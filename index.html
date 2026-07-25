@@ -35,12 +35,6 @@
         }
 
         body {
-            background-image: url('bg.jpg');
-            background-size: cover;
-            background-attachment: fixed;
-            background-position: center;
-            background-repeat: no-repeat;
-            
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             color: var(--text-color);
             margin: 0;
@@ -53,12 +47,24 @@
             position: relative;
         }
 
+        /* 修復手機版 background-attachment: fixed 相容性問題 */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: url('bg.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            z-index: -2;
+        }
+
         body::before {
             content: '';
-            position: absolute;
+            position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
             background-color: var(--bg-overlay);
-            z-index: 0;
+            z-index: -1;
             transition: background-color 0.4s;
         }
 
@@ -313,6 +319,43 @@
             align-items: center;
             justify-content: center;
             text-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        /* --- 手機版適應 (RWD) --- */
+        @media (max-width: 480px) {
+            body {
+                padding: 20px 12px;
+            }
+
+            .glass-card {
+                padding: 20px 15px;
+            }
+
+            h1 {
+                font-size: 1.6rem;
+            }
+
+            .countdown-grid {
+                gap: 8px;
+            }
+
+            .time-number {
+                font-size: 1.4rem;
+            }
+
+            .time-label {
+                font-size: 0.75rem;
+            }
+
+            .custom-btn {
+                padding: 10px 18px;
+                font-size: 0.9rem;
+            }
+
+            .theme-toggle-container {
+                bottom: 12px;
+                right: 12px;
+            }
         }
     </style>
 </head>
