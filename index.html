@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>學測倒數 & 質感工具箱</title>
+    <title>學測倒數</title>
     <style>
         /* --- 全局變數（明亮/黑暗模式） --- */
         :root {
@@ -33,7 +33,6 @@
         }
 
         body {
-            /* 預設背景圖，可自行替換成你的 bg.jpg */
             background-image: url('bg.jpg');
             background-size: cover;
             background-attachment: fixed;
@@ -52,7 +51,6 @@
             position: relative;
         }
 
-        /* 背景遮罩層（協助模式切換視覺） */
         body::before {
             content: '';
             position: absolute;
@@ -62,6 +60,297 @@
             transition: background-color 0.4s;
         }
 
+        .container {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        /* --- 毛玻璃卡片結構 (Glassmorphism) --- */
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            opacity: 0.85;
+            margin-bottom: 25px;
+        }
+
+        /* --- 倒數計時器網格 --- */
+        .countdown-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .time-box {
+            background: var(--btn-bg);
+            padding: 12px 5px;
+            border-radius: 12px;
+            border: 1px solid var(--card-border);
+        }
+
+        .time-number {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--accent-color);
+            display: block;
+        }
+
+        .time-label {
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }
+
+        /* --- 按鈕與動畫樣式 --- */
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .custom-btn {
+            background: var(--btn-bg);
+            color: var(--text-color);
+            border: 1px solid var(--card-border);
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .custom-btn:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 8px 25px rgba(129, 140, 248, 0.4);
+            border-color: var(--accent-color);
+        }
+
+        .custom-btn:active {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        .theme-toggle-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 2;
+        }
+
+        /* --- 隨機科目轉盤 (Modal) 樣式 --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            transform: translateY(-20px) scale(0.95);
+            transition: transform 0.3s ease;
+            text-align: center;
+            min-width: 300px;
+            /* 覆寫部分卡片樣式讓他更像彈出視窗 */
+            margin-bottom: 0; 
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: translateY(0) scale(1);
+        }
+
+        .roulette-result {
+            font-size: 3rem;
+            font-weight: bold;
+            color: var(--accent-color);
+            margin: 30px 0;
+            height: 60px; /* 固定高度防止跳動 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body data-theme="dark">
+
+    <!-- 切換深淺模式按鈕 -->
+    <div class="theme-toggle-container">
+        <button class="custom-btn" id="themeBtn">☀️ Bright mode</button>
+    </div>
+
+    <div class="container">
+        <!-- 毛玻璃倒數卡片 -->
+        <div class="glass-card">
+            <h1>🎓 學測倒數計時</h1>
+            <p class="subtitle">堅持下去！</p>
+
+            <div class="countdown-grid">
+                <div class="time-box">
+                    <span class="time-number" id="days">00</span>
+                    <span class="time-label">天</span>
+                </div>
+                <div class="time-box">
+                    <span class="time-number" id="hours">00</span>
+                    <span class="time-label">時</span>
+                </div>
+                <div class="time-box">
+                    <span class="time-number" id="minutes">00</span>
+                    <span class="time-label">分</span>
+                </div>
+                <div class="time-box">
+                    <span class="time-number" id="seconds">00</span>
+                    <span class="time-label">秒</span>
+                </div>
+            </div>
+
+            <!-- 按鈕群組 -->
+            <div class="btn-group">
+                <!-- 這裡改成「現在要幹嘛」的按鈕 -->
+                <button class="custom-btn" id="rouletteBtn">🤔 現在要幹嘛</button>
+                <button class="custom-btn" id="surpriseBtn">✨ 查看小驚喜</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 隨機科目轉盤的彈出視窗 (預設隱藏) -->
+    <div class="modal-overlay" id="rouletteModal">
+        <div class="glass-card modal-content">
+            <h2>馬上讀</h2>
+            <div class="roulette-result" id="rouletteResult">❓</div>
+            <!-- 這個按鈕在轉盤停止前會隱藏 -->
+            <button class="custom-btn" id="closeRouletteBtn" style="display: none; margin: 0 auto;">好！去讀書</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. 倒數計時器邏輯 ---
+        const targetDate = new Date('2027-01-22T00:00:00').getTime();
+
+        function updateCountdown() {
+            const now = new Date().getTime();
+            const difference = targetDate - now;
+
+            if (difference > 0) {
+                const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+                document.getElementById('days').innerText = String(days).padStart(2, '0');
+                document.getElementById('hours').innerText = String(hours).padStart(2, '0');
+                document.getElementById('minutes').innerText = String(minutes).padStart(2, '0');
+                document.getElementById('seconds').innerText = String(seconds).padStart(2, '0');
+            } else {
+                document.querySelector('.countdown-grid').innerHTML = "<h2>🎉 學測順利！</h2>";
+            }
+        }
+
+        setInterval(updateCountdown, 1000);
+        updateCountdown();
+
+        // --- 2. 暗黑/明亮模式切換 ---
+        const themeBtn = document.getElementById('themeBtn');
+        const body = document.body;
+
+        themeBtn.addEventListener('click', () => {
+            const currentTheme = body.getAttribute('data-theme');
+            if (currentTheme === 'dark') {
+                body.setAttribute('data-theme', 'light');
+                themeBtn.innerText = '🌙 Dark mode';
+            } else {
+                body.setAttribute('data-theme', 'dark');
+                themeBtn.innerText = '☀️ Bright mode';
+            }
+        });
+
+        // --- 3. 經典彩蛋 Rickroll ---
+        const surpriseBtn = document.querySelector('#surpriseBtn');
+        surpriseBtn.addEventListener('click', () => {
+            window.location.href = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+        });
+
+        // --- 4. 隨機科目轉盤邏輯 ---
+        const rouletteBtn = document.getElementById('rouletteBtn');
+        const rouletteModal = document.getElementById('rouletteModal');
+        const rouletteResult = document.getElementById('rouletteResult');
+        const closeRouletteBtn = document.getElementById('closeRouletteBtn');
+
+        // 包含 Emoji 的五個科目
+        const subjects = ['📖 國文', '🔠 英文', '📐 數學', '🔬 自然', '🌍 社會'];
+        let spinInterval;
+
+        rouletteBtn.addEventListener('click', () => {
+            // 顯示彈出視窗
+            rouletteModal.classList.add('active');
+            closeRouletteBtn.style.display = 'none'; // 先隱藏確認按鈕
+            rouletteResult.style.color = 'var(--text-color)'; // 轉動時用一般顏色
+            
+            let counter = 0;
+            
+            // 開始快速切換文字 (每 80 毫秒換一個)
+            spinInterval = setInterval(() => {
+                rouletteResult.innerText = subjects[counter % subjects.length];
+                counter++;
+            }, 80); 
+
+            // 2 秒後停止轉動並選出最終結果
+            setTimeout(() => {
+                clearInterval(spinInterval);
+                const finalSubject = subjects[Math.floor(Math.random() * subjects.length)];
+                rouletteResult.innerText = finalSubject;
+                
+                // 讓最終結果變成主題強調色
+                rouletteResult.style.color = 'var(--accent-color)';
+                
+                // 顯示確認按鈕
+                closeRouletteBtn.style.display = 'block'; 
+            }, 2000);
+        });
+
+        // 關閉轉盤視窗
+        closeRouletteBtn.addEventListener('click', () => {
+            rouletteModal.classList.remove('active');
+            // 延遲重置，避免關閉動畫中看到文字變回問號
+            setTimeout(() => {
+                rouletteResult.innerText = '❓'; 
+            }, 300);
+        });
+    </script>
+</body>
+</html>
         /* 內容容器：防止被遮罩擋住 */
         .container {
             position: relative;
