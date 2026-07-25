@@ -14,6 +14,7 @@
             --accent-color: #4f46e5;
             --btn-bg: rgba(255, 255, 255, 0.7);
             --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            --input-bg: rgba(255, 255, 255, 0.5);
         }
 
         [data-theme="dark"] {
@@ -24,6 +25,7 @@
             --accent-color: #818cf8;
             --btn-bg: rgba(255, 255, 255, 0.15);
             --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --input-bg: rgba(0, 0, 0, 0.25);
         }
 
         /* --- 基本樣式設定 --- */
@@ -47,7 +49,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 20px;
+            padding: 40px 20px;
             position: relative;
         }
 
@@ -84,6 +86,12 @@
             margin: 0 0 10px 0;
             font-size: 2rem;
             font-weight: 700;
+        }
+
+        h2 {
+            margin: 0 0 15px 0;
+            font-size: 1.4rem;
+            font-weight: 600;
         }
 
         .subtitle {
@@ -152,11 +160,116 @@
             transform: translateY(1px) scale(0.98);
         }
 
+        /* --- 明亮/暗黑切換按鈕固定於右下角 --- */
         .theme-toggle-container {
-            position: absolute;
-            top: 20px;
+            position: fixed;
+            bottom: 20px;
             right: 20px;
-            z-index: 2;
+            z-index: 10;
+        }
+
+        /* --- 待辦事項清單樣式 --- */
+        .todo-section {
+            text-align: left;
+        }
+
+        .todo-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .todo-input {
+            flex: 1;
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-color);
+            padding: 12px 18px;
+            border-radius: 30px;
+            font-size: 0.95rem;
+            outline: none;
+            backdrop-filter: blur(5px);
+        }
+
+        .todo-input::placeholder {
+            color: var(--text-color);
+            opacity: 0.6;
+        }
+
+        .todo-input:focus {
+            border-color: var(--accent-color);
+        }
+
+        .todo-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .todo-item {
+            display: flex;
+            align-items: center;
+            background: var(--btn-bg);
+            border: 1px solid var(--card-border);
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            gap: 12px;
+            transition: all 0.4s ease;
+        }
+
+        .todo-checkbox {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--card-border);
+            border-radius: 6px;
+            cursor: pointer;
+            outline: none;
+            position: relative;
+            background: transparent;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .todo-checkbox:checked {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        .todo-checkbox:checked::after {
+            content: '✓';
+            position: absolute;
+            color: white;
+            font-size: 14px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: bold;
+        }
+
+        .todo-text {
+            font-size: 1rem;
+            word-break: break-all;
+            flex: 1;
+        }
+
+        .todo-item.completed {
+            opacity: 0;
+            transform: translateX(30px);
+        }
+
+        .todo-item.completed .todo-text {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+
+        .todo-empty {
+            text-align: center;
+            opacity: 0.6;
+            font-size: 0.9rem;
+            padding: 10px 0;
         }
 
         /* --- 隨機科目轉盤 (Modal) 樣式 --- */
@@ -183,7 +296,6 @@
             transition: transform 0.3s ease;
             text-align: center;
             min-width: 300px;
-            /* 覆寫部分卡片樣式讓他更像彈出視窗 */
             margin-bottom: 0; 
         }
 
@@ -196,7 +308,7 @@
             font-weight: bold;
             color: var(--accent-color);
             margin: 30px 0;
-            height: 60px; /* 固定高度防止跳動 */
+            height: 60px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -206,7 +318,7 @@
 </head>
 <body data-theme="dark">
 
-    <!-- 切換深淺模式按鈕 -->
+    <!-- 切換深淺模式按鈕（右下角） -->
     <div class="theme-toggle-container">
         <button class="custom-btn" id="themeBtn">☀️ Bright mode</button>
     </div>
@@ -238,19 +350,27 @@
 
             <!-- 按鈕群組 -->
             <div class="btn-group">
-                <!-- 這裡改成「現在要幹嘛」的按鈕 -->
                 <button class="custom-btn" id="rouletteBtn">🤔 現在要幹嘛</button>
                 <button class="custom-btn" id="surpriseBtn">✨ 查看小驚喜</button>
             </div>
         </div>
+
+        <!-- 待辦事項清單卡片 -->
+        <div class="glass-card todo-section">
+            <h2>📝 今日待辦事項</h2>
+            <div class="todo-input-group">
+                <input type="text" id="todoInput" class="todo-input" placeholder="新增待辦事項..." />
+                <button class="custom-btn" id="addTodoBtn">新增＋</button>
+            </div>
+            <ul class="todo-list" id="todoList"></ul>
+        </div>
     </div>
 
-    <!-- 隨機科目轉盤的彈出視窗 (預設隱藏) -->
+    <!-- 隨機科目轉盤的彈出視窗 -->
     <div class="modal-overlay" id="rouletteModal">
         <div class="glass-card modal-content">
             <h2>現在要讀：</h2>
             <div class="roulette-result" id="rouletteResult">❓</div>
-            <!-- 這個按鈕在轉盤停止前會隱藏 -->
             <button class="custom-btn" id="closeRouletteBtn" style="display: none; margin: 0 auto;">好！去讀書</button>
         </div>
     </div>
@@ -308,46 +428,106 @@
         const rouletteResult = document.getElementById('rouletteResult');
         const closeRouletteBtn = document.getElementById('closeRouletteBtn');
 
-        // 包含 Emoji 的五個科目
         const subjects = ['📖 國文', '🔠 英文', '📐 數學', '🔬 自然', '🌍 社會'];
         let spinInterval;
 
         rouletteBtn.addEventListener('click', () => {
-            // 顯示彈出視窗
             rouletteModal.classList.add('active');
-            closeRouletteBtn.style.display = 'none'; // 先隱藏確認按鈕
-            rouletteResult.style.color = 'var(--text-color)'; // 轉動時用一般顏色
+            closeRouletteBtn.style.display = 'none';
+            rouletteResult.style.color = 'var(--text-color)';
             
             let counter = 0;
             
-            // 開始快速切換文字 (每 80 毫秒換一個)
             spinInterval = setInterval(() => {
                 rouletteResult.innerText = subjects[counter % subjects.length];
                 counter++;
             }, 80); 
 
-            // 2 秒後停止轉動並選出最終結果
             setTimeout(() => {
                 clearInterval(spinInterval);
                 const finalSubject = subjects[Math.floor(Math.random() * subjects.length)];
                 rouletteResult.innerText = finalSubject;
-                
-                // 讓最終結果變成主題強調色
                 rouletteResult.style.color = 'var(--accent-color)';
-                
-                // 顯示確認按鈕
                 closeRouletteBtn.style.display = 'block'; 
             }, 2000);
         });
 
-        // 關閉轉盤視窗
         closeRouletteBtn.addEventListener('click', () => {
             rouletteModal.classList.remove('active');
-            // 延遲重置，避免關閉動畫中看到文字變回問號
             setTimeout(() => {
                 rouletteResult.innerText = '❓'; 
             }, 300);
         });
+
+        // --- 5. 待辦事項清單邏輯 ---
+        const todoInput = document.getElementById('todoInput');
+        const addTodoBtn = document.getElementById('addTodoBtn');
+        const todoList = document.getElementById('todoList');
+
+        // 從 localStorage 讀取待辦事項
+        let todos = JSON.parse(localStorage.getItem('study_todos')) || [];
+
+        function saveTodos() {
+            localStorage.setItem('study_todos', JSON.stringify(todos));
+        }
+
+        function renderTodos() {
+            todoList.innerHTML = '';
+            if (todos.length === 0) {
+                todoList.innerHTML = '<li class="todo-empty">目前沒有待辦事項，太棒了！✨</li>';
+                return;
+            }
+
+            todos.forEach((todo, index) => {
+                const li = document.createElement('li');
+                li.className = 'todo-item';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'todo-checkbox';
+                
+                const textSpan = document.createElement('span');
+                textSpan.className = 'todo-text';
+                textSpan.innerText = todo;
+
+                // 點擊勾選框 -> 動畫 -> 自動刪除
+                checkbox.addEventListener('change', () => {
+                    if (checkbox.checked) {
+                        li.classList.add('completed');
+                        setTimeout(() => {
+                            todos.splice(index, 1);
+                            saveTodos();
+                            renderTodos();
+                        }, 400); // 配合淡出動畫時間
+                    }
+                });
+
+                li.appendChild(checkbox);
+                li.appendChild(textSpan);
+                todoList.appendChild(li);
+            });
+        }
+
+        function addTodo() {
+            const text = todoInput.value.trim();
+            if (text !== '') {
+                todos.push(text);
+                saveTodos();
+                renderTodos();
+                todoInput.value = '';
+            }
+        }
+
+        addTodoBtn.addEventListener('click', addTodo);
+
+        todoInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addTodo();
+            }
+        });
+
+        // 初始化載入待辦清單
+        renderTodos();
     </script>
 </body>
 </html>
