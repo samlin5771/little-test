@@ -1,49 +1,261 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>just what you see</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>學測倒數 & 質感工具箱</title>
     <style>
-       body {
-      
-            background-image: url('bg.jpg'); 
-            
-            
+        /* --- 全局變數（明亮/黑暗模式） --- */
+        :root {
+            --bg-overlay: rgba(255, 255, 255, 0.4);
+            --card-bg: rgba(255, 255, 255, 0.35);
+            --card-border: rgba(255, 255, 255, 0.5);
+            --text-color: #222222;
+            --accent-color: #4f46e5;
+            --btn-bg: rgba(255, 255, 255, 0.7);
+            --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        }
+
+        [data-theme="dark"] {
+            --bg-overlay: rgba(0, 0, 0, 0.5);
+            --card-bg: rgba(20, 20, 30, 0.45);
+            --card-border: rgba(255, 255, 255, 0.18);
+            --text-color: #ffffff;
+            --accent-color: #818cf8;
+            --btn-bg: rgba(255, 255, 255, 0.15);
+            --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        /* --- 基本樣式設定 --- */
+        * {
+            box-sizing: border-box;
+            transition: background-color 0.4s, color 0.4s, border-color 0.4s, transform 0.2s;
+        }
+
+        body {
+            /* 預設背景圖，可自行替換成你的 bg.jpg */
+            background-image: url('bg.jpg');
             background-size: cover;
             background-attachment: fixed;
             background-position: center;
             background-repeat: no-repeat;
-
-            /* 文字樣式調整 */
-            font-family: sans-serif;
-            text-align: center;
-            color: white; 
+            
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            color: var(--text-color);
             margin: 0;
-            height: 100vh;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
             justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
         }
-        
+
+        /* 背景遮罩層（協助模式切換視覺） */
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--bg-overlay);
+            z-index: 0;
+            transition: background-color 0.4s;
+        }
+
+        /* 內容容器：防止被遮罩擋住 */
+        .container {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        /* --- 毛玻璃卡片結構 (Glassmorphism) --- */
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+        }
+
         h1 {
-            background-color: rgba(0, 0, 0, 0.5); 
-            display: inline-block;
-            padding: 10px 20px;
-            border-radius: 10px;
+            margin: 0 0 10px 0;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            opacity: 0.85;
+            margin-bottom: 25px;
+        }
+
+        /* --- 倒數計時器網格 --- */
+        .countdown-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .time-box {
+            background: var(--btn-bg);
+            padding: 12px 5px;
+            border-radius: 12px;
+            border: 1px solid var(--card-border);
+        }
+
+        .time-number {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--accent-color);
+            display: block;
+        }
+
+        .time-label {
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }
+
+        /* --- 按鈕與動畫樣式 --- */
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .custom-btn {
+            background: var(--btn-bg);
+            color: var(--text-color);
+            border: 1px solid var(--card-border);
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            
+            /* 平滑過渡動畫 */
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* Hover 懸浮效果：放大 + 發光 */
+        .custom-btn:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 8px 25px rgba(129, 140, 248, 0.4);
+            border-color: var(--accent-color);
+        }
+
+        /* Active 按下效果：縮小彈回 */
+        .custom-btn:active {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        /* 主題切換按鈕位置 */
+        .theme-toggle-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 2;
         }
     </style>
 </head>
-<body>
-    <h1>It's a stuip web</h1>
-    <p>As you can see I wrote it.</p>
-    <button onclick="alert('dumb ass will touch me.')">click me!</button>
-</body>
-    <button id="surpriseBtn">點擊查看神秘驚喜！</button>
-        <script>
-        const btn = document.querySelector('#surpriseBtn');
-          btn.addEventListener('click', () => {
-        window.location.href = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
-          });
-        </script>
+<body data-theme="dark">
 
+    <!-- 切換深淺模式按鈕 -->
+    <div class="theme-toggle-container">
+        <button class="custom-btn" id="themeBtn">☀️ 切換明亮模式</button>
+    </div>
+
+    <div class="container">
+        <!-- 毛玻璃倒數卡片 -->
+        <div class="glass-card">
+            <h1>🎓 學測倒數計時</h1>
+            <p class="subtitle">堅持下去，未來的你一定會感謝現在拼命的自己！</p>
+
+            <div class="countdown-grid">
+                <div class="time-box">
+                    <span class="time-number" id="days">00</span>
+                    <span class="time-label">天</span>
+                </div>
+                <div class="time-box">
+                    <span class="time-number" id="hours">00</span>
+                    <span class="time-label">時</span>
+                </div>
+                <div class="time-box">
+                    <span class="time-number" id="minutes">00</span>
+                    <span class="time-label">分</span>
+                </div>
+                <div class="time-box">
+                    <span class="time-number" id="seconds">00</span>
+                    <span class="time-label">秒</span>
+                </div>
+            </div>
+
+            <!-- 保留互動按鈕與彩蛋 -->
+            <div class="btn-group">
+                <button class="custom-btn" onclick="alert('加油！讀累了就休息一下吧！')">給我力量！</button>
+                <button class="custom-btn" id="surpriseBtn">✨ 點擊查看神祕驚喜</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. 倒數計時器邏輯 ---
+        // 預設為下一次學測日期（每年1月中旬，這裡可手動修改目標日期）
+        const targetDate = new Date('2027-01-16T09:00:00').getTime();
+
+        function updateCountdown() {
+            const now = new Date().getTime();
+            const difference = targetDate - now;
+
+            if (difference > 0) {
+                const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+                document.getElementById('days').innerText = String(days).padStart(2, '0');
+                document.getElementById('hours').innerText = String(hours).padStart(2, '0');
+                document.getElementById('minutes').innerText = String(minutes).padStart(2, '0');
+                document.getElementById('seconds').innerText = String(seconds).padStart(2, '0');
+            } else {
+                document.querySelector('.countdown-grid').innerHTML = "<h2>🎉 學測順利，開考大吉！</h2>";
+            }
+        }
+
+        // 每秒更新一次
+        setInterval(updateCountdown, 1000);
+        updateCountdown();
+
+        // --- 2. 暗黑/明亮模式切換 ---
+        const themeBtn = document.getElementById('themeBtn');
+        const body = document.body;
+
+        themeBtn.addEventListener('click', () => {
+            const currentTheme = body.getAttribute('data-theme');
+            if (currentTheme === 'dark') {
+                body.setAttribute('data-theme', 'light');
+                themeBtn.innerText = '🌙 切換黑暗模式';
+            } else {
+                body.setAttribute('data-theme', 'dark');
+                themeBtn.innerText = '☀️ 切換明亮模式';
+            }
+        });
+
+        // --- 3. 經典彩蛋 Rickroll ---
+        const surpriseBtn = document.querySelector('#surpriseBtn');
+        surpriseBtn.addEventListener('click', () => {
+            window.location.href = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+        });
+    </script>
+</body>
 </html>
