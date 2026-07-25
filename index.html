@@ -172,14 +172,14 @@
 
     <!-- 切換深淺模式按鈕 -->
     <div class="theme-toggle-container">
-        <button class="custom-btn" id="themeBtn">☀️ 切換明亮模式</button>
+        <button class="custom-btn" id="themeBtn">☀️Bright mode </button>
     </div>
 
     <div class="container">
         <!-- 毛玻璃倒數卡片 -->
         <div class="glass-card">
             <h1>🎓 學測倒數計時</h1>
-            <p class="subtitle">堅持下去，未來的你一定會感謝現在拼命的自己！</p>
+            <p class="subtitle">堅持下去!</p>
 
             <div class="countdown-grid">
                 <div class="time-box">
@@ -202,8 +202,8 @@
 
             <!-- 保留互動按鈕與彩蛋 -->
             <div class="btn-group">
-                <button class="custom-btn" onclick="alert('加油！讀累了就休息一下吧！')">給我力量！</button>
-                <button class="custom-btn" id="surpriseBtn">✨ 點擊查看神祕驚喜</button>
+                <button class="custom-btn" onclick="alert('加油！讀累了就休息一下吧！')">我累了</button>
+                <button class="custom-btn" id="surpriseBtn">✨查看小驚喜</button>
             </div>
         </div>
     </div>
@@ -211,7 +211,7 @@
     <script>
         // --- 1. 倒數計時器邏輯 ---
         // 預設為下一次學測日期（每年1月中旬，這裡可手動修改目標日期）
-        const targetDate = new Date('2027-01-16T09:00:00').getTime();
+        const targetDate = new Date('2027-01-22T00:00:00').getTime();
 
         function updateCountdown() {
             const now = new Date().getTime();
@@ -228,7 +228,7 @@
                 document.getElementById('minutes').innerText = String(minutes).padStart(2, '0');
                 document.getElementById('seconds').innerText = String(seconds).padStart(2, '0');
             } else {
-                document.querySelector('.countdown-grid').innerHTML = "<h2>🎉 學測順利，開考大吉！</h2>";
+                document.querySelector('.countdown-grid').innerHTML = "<h2>🎉 學測順利！</h2>";
             }
         }
 
@@ -244,10 +244,10 @@
             const currentTheme = body.getAttribute('data-theme');
             if (currentTheme === 'dark') {
                 body.setAttribute('data-theme', 'light');
-                themeBtn.innerText = '🌙 切換黑暗模式';
+                themeBtn.innerText = '🌙 Dark mode';
             } else {
                 body.setAttribute('data-theme', 'dark');
-                themeBtn.innerText = '☀️ 切換明亮模式';
+                themeBtn.innerText = '☀️Bright mode';
             }
         });
 
