@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>學測倒數</title>
+
+    <!-- 關鍵優化 1：優先預載入背景圖片，解決下載延遲問題 -->
+    <link rel="preload" as="image" href="bg.jpg">
+
     <style>
         /* --- 全局變數（明亮/黑暗模式） --- */
         :root {
@@ -15,6 +19,7 @@
             --btn-bg: rgba(255, 255, 255, 0.7);
             --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
             --input-bg: rgba(255, 255, 255, 0.5);
+            --bg-fallback: #1a1b26; /* 圖片載入前的備用背景色 */
         }
 
         [data-theme="dark"] {
@@ -26,6 +31,7 @@
             --btn-bg: rgba(255, 255, 255, 0.15);
             --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
             --input-bg: rgba(0, 0, 0, 0.25);
+            --bg-fallback: #0f1015;
         }
 
         /* --- 基本樣式設定 --- */
@@ -45,9 +51,10 @@
             align-items: center;
             padding: 40px 20px;
             position: relative;
+            background-color: var(--bg-fallback); /* 防止圖還沒載入時一片白 */
         }
 
-        /* 修復手機版 background-attachment: fixed 相容性問題 */
+        /* 關鍵優化 2：修復手機版背景，並加入漸變淡入與硬體加速 */
         body::after {
             content: '';
             position: fixed;
@@ -57,6 +64,15 @@
             background-position: center;
             background-repeat: no-repeat;
             z-index: -2;
+            opacity: 0; /* 預設先隱藏，等 JS 確定載入後淡入 */
+            transition: opacity 0.6s ease-in-out;
+            will-change: opacity; /* 告訴瀏覽器開啟渲染優化 */
+            transform: translateZ(0); /* 啟用 GPU 繪圖加速 */
+        }
+
+        /* 當背景圖載入完成時賦予此 class */
+        body.bg-loaded::after {
+            opacity: 1;
         }
 
         body::before {
@@ -419,6 +435,14 @@
     </div>
 
     <script>
+        // --- 0. 背景圖片載入優化偵測 ---
+        const bgImg = new Image();
+        bgImg.src = 'bg.jpg';
+        bgImg.onload = () => {
+            // 圖下載好後才優雅地淡入背景，消除硬卡頓感
+            document.body.classList.add('bg-loaded');
+        };
+
         // --- 1. 倒數計時器邏輯 ---
         const targetDate = new Date('2027-01-22T00:00:00').getTime();
 
@@ -507,7 +531,6 @@
         const addTodoBtn = document.getElementById('addTodoBtn');
         const todoList = document.getElementById('todoList');
 
-        // 從 localStorage 讀取待辦事項
         let todos = JSON.parse(localStorage.getItem('study_todos')) || [];
 
         function saveTodos() {
@@ -533,7 +556,6 @@
                 textSpan.className = 'todo-text';
                 textSpan.innerText = todo;
 
-                // 點擊勾選框 -> 動畫 -> 自動刪除
                 checkbox.addEventListener('change', () => {
                     if (checkbox.checked) {
                         li.classList.add('completed');
@@ -541,7 +563,7 @@
                             todos.splice(index, 1);
                             saveTodos();
                             renderTodos();
-                        }, 400); // 配合淡出動畫時間
+                        }, 400);
                     }
                 });
 
@@ -569,8 +591,8 @@
             }
         });
 
-        // 初始化載入待辦清單
         renderTodos();
     </script>
 </body>
+</html>
 </html>
