@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>學測倒數</title>
+    <title>學測與重大考試倒數</title>
 
-    <!-- 關鍵優化 1：優先預載入背景圖片，解決下載延遲問題 -->
     <link rel="preload" as="image" href="bg.jpg">
 
     <style>
@@ -19,7 +18,7 @@
             --btn-bg: rgba(255, 255, 255, 0.7);
             --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
             --input-bg: rgba(255, 255, 255, 0.5);
-            --bg-fallback: #1a1b26; /* 圖片載入前的備用背景色 */
+            --bg-fallback: #1a1b26; 
         }
 
         [data-theme="dark"] {
@@ -34,7 +33,6 @@
             --bg-fallback: #0f1015;
         }
 
-        /* --- 基本樣式設定 --- */
         * {
             box-sizing: border-box;
             transition: background-color 0.4s, color 0.4s, border-color 0.4s, transform 0.2s;
@@ -51,10 +49,9 @@
             align-items: center;
             padding: 40px 20px;
             position: relative;
-            background-color: var(--bg-fallback); /* 防止圖還沒載入時一片白 */
+            background-color: var(--bg-fallback);
         }
 
-        /* 關鍵優化 2：修復手機版背景，並加入漸變淡入與硬體加速 */
         body::after {
             content: '';
             position: fixed;
@@ -64,13 +61,12 @@
             background-position: center;
             background-repeat: no-repeat;
             z-index: -2;
-            opacity: 0; /* 預設先隱藏，等 JS 確定載入後淡入 */
+            opacity: 0;
             transition: opacity 0.6s ease-in-out;
-            will-change: opacity; /* 告訴瀏覽器開啟渲染優化 */
-            transform: translateZ(0); /* 啟用 GPU 繪圖加速 */
+            will-change: opacity;
+            transform: translateZ(0);
         }
 
-        /* 當背景圖載入完成時賦予此 class */
         body.bg-loaded::after {
             opacity: 1;
         }
@@ -92,7 +88,6 @@
             max-width: 600px;
         }
 
-        /* --- 毛玻璃卡片結構 (Glassmorphism) --- */
         .glass-card {
             background: var(--card-bg);
             backdrop-filter: blur(12px);
@@ -104,25 +99,41 @@
             margin-bottom: 20px;
         }
 
+        .target-select-wrapper {
+            margin-bottom: 15px;
+        }
+
+        .target-select {
+            background: var(--input-bg);
+            color: var(--text-color);
+            border: 1px solid var(--card-border);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            text-align: center;
+        }
+
+        .target-select option {
+            background: var(--bg-fallback);
+            color: #ffffff;
+        }
+
         h1 {
             margin: 0 0 10px 0;
             font-size: 2rem;
             font-weight: 700;
         }
 
-        h2 {
-            margin: 0 0 15px 0;
-            font-size: 1.4rem;
-            font-weight: 600;
-        }
-
         .subtitle {
             font-size: 1rem;
             opacity: 0.85;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
 
-        /* --- 倒數計時器網格 --- */
         .countdown-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -149,13 +160,28 @@
             opacity: 0.8;
         }
 
-        /* --- 按鈕與動畫樣式 --- */
+        .next-event-badge {
+            display: inline-block;
+            background: var(--btn-bg);
+            border: 1px solid var(--card-border);
+            padding: 6px 16px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            opacity: 0.9;
+            margin-top: 5px;
+            margin-bottom: 15px;
+        }
+
+        .next-event-badge strong {
+            color: var(--accent-color);
+        }
+
         .btn-group {
             display: flex;
             gap: 15px;
             justify-content: center;
             flex-wrap: wrap;
-            margin-top: 20px;
+            margin-top: 15px;
         }
 
         .custom-btn {
@@ -182,7 +208,6 @@
             transform: translateY(1px) scale(0.98);
         }
 
-        /* --- 明亮/暗黑切換按鈕固定於右下角 --- */
         .theme-toggle-container {
             position: fixed;
             bottom: 20px;
@@ -190,7 +215,6 @@
             z-index: 10;
         }
 
-        /* --- 待辦事項清單樣式 --- */
         .todo-section {
             text-align: left;
         }
@@ -294,7 +318,6 @@
             padding: 10px 0;
         }
 
-        /* --- 隨機科目轉盤 (Modal) 樣式 --- */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -337,84 +360,57 @@
             text-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
-        /* --- 手機版適應 (RWD) --- */
         @media (max-width: 480px) {
-            body {
-                padding: 20px 12px;
-            }
-
-            .glass-card {
-                padding: 20px 15px;
-            }
-
-            h1 {
-                font-size: 1.6rem;
-            }
-
-            .countdown-grid {
-                gap: 8px;
-            }
-
-            .time-number {
-                font-size: 1.4rem;
-            }
-
-            .time-label {
-                font-size: 0.75rem;
-            }
-
-            .custom-btn {
-                padding: 10px 18px;
-                font-size: 0.9rem;
-            }
-
-            .theme-toggle-container {
-                bottom: 12px;
-                right: 12px;
-            }
+            body { padding: 20px 12px; }
+            .glass-card { padding: 20px 15px; }
+            h1 { font-size: 1.5rem; }
+            .countdown-grid { gap: 8px; }
+            .time-number { font-size: 1.3rem; }
+            .time-label { font-size: 0.75rem; }
+            .custom-btn { padding: 10px 18px; font-size: 0.9rem; }
+            .theme-toggle-container { bottom: 12px; right: 12px; }
         }
     </style>
 </head>
 <body data-theme="dark">
 
-    <!-- 切換深淺模式按鈕（右下角） -->
     <div class="theme-toggle-container">
         <button class="custom-btn" id="themeBtn">☀️ Bright mode</button>
     </div>
 
     <div class="container">
-        <!-- 毛玻璃倒數卡片 -->
         <div class="glass-card">
-            <h1>🎓 學測倒數計時</h1>
-            <p class="subtitle">堅持下去！</p>
-
-            <div class="countdown-grid">
-                <div class="time-box">
-                    <span class="time-number" id="days">00</span>
-                    <span class="time-label">天</span>
-                </div>
-                <div class="time-box">
-                    <span class="time-number" id="hours">00</span>
-                    <span class="time-label">時</span>
-                </div>
-                <div class="time-box">
-                    <span class="time-number" id="minutes">00</span>
-                    <span class="time-label">分</span>
-                </div>
-                <div class="time-box">
-                    <span class="time-number" id="seconds">00</span>
-                    <span class="time-label">秒</span>
-                </div>
+            <div class="target-select-wrapper">
+                <select id="examSelector" class="target-select">
+                    <option value="gsat">🎓 116 學測倒數</option>
+                    <option value="mock1">📝 高三第一次模考 (全模)</option>
+                    <option value="listening1">🎧 英語聽力第一次測驗</option>
+                    <option value="mock2">📚 高三第二次模考 (全模)</option>
+                    <option value="mock3">🔥 高三第三次模考 (全模)</option>
+                    <option value="listening2">🎧 英語聽力第二次測驗</option>
+                </select>
             </div>
 
-            <!-- 按鈕群組 -->
+            <h1 id="countdownTitle">🎓 116 學測倒數</h1>
+            <p class="subtitle" id="countdownSubtitle">穩住節奏，每一天都是進步！</p>
+
+            <div class="countdown-grid" id="countdownGrid">
+                <div class="time-box"><span class="time-number" id="days">00</span><span class="time-label">天</span></div>
+                <div class="time-box"><span class="time-number" id="hours">00</span><span class="time-label">時</span></div>
+                <div class="time-box"><span class="time-number" id="minutes">00</span><span class="time-label">分</span></div>
+                <div class="time-box"><span class="time-number" id="seconds">00</span><span class="time-label">秒</span></div>
+            </div>
+
+            <div class="next-event-badge" id="nextEventBadge">
+                ⏳ 計算下一個重大關卡中...
+            </div>
+
             <div class="btn-group">
                 <button class="custom-btn" id="rouletteBtn">🤔 現在要幹嘛</button>
                 <button class="custom-btn" id="surpriseBtn">✨ 查看小驚喜</button>
             </div>
         </div>
 
-        <!-- 待辦事項清單卡片 -->
         <div class="glass-card todo-section">
             <h2>📝 今日待辦事項</h2>
             <div class="todo-input-group">
@@ -425,7 +421,6 @@
         </div>
     </div>
 
-    <!-- 隨機科目轉盤的彈出視窗 -->
     <div class="modal-overlay" id="rouletteModal">
         <div class="glass-card modal-content">
             <h2>現在要讀：</h2>
@@ -435,20 +430,67 @@
     </div>
 
     <script>
-        // --- 0. 背景圖片載入優化偵測 ---
         const bgImg = new Image();
         bgImg.src = 'bg.jpg';
-        bgImg.onload = () => {
-            // 圖下載好後才優雅地淡入背景，消除硬卡頓感
-            document.body.classList.add('bg-loaded');
+        bgImg.onload = () => { document.body.classList.add('bg-loaded'); };
+
+        // --- 1. 更新後的考試日程資料庫 ---
+        const examEvents = {
+            mock1: {
+                title: '📝 115 高三第一次模考',
+                subtitle: '第一次檢驗高一二複習成果！',
+                date: '2026-09-02T00:00:00'
+            },
+            listening1: {
+                title: '🎧 116 英語聽力第一次測驗',
+                subtitle: '專注聆聽，拿下 A 級卡位！',
+                date: '2026-10-17T00:00:00' // 已更新為 10/17 00:00
+            },
+            mock2: {
+                title: '📚 115 高三第二次模考',
+                subtitle: '進度拉升期，補強弱點核心！',
+                date: '2026-10-28T00:00:00'
+            },
+            mock3: {
+                title: '🔥 115 高三第三次模考',
+                subtitle: '最後衝刺前哨戰，穩紮穩打！',
+                date: '2026-12-08T00:00:00'
+            },
+            listening2: {
+                title: '🎧 116 英語聽力第二次測驗',
+                subtitle: '把握二次機會，完美發揮！',
+                date: '2026-12-12T00:00:00' // 新增英聽第二次 12/12 00:00
+            },
+            gsat: {
+                title: '🎓 116 學測正式登場',
+                subtitle: '堅持到底，成功就在前方！',
+                date: '2027-01-22T00:00:00'
+            }
         };
 
-        // --- 1. 倒數計時器邏輯 ---
-        const targetDate = new Date('2027-01-22T00:00:00').getTime();
+        const examSelector = document.getElementById('examSelector');
+        const countdownTitle = document.getElementById('countdownTitle');
+        const countdownSubtitle = document.getElementById('countdownSubtitle');
+        const nextEventBadge = document.getElementById('nextEventBadge');
+
+        let currentExamKey = localStorage.getItem('selectedExamKey') || 'gsat';
+        if (!examEvents[currentExamKey]) currentExamKey = 'gsat';
+        examSelector.value = currentExamKey;
+
+        examSelector.addEventListener('change', (e) => {
+            currentExamKey = e.target.value;
+            localStorage.setItem('selectedExamKey', currentExamKey);
+            updateCountdown();
+        });
 
         function updateCountdown() {
             const now = new Date().getTime();
+            const currentExam = examEvents[currentExamKey];
+            const targetDate = new Date(currentExam.date).getTime();
             const difference = targetDate - now;
+
+            countdownTitle.innerText = currentExam.title;
+            countdownSubtitle.innerText = currentExam.subtitle;
 
             if (difference > 0) {
                 const days = Math.floor(difference / (1000 * 60 * 60 * 24));
@@ -461,14 +503,36 @@
                 document.getElementById('minutes').innerText = String(minutes).padStart(2, '0');
                 document.getElementById('seconds').innerText = String(seconds).padStart(2, '0');
             } else {
-                document.querySelector('.countdown-grid').innerHTML = "<h2>🎉 學測順利！</h2>";
+                document.getElementById('days').innerText = '00';
+                document.getElementById('hours').innerText = '00';
+                document.getElementById('minutes').innerText = '00';
+                document.getElementById('seconds').innerText = '00';
+            }
+
+            updateNextEventHint(now);
+        }
+
+        function updateNextEventHint(now) {
+            const upcoming = Object.values(examEvents)
+                .map(event => ({
+                    ...event,
+                    diff: new Date(event.date).getTime() - now
+                }))
+                .filter(event => event.diff > 0)
+                .sort((a, b) => a.diff - b.diff);
+
+            if (upcoming.length > 0) {
+                const next = upcoming[0];
+                const daysLeft = Math.ceil(next.diff / (1000 * 60 * 60 * 24));
+                nextEventBadge.innerHTML = `📍 下一個最近關卡：<strong>${next.title.split(' ')[1] || next.title}</strong>（還剩 <strong>${daysLeft}</strong> 天）`;
+            } else {
+                nextEventBadge.innerHTML = `🎉 所有的挑戰都已經順利完成了！`;
             }
         }
 
         setInterval(updateCountdown, 1000);
         updateCountdown();
 
-        // --- 2. 暗黑/明亮模式切換 ---
         const themeBtn = document.getElementById('themeBtn');
         const body = document.body;
 
@@ -483,13 +547,11 @@
             }
         });
 
-        // --- 3. 經典彩蛋 Rickroll ---
         const surpriseBtn = document.querySelector('#surpriseBtn');
         surpriseBtn.addEventListener('click', () => {
             window.location.href = 'https://www.youtube.com/watch?v=BpHvY8Wt2j0';
         });
 
-        // --- 4. 隨機科目轉盤邏輯 ---
         const rouletteBtn = document.getElementById('rouletteBtn');
         const rouletteModal = document.getElementById('rouletteModal');
         const rouletteResult = document.getElementById('rouletteResult');
@@ -504,7 +566,6 @@
             rouletteResult.style.color = 'var(--text-color)';
             
             let counter = 0;
-            
             spinInterval = setInterval(() => {
                 rouletteResult.innerText = subjects[counter % subjects.length];
                 counter++;
@@ -526,7 +587,6 @@
             }, 300);
         });
 
-        // --- 5. 待辦事項清單邏輯 ---
         const todoInput = document.getElementById('todoInput');
         const addTodoBtn = document.getElementById('addTodoBtn');
         const todoList = document.getElementById('todoList');
@@ -594,5 +654,4 @@
         renderTodos();
     </script>
 </body>
-</html>
 </html>
