@@ -178,7 +178,7 @@
         .custom-btn.success { color: #10b981; border-color: rgba(16,185,129,0.4); }
         .custom-btn.success:hover { background: rgba(16,185,129,0.15); border-color: #10b981; }
 
-        /* --- 每周進度表 Weekly Chart (比照圖片一風格) --- */
+        /* --- 每周進度表 Weekly Chart --- */
         .week-nav-bar {
             display: flex; justify-content: space-between; align-items: center;
             margin-bottom: 20px; flex-wrap: wrap; gap: 10px;
@@ -198,6 +198,25 @@
         }
         .weekly-table .subject-col {
             font-weight: bold; font-size: 1.05rem; width: 140px; border-bottom: 2px solid var(--table-border);
+        }
+
+        /* 大考/模考表頭醒目提示標籤 */
+        .exam-header-badge {
+            display: inline-block;
+            background: #ef4444;
+            color: #ffffff;
+            font-size: 0.72rem;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 6px;
+            margin-left: 4px;
+            vertical-align: middle;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.9; }
+            50% { opacity: 0.6; }
+            100% { opacity: 0.9; }
         }
 
         .weekly-cell {
@@ -512,10 +531,10 @@
         let selectedColor = "";
 
         const examEvents = {
-            mock1: { title: '📝 115 高三第一次模考', date: '2026-09-02' },
-            mock2: { title: '📚 115 高三第二次模考', date: '2026-10-28' },
-            mock3: { title: '🔥 115 高三第三次模考', date: '2026-12-08' },
-            gsat:  { title: '🎓 116 學測',          date: '2027-01-22' }
+            mock1: { title: '📝 115 高三第一次模考', date: '2026-09-02', shortTitle: '🔥第一次模考' },
+            mock2: { title: '📚 115 高三第二次模考', date: '2026-10-28', shortTitle: '🔥第二次模考' },
+            mock3: { title: '🔥 115 高三第三次模考', date: '2026-12-08', shortTitle: '🔥第三次模考' },
+            gsat:  { title: '🎓 116 學測',          date: '2027-01-22', shortTitle: '🎓 116 學測' }
         };
 
         const openDrawerBtn = document.getElementById('openDrawerBtn');
@@ -591,7 +610,7 @@
             return `${yyyy}-${mm}-${dd}`;
         }
 
-        // 渲染每週進度表 (比照圖片一：直排科目，橫排星期一至日)
+        // 渲染每週進度表 (含大考/模考自動標記功能)
         function renderWeeklyTable() {
             const table = document.getElementById('weeklyTable');
             const weekRangeTitle = document.getElementById('weekRangeTitle');
@@ -607,10 +626,20 @@
             const endStr = `${datesOfWeek[6].getFullYear()}/${String(datesOfWeek[6].getMonth() + 1).padStart(2, '0')}/${String(datesOfWeek[6].getDate()).padStart(2, '0')}`;
             weekRangeTitle.innerText = `${startStr} - ${endStr}`;
 
-            // 表頭：星期 / 科目、星期一～星期日
+            // 表頭：星期 / 科目、星期一～星期日（帶大考比對標籤）
             let html = '<thead><tr><th class="subject-col">星期 / 科目</th>';
             datesOfWeek.forEach((dateObj, dayIdx) => {
-                html += `<th>星期${daysOfWeek[dayIdx]}</th>`;
+                const dateStr = formatDateString(dateObj);
+                
+                // 比對當天是否有大考或模考
+                let examBadgeHtml = '';
+                Object.values(examEvents).forEach(exam => {
+                    if (exam.date === dateStr) {
+                        examBadgeHtml += `<span class="exam-header-badge">${exam.shortTitle}</span>`;
+                    }
+                });
+
+                html += `<th>星期${daysOfWeek[dayIdx]} ${examBadgeHtml}</th>`;
             });
             html += '</tr></thead><tbody>';
 
