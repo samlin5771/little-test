@@ -472,7 +472,7 @@
 
         <div class="drawer-actions">
             <button class="custom-btn" id="loginBtn">🔐 Google 帳號登入</button>
-            <button class="custom-btn" id="themeBtn">☀️ 切換明亮模式</button>
+            <button class="custom-btn" id="themeBtn">☀️Bright mode </button>
         </div>
     </aside>
 
@@ -918,7 +918,7 @@
         document.getElementById('themeBtn').addEventListener('click', () => {
             const isDark = document.body.getAttribute('data-theme') === 'dark';
             document.body.setAttribute('data-theme', isDark ? 'light' : 'dark');
-            document.getElementById('themeBtn').innerText = isDark ? '🌙Dark mode' : '☀️ Bright mode';
+            document.getElementById('themeBtn').innerText = isDark ? '🌙 切換暗黑模式' : '☀️ 切換明亮模式';
         });
 
         document.getElementById('surpriseBtn').addEventListener('click', () => {
