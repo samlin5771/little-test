@@ -591,7 +591,7 @@
 
         const daysOfWeek = ['一', '二', '三', '四', '五', '六', '日'];
         const subjects = ['數學', '自然', '英文', '國文', '社會'];
-        const slotLabels = ['plan', 'Urgent'];
+        const slotLabels = ['上', '下'];
         let currentEditWeeklyKey = null;
 
         let currentMonday = getMonday(new Date());
@@ -627,7 +627,7 @@
             weekRangeTitle.innerText = `${startStr} - ${endStr}`;
 
             // 表頭：星期 / 科目、星期一～星期日（帶大考比對標籤）
-            let html = '<thead><tr><th class="subject-col">星期 / 科目</th>';
+            let html = '<thead><tr><th class="subject-col">星期/科目</th>';
             datesOfWeek.forEach((dateObj, dayIdx) => {
                 const dateStr = formatDateString(dateObj);
                 
@@ -660,7 +660,7 @@
                         
                         const doneClass = data.done ? 'completed' : '';
                         const colorClass = data.color ? `color-${data.color}` : '';
-                        const textDisplay = data.text ? data.text : '...';
+                        const textDisplay = data.text ? data.text : '    ';
                         
                         html += `<td>
                                     <div class="weekly-cell ${doneClass} ${colorClass}" data-key="${key}" data-title="${dateStr} - ${subj} (${slotLabels[slot]})">
