@@ -590,8 +590,8 @@
         });
 
         const daysOfWeek = ['一', '二', '三', '四', '五', '六', '日'];
-        const subjects = ['數學', '物理/自然', '英文', '國文', '社會/自然'];
-        const slotLabels = ['上', '下'];
+        const subjects = ['數學', '自然', '英文', '國文', '社會'];
+        const slotLabels = ['plan', 'Urgent'];
         let currentEditWeeklyKey = null;
 
         let currentMonday = getMonday(new Date());
@@ -643,7 +643,7 @@
             });
             html += '</tr></thead><tbody>';
 
-            // 內容：逐個科目處理，每個科目有「上」、「下」兩個 Row
+            // 內容：逐個科目處理
             subjects.forEach((subj, subjIdx) => {
                 for (let slot = 0; slot < 2; slot++) {
                     html += '<tr>';
