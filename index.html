@@ -12,27 +12,27 @@
     <style>
         :root {
             --bg-overlay: rgba(255, 255, 255, 0.4);
-            --card-bg: rgba(255, 255, 255, 0.35);
+            --card-bg: rgba(255, 255, 255, 0.45);
             --card-border: rgba(255, 255, 255, 0.5);
-            --sidebar-bg: rgba(255, 255, 255, 0.45);
+            --sidebar-bg: rgba(255, 255, 255, 0.75);
             --text-color: #222222;
-            --accent-color: #4f46e5;
+            --accent-color: #6366f1;
             --btn-bg: rgba(255, 255, 255, 0.7);
             --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-            --input-bg: rgba(255, 255, 255, 0.5);
+            --input-bg: rgba(255, 255, 255, 0.6);
             --bg-fallback: #1a1b26; 
         }
 
         [data-theme="dark"] {
-            --bg-overlay: rgba(0, 0, 0, 0.5);
-            --card-bg: rgba(20, 20, 30, 0.45);
-            --card-border: rgba(255, 255, 255, 0.18);
-            --sidebar-bg: rgba(15, 16, 25, 0.65);
+            --bg-overlay: rgba(0, 0, 0, 0.55);
+            --card-bg: rgba(20, 20, 32, 0.55);
+            --card-border: rgba(255, 255, 255, 0.15);
+            --sidebar-bg: rgba(15, 16, 26, 0.85);
             --text-color: #ffffff;
             --accent-color: #818cf8;
-            --btn-bg: rgba(255, 255, 255, 0.15);
-            --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-            --input-bg: rgba(0, 0, 0, 0.25);
+            --btn-bg: rgba(255, 255, 255, 0.12);
+            --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+            --input-bg: rgba(0, 0, 0, 0.3);
             --bg-fallback: #0f1015;
         }
 
@@ -46,9 +46,9 @@
             color: var(--text-color);
             margin: 0;
             min-height: 100vh;
-            display: flex;
-            position: relative;
             background-color: var(--bg-fallback);
+            overflow-x: hidden;
+            overflow-y: auto;
         }
 
         body::after {
@@ -74,18 +74,111 @@
             z-index: -1;
         }
 
-        /* --- 側邊欄 Sidebar --- */
-        .sidebar {
-            width: 260px;
-            background: var(--sidebar-bg);
+        /* --- 頂部導航列 Top Header --- */
+        .top-navbar {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            background: var(--card-bg);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .menu-toggle-btn {
+            background: var(--btn-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-color);
+            font-size: 1.2rem;
+            padding: 8px 14px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .top-nav-tabs {
+            display: flex;
+            gap: 8px;
+        }
+
+        .top-nav-item {
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--text-color);
+        }
+
+        .top-nav-item.active {
+            background: var(--btn-bg);
+            border-color: var(--card-border);
+            color: var(--accent-color);
+        }
+
+        /* --- 抽屜側邊欄 Drawer Sidebar --- */
+        .drawer-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 99;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .drawer-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .sidebar-drawer {
+            position: fixed;
+            top: 0; left: -300px;
+            width: 280px;
+            height: 100%;
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             border-right: 1px solid var(--card-border);
+            z-index: 100;
+            padding: 25px 20px;
             display: flex;
             flex-direction: column;
-            padding: 20px 15px;
-            z-index: 10;
-            flex-shrink: 0;
+            transition: left 0.3s ease;
+            box-shadow: 5px 0 25px rgba(0,0,0,0.2);
+        }
+
+        .sidebar-drawer.active {
+            left: 0;
+        }
+
+        .drawer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .drawer-title {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .close-drawer-btn {
+            background: none;
+            border: none;
+            color: var(--text-color);
+            font-size: 1.5rem;
+            cursor: pointer;
         }
 
         .user-profile {
@@ -100,8 +193,8 @@
         }
 
         .user-avatar {
-            width: 40px;
-            height: 40px;
+            width: 42px;
+            height: 42px;
             border-radius: 50%;
             object-fit: cover;
             background: var(--btn-bg);
@@ -114,52 +207,25 @@
         }
 
         .user-name { font-weight: bold; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .user-status { font-size: 0.75rem; opacity: 0.7; }
+        .user-status { font-size: 0.75rem; opacity: 0.75; }
 
-        .nav-menu {
+        .drawer-actions {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            flex: 1;
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
             gap: 12px;
-            padding: 12px 16px;
-            border-radius: 12px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 0.95rem;
-            border: 1px solid transparent;
-        }
-
-        .nav-item:hover, .nav-item.active {
-            background: var(--btn-bg);
-            border-color: var(--card-border);
-            color: var(--accent-color);
-        }
-
-        .sidebar-footer {
             margin-top: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
         }
 
         /* --- 主要內容區 Main Content --- */
         .main-wrapper {
-            flex: 1;
-            padding: 30px;
-            overflow-y: auto;
+            padding: 25px 15px;
             display: flex;
             justify-content: center;
         }
 
         .container {
             width: 100%;
-            max-width: 800px;
+            max-width: 900px;
         }
 
         .tab-content { display: none; }
@@ -167,8 +233,8 @@
 
         .glass-card {
             background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
             border: 1px solid var(--card-border);
             border-radius: 20px;
             padding: 25px;
@@ -206,12 +272,12 @@
 
         .time-box {
             background: var(--btn-bg);
-            padding: 10px 4px;
-            border-radius: 12px;
+            padding: 12px 4px;
+            border-radius: 14px;
             border: 1px solid var(--card-border);
         }
 
-        .time-number { font-size: 1.5rem; font-weight: bold; color: var(--accent-color); display: block; }
+        .time-number { font-size: 1.6rem; font-weight: bold; color: var(--accent-color); display: block; }
         .time-label { font-size: 0.8rem; opacity: 0.8; }
 
         .next-event-badge {
@@ -219,7 +285,7 @@
             text-align: center;
             background: var(--btn-bg);
             border: 1px solid var(--card-border);
-            padding: 8px 16px;
+            padding: 10px 16px;
             border-radius: 15px;
             font-size: 0.85rem;
             margin: 15px auto;
@@ -239,9 +305,15 @@
             cursor: pointer;
             backdrop-filter: blur(5px);
             transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
 
         .custom-btn:hover { border-color: var(--accent-color); }
+        .custom-btn.danger { color: #ff5555; border-color: rgba(255,85,85,0.4); }
+        .custom-btn.danger:hover { background: rgba(255,85,85,0.15); }
 
         /* --- 待辦事項 Todo --- */
         .todo-input-group { display: flex; gap: 10px; margin-bottom: 20px; }
@@ -262,101 +334,153 @@
             align-items: center;
             background: var(--btn-bg);
             border: 1px solid var(--card-border);
-            padding: 10px 14px;
-            border-radius: 12px;
-            margin-bottom: 8px;
-            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 14px;
+            margin-bottom: 10px;
+            gap: 12px;
         }
         .todo-checkbox {
             appearance: none;
-            width: 18px; height: 18px;
+            width: 20px; height: 20px;
             border: 2px solid var(--card-border);
-            border-radius: 5px;
+            border-radius: 6px;
             cursor: pointer;
             position: relative;
         }
         .todo-checkbox:checked { background-color: var(--accent-color); border-color: var(--accent-color); }
         .todo-checkbox:checked::after {
-            content: '✓'; position: absolute; color: white; font-size: 12px;
+            content: '✓'; position: absolute; color: white; font-size: 13px;
             top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold;
         }
         .todo-text { flex: 1; word-break: break-all; }
 
-        /* --- Modal --- */
+        /* --- 行事曆 FullCalendar 風格重塑 --- */
+        .fc {
+            --fc-border-color: var(--card-border);
+            --fc-page-bg-color: transparent;
+            --fc-neutral-bg-color: transparent;
+            --fc-list-event-hover-bg-color: var(--btn-bg);
+            --fc-today-bg-color: rgba(99, 102, 241, 0.15);
+            font-family: inherit;
+        }
+        .fc .fc-toolbar-title { font-size: 1.2rem; font-weight: bold; color: var(--text-color); }
+        .fc .fc-button-primary {
+            background-color: var(--btn-bg) !important;
+            border-color: var(--card-border) !important;
+            color: var(--text-color) !important;
+            border-radius: 20px !important;
+            font-weight: 600;
+            padding: 6px 14px !important;
+            text-transform: capitalize;
+            box-shadow: none !important;
+        }
+        .fc .fc-button-primary:hover {
+            border-color: var(--accent-color) !important;
+            color: var(--accent-color) !important;
+        }
+        .fc .fc-daygrid-day-frame {
+            min-height: 85px !important; /* 拉高格子 */
+        }
+        .fc .fc-daygrid-day-number {
+            color: var(--text-color);
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 6px 8px;
+        }
+        .fc-event {
+            background-color: var(--accent-color) !important;
+            border: none !important;
+            border-radius: 6px !important;
+            padding: 3px 6px !important;
+            font-size: 0.82rem !important;
+            cursor: pointer;
+        }
+
+        /* --- 通用美化 Modal 彈窗 --- */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
             display: flex; justify-content: center; align-items: center;
-            z-index: 100; opacity: 0; pointer-events: none;
-            transition: opacity 0.3s ease;
+            z-index: 200; opacity: 0; pointer-events: none;
+            transition: opacity 0.25s ease;
         }
         .modal-overlay.active { opacity: 1; pointer-events: auto; }
-        .modal-content { text-align: center; min-width: 280px; }
-        .roulette-result { font-size: 2rem; font-weight: bold; color: var(--accent-color); margin: 20px 0; }
+        .modal-card {
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 25px;
+            width: 90%;
+            max-width: 380px;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+        .modal-card h3 { margin-top: 0; margin-bottom: 15px; font-size: 1.2rem; }
+        .modal-input {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-color);
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            outline: none;
+            margin-bottom: 20px;
+        }
+        .modal-btns { display: flex; gap: 10px; justify-content: center; }
 
-        .fc { color: var(--text-color); }
-        .fc-theme-standard td, .fc-theme-standard th { border-color: var(--card-border); }
-        .fc-button-primary { background-color: var(--btn-bg) !important; border-color: var(--card-border) !important; color: var(--text-color) !important; }
+        .roulette-result { font-size: 2.2rem; font-weight: bold; color: var(--accent-color); margin: 20px 0; }
 
-        /* 📱 手機 RWD 排版修復 */
-        @media (max-width: 768px) {
-            body { flex-direction: column; }
-            .sidebar {
-                width: 100%;
-                border-right: none;
-                border-bottom: 1px solid var(--card-border);
-                padding: 15px;
-            }
-            .nav-menu {
-                flex-direction: row;
-                justify-content: space-around;
-            }
-            .nav-item {
-                padding: 8px 12px;
-                font-size: 0.85rem;
-            }
-            .sidebar-footer {
-                flex-direction: row;
-                margin-top: 15px;
-            }
-            .sidebar-footer .custom-btn {
-                flex: 1;
-                font-size: 0.8rem;
-                padding: 8px;
-            }
-            .main-wrapper {
-                padding: 15px 10px;
-            }
+        @media (max-width: 600px) {
+            .top-nav-item { padding: 6px 10px; font-size: 0.8rem; }
+            .fc .fc-daygrid-day-frame { min-height: 65px !important; }
         }
     </style>
 </head>
 <body data-theme="dark">
 
-    <aside class="sidebar">
+    <!-- 頂部導航列 -->
+    <header class="top-navbar">
+        <button class="menu-toggle-btn" id="openDrawerBtn">
+            <span>☰</span>
+        </button>
+        <div class="top-nav-tabs">
+            <button class="top-nav-item active" data-tab="tab-countdown">⏱️ 倒數</button>
+            <button class="top-nav-item" data-tab="tab-calendar">📅 行事曆</button>
+            <button class="top-nav-item" data-tab="tab-todo">📝 待辦</button>
+        </div>
+    </header>
+
+    <!-- 側邊抽屜選單 -->
+    <div class="drawer-overlay" id="drawerOverlay"></div>
+    <aside class="sidebar-drawer" id="sidebarDrawer">
+        <div class="drawer-header">
+            <span class="drawer-title">⚙️ 個人設定</span>
+            <button class="close-drawer-btn" id="closeDrawerBtn">×</button>
+        </div>
+
         <div class="user-profile">
             <img src="https://via.placeholder.com/40" alt="Avatar" class="user-avatar" id="userAvatar">
             <div class="user-info">
                 <span class="user-name" id="userName">未登入訪客</span>
-                <span class="user-status" id="userStatus">僅使用本機快取資料</span>
+                <span class="user-status" id="userStatus">僅使用本機快取</span>
             </div>
         </div>
 
-        <nav class="nav-menu">
-            <div class="nav-item active" data-tab="tab-countdown"><span>⏱️</span> 倒數</div>
-            <div class="nav-item" data-tab="tab-calendar"><span>📅</span> 行事曆</div>
-            <div class="nav-item" data-tab="tab-todo"><span>📝</span> 待辦</div>
-        </nav>
-
-        <div class="sidebar-footer">
-            <button class="custom-btn" id="loginBtn">🔐 Google 登入</button>
-            <button class="custom-btn" id="themeBtn">☀️ 切換模式</button>
+        <div class="drawer-actions">
+            <button class="custom-btn" id="loginBtn">🔐 Google 帳號登入</button>
+            <button class="custom-btn" id="themeBtn">☀️ 切換明亮模式</button>
         </div>
     </aside>
 
+    <!-- 主內容區 -->
     <main class="main-wrapper">
         <div class="container">
 
+            <!-- 1. 倒數分頁 -->
             <section id="tab-countdown" class="tab-content active">
                 <div class="glass-card" style="text-align: center;">
                     <div class="target-select-wrapper">
@@ -389,16 +513,18 @@
                 </div>
             </section>
 
+            <!-- 2. 行事曆分頁 -->
             <section id="tab-calendar" class="tab-content">
                 <div class="glass-card">
-                    <h2 style="margin:0 0 10px 0;">📅 每日學習進度紀錄</h2>
+                    <h2 style="margin:0 0 15px 0; text-align: center;">📅 學習與考試行事曆</h2>
                     <div id="calendar"></div>
                 </div>
             </section>
 
+            <!-- 3. 待辦事項分頁 -->
             <section id="tab-todo" class="tab-content">
                 <div class="glass-card">
-                    <h2 style="margin:0 0 15px 0;">📝 今日待辦事項</h2>
+                    <h2 style="margin:0 0 15px 0; text-align: center;">📝 今日待辦事項</h2>
                     <div class="todo-input-group">
                         <input type="text" id="todoInput" class="todo-input" placeholder="新增待辦事項..." />
                         <button class="custom-btn" id="addTodoBtn">新增</button>
@@ -410,11 +536,50 @@
         </div>
     </main>
 
+    <!-- 轉盤 Modal -->
     <div class="modal-overlay" id="rouletteModal">
-        <div class="glass-card modal-content">
-            <h2>現在要讀：</h2>
+        <div class="modal-card">
+            <h3>🎲 現在要讀：</h3>
             <div class="roulette-result" id="rouletteResult">❓</div>
             <button class="custom-btn" id="closeRouletteBtn" style="display: none; margin: 0 auto;">好！去讀書</button>
+        </div>
+    </div>
+
+    <!-- 行事曆新增 Modal -->
+    <div class="modal-overlay" id="eventAddModal">
+        <div class="modal-card">
+            <h3>📅 新增行程紀錄</h3>
+            <p id="eventAddDateText" style="font-size:0.85rem; opacity:0.8; margin-bottom:12px;"></p>
+            <input type="text" id="eventTitleInput" class="modal-input" placeholder="例如：寫英文模考題..." />
+            <div class="modal-btns">
+                <button class="custom-btn" id="cancelAddEventBtn">取消</button>
+                <button class="custom-btn" id="confirmAddEventBtn">確定儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 行事曆編輯/刪除 Modal -->
+    <div class="modal-overlay" id="eventEditModal">
+        <div class="modal-card">
+            <h3>✏️ 編輯行程事件</h3>
+            <input type="text" id="eventEditInput" class="modal-input" />
+            <div class="modal-btns">
+                <button class="custom-btn danger" id="deleteEventBtn">🗑️ 刪除</button>
+                <button class="custom-btn" id="cancelEditEventBtn">取消</button>
+                <button class="custom-btn" id="saveEditEventBtn">儲存修改</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 登出二次確認 Modal -->
+    <div class="modal-overlay" id="logoutConfirmModal">
+        <div class="modal-card">
+            <h3>⚠️ 確定要登出嗎？</h3>
+            <p style="font-size:0.9rem; opacity:0.8; margin-bottom:20px;">登出後將切換為本機模式，雲端資料依然會保留。</p>
+            <div class="modal-btns">
+                <button class="custom-btn" id="cancelLogoutBtn">取消</button>
+                <button class="custom-btn danger" id="confirmLogoutBtn">確定登出</button>
+            </div>
         </div>
     </div>
 
@@ -445,55 +610,143 @@
         let calendarEvents = [];
         let todos = [];
 
+        // 彈窗控制暫存 variables
+        let selectedDateStr = "";
+        let selectedEventObj = null;
+
         document.addEventListener('DOMContentLoaded', () => {
             const calendarEl = document.getElementById('calendar');
             calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
                 locale: 'zh-tw',
+                height: 'auto',
                 selectable: true,
                 events: calendarEvents,
+                // 點擊空白日期 -> 開啟新增彈窗
                 dateClick: function(info) {
-                    const title = prompt('請輸入【' + info.dateStr + '】的紀錄：');
-                    if (title) {
-                        const newEvent = { title: title, start: info.dateStr, allDay: true };
-                        calendarEvents.push(newEvent);
-                        calendar.addEvent(newEvent);
-                        saveUserData();
-                    }
+                    selectedDateStr = info.dateStr;
+                    document.getElementById('eventAddDateText').innerText = '日期：' + selectedDateStr;
+                    document.getElementById('eventTitleInput').value = '';
+                    document.getElementById('eventAddModal').classList.add('active');
+                },
+                // 點擊已有事件 -> 開啟編輯/刪除彈窗
+                eventClick: function(info) {
+                    selectedEventObj = info.event;
+                    document.getElementById('eventEditInput').value = selectedEventObj.title;
+                    document.getElementById('eventEditModal').classList.add('active');
                 }
             });
             calendar.render();
         });
 
+        // --- 新增事件邏輯 ---
+        document.getElementById('cancelAddEventBtn').addEventListener('click', () => {
+            document.getElementById('eventAddModal').classList.remove('active');
+        });
+
+        document.getElementById('confirmAddEventBtn').addEventListener('click', () => {
+            const title = document.getElementById('eventTitleInput').value.trim();
+            if (title && selectedDateStr) {
+                const newEvent = { title: title, start: selectedDateStr, allDay: true, id: String(Date.now()) };
+                calendarEvents.push(newEvent);
+                calendar.addEvent(newEvent);
+                saveUserData();
+            }
+            document.getElementById('eventAddModal').classList.remove('active');
+        });
+
+        // --- 編輯/刪除事件邏輯 ---
+        document.getElementById('cancelEditEventBtn').addEventListener('click', () => {
+            document.getElementById('eventEditModal').classList.remove('active');
+        });
+
+        document.getElementById('saveEditEventBtn').addEventListener('click', () => {
+            const newTitle = document.getElementById('eventEditInput').value.trim();
+            if (newTitle && selectedEventObj) {
+                selectedEventObj.setProp('title', newTitle);
+                // 更新陣列中的紀錄
+                const idx = calendarEvents.findIndex(e => e.start === selectedEventObj.startStr && e.title === selectedEventObj.title);
+                if (idx !== -1) calendarEvents[idx].title = newTitle;
+                saveUserData();
+            }
+            document.getElementById('eventEditModal').classList.remove('active');
+        });
+
+        document.getElementById('deleteEventBtn').addEventListener('click', () => {
+            if (selectedEventObj) {
+                calendarEvents = calendarEvents.filter(e => !(e.start === selectedEventObj.startStr && e.title === selectedEventObj.title));
+                selectedEventObj.remove();
+                saveUserData();
+            }
+            document.getElementById('eventEditModal').classList.remove('active');
+        });
+
+        // --- 側邊 Drawer 抽屜選單控制 ---
+        const openDrawerBtn = document.getElementById('openDrawerBtn');
+        const closeDrawerBtn = document.getElementById('closeDrawerBtn');
+        const sidebarDrawer = document.getElementById('sidebarDrawer');
+        const drawerOverlay = document.getElementById('drawerOverlay');
+
+        function toggleDrawer(open) {
+            if (open) {
+                sidebarDrawer.classList.add('active');
+                drawerOverlay.classList.add('active');
+            } else {
+                sidebarDrawer.classList.remove('active');
+                drawerOverlay.classList.remove('active');
+            }
+        }
+
+        openDrawerBtn.addEventListener('click', () => toggleDrawer(true));
+        closeDrawerBtn.addEventListener('click', () => toggleDrawer(false));
+        drawerOverlay.addEventListener('click', () => toggleDrawer(false));
+
+        // --- 登入與登出二次確認 ---
         const loginBtn = document.getElementById('loginBtn');
+        const logoutConfirmModal = document.getElementById('logoutConfirmModal');
+
         loginBtn.addEventListener('click', () => {
             if (currentUser) {
-                signOut(auth).then(() => alert("已成功登出！"));
+                // 登出：開啟二次確認彈窗
+                logoutConfirmModal.classList.add('active');
             } else {
                 signInWithPopup(auth, provider)
                     .then((result) => {
                         console.log("登入成功:", result.user);
+                        toggleDrawer(false);
                     })
                     .catch((err) => {
                         console.error("登入失敗:", err);
-                        alert("登入失敗: " + err.message + "\n請確認 Firebase 已加入 samlin5771.github.io 網域！");
+                        alert("登入失敗: " + err.message + "\n請確認 Firebase 授權網域！");
                     });
             }
         });
 
+        document.getElementById('cancelLogoutBtn').addEventListener('click', () => {
+            logoutConfirmModal.classList.remove('active');
+        });
+
+        document.getElementById('confirmLogoutBtn').addEventListener('click', () => {
+            signOut(auth).then(() => {
+                logoutConfirmModal.classList.remove('active');
+                toggleDrawer(false);
+            });
+        });
+
+        // --- Firebase 狀態監聽 ---
         onAuthStateChanged(auth, async (user) => {
             currentUser = user;
             if (user) {
                 document.getElementById('userName').innerText = user.displayName;
-                document.getElementById('userStatus').innerText = "雲端同步中";
+                document.getElementById('userStatus').innerText = "雲端同步已啟用";
                 document.getElementById('userAvatar').src = user.photoURL;
-                loginBtn.innerText = "🔒 登出";
+                loginBtn.innerText = "🔒 登出帳號";
                 await loadUserData();
             } else {
                 document.getElementById('userName').innerText = "未登入訪客";
-                document.getElementById('userStatus').innerText = "僅本機快取";
+                document.getElementById('userStatus').innerText = "僅使用本機快取";
                 document.getElementById('userAvatar').src = "https://via.placeholder.com/40";
-                loginBtn.innerText = "🔐 Google 登入";
+                loginBtn.innerText = "🔐 Google 帳號登入";
                 
                 todos = JSON.parse(localStorage.getItem('study_todos')) || [];
                 renderTodos();
@@ -535,24 +788,29 @@
             }
         }
 
-        const navItems = document.querySelectorAll('.nav-item');
+        // --- 頂部分頁切換 ---
+        const topNavItems = document.querySelectorAll('.top-nav-item');
         const tabContents = document.querySelectorAll('.tab-content');
 
-        navItems.forEach(item => {
+        topNavItems.forEach(item => {
             item.addEventListener('click', () => {
                 const targetTab = item.getAttribute('data-tab');
-                navItems.forEach(i => i.classList.remove('active'));
+                topNavItems.forEach(i => i.classList.remove('active'));
                 tabContents.forEach(c => c.classList.remove('active'));
 
                 item.classList.add('active');
                 document.getElementById(targetTab).classList.add('active');
 
+                // 切換分頁時自動捲動回頂部，防止畫面卡死
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+
                 if (targetTab === 'tab-calendar' && calendar) {
-                    setTimeout(() => calendar.updateSize(), 100);
+                    setTimeout(() => calendar.updateSize(), 150);
                 }
             });
         });
 
+        // --- 倒數計時邏輯 ---
         const examEvents = {
             mock1: { title: '📝 115 高三第一次模考', subtitle: '第一次段考10/13-14', date: '2026-09-02T00:00:00' },
             listening1: { title: '🎧 116 英語聽力第一次測驗', subtitle: '記得挖耳屎', date: '2026-10-17T00:00:00' },
@@ -610,13 +868,14 @@
         setInterval(updateCountdown, 1000);
         updateCountdown();
 
+        // --- 待辦事項邏輯 ---
         const todoInput = document.getElementById('todoInput');
         const todoList = document.getElementById('todoList');
 
         function renderTodos() {
             todoList.innerHTML = '';
             if (todos.length === 0) {
-                todoList.innerHTML = '<li style="text-align:center; opacity:0.6; padding:10px;">目前沒有待辦事項，太棒了！✨</li>';
+                todoList.innerHTML = '<li style="text-align:center; opacity:0.6; padding:15px;">目前沒有待辦事項，太棒了！✨</li>';
                 return;
             }
             todos.forEach((todo) => {
@@ -655,16 +914,18 @@
             }
         });
 
+        // 明暗模式切換
         document.getElementById('themeBtn').addEventListener('click', () => {
             const isDark = document.body.getAttribute('data-theme') === 'dark';
             document.body.setAttribute('data-theme', isDark ? 'light' : 'dark');
-            document.getElementById('themeBtn').innerText = isDark ? '🌙 切換暗黑' : '☀️ 切換明亮';
+            document.getElementById('themeBtn').innerText = isDark ? '🌙Dark mode' : '☀️ Bright mode';
         });
 
         document.getElementById('surpriseBtn').addEventListener('click', () => {
             window.location.href = 'https://www.youtube.com/watch?v=BpHvY8Wt2j0';
         });
 
+        // 轉盤抽籤
         const rouletteBtn = document.getElementById('rouletteBtn');
         const rouletteModal = document.getElementById('rouletteModal');
         const rouletteResult = document.getElementById('rouletteResult');
