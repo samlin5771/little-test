@@ -281,7 +281,7 @@
     <div class="drawer-overlay" id="drawerOverlay"></div>
     <aside class="sidebar-drawer" id="sidebarDrawer">
         <div class="drawer-header">
-            <span class="drawer-title">📚 學習導航</span>
+            <span class="drawer-title">📚 學習計畫</span>
             <button class="close-drawer-btn" id="closeDrawerBtn">×</button>
         </div>
 
@@ -338,10 +338,10 @@
                         <div class="time-box"><span class="time-number" id="seconds">00</span><span class="time-label">秒</span></div>
                     </div>
                     
-                    <!-- 補回：下一個重大關卡提示 -->
+                    <!-- 下一個重大關卡提示 -->
                     <div class="next-event-badge" id="nextEventBadge">⏳ 計算下一個重大關卡中...</div>
                     
-                    <!-- 補回：趣味轉盤與驚喜按鈕 -->
+                    <!-- 趣味轉盤與驚喜按鈕 -->
                     <div class="btn-group">
                         <button class="custom-btn" id="rouletteBtn">🎲 現在要幹嘛</button>
                         <button class="custom-btn" id="surpriseBtn">✨ 查看小驚喜</button>
@@ -816,7 +816,7 @@
             updateNextEventHint(now); 
         }
 
-        // 補回：下一個重大關卡計算邏輯
+        // 下一個重大關卡計算邏輯
         function updateNextEventHint(now) {
             const upcoming = Object.values(examEvents)
                 .map(event => ({ ...event, diff: new Date(event.date).getTime() - now }))
