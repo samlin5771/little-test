@@ -116,7 +116,6 @@
         .user-name { font-weight: bold; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .user-status { font-size: 0.75rem; opacity: 0.75; }
 
-        /* 側邊導航選單 */
         .drawer-nav { display: flex; flex-direction: column; gap: 10px; margin-bottom: auto; }
         .drawer-nav-item {
             padding: 12px 16px; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 1rem;
@@ -133,7 +132,7 @@
 
         /* --- 主要內容區 Main Content --- */
         .main-wrapper { padding: 25px 15px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 900px; }
+        .container { width: 100%; max-width: 1000px; }
 
         .tab-content { display: none; }
         .tab-content.active { display: block; animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
@@ -168,6 +167,7 @@
             background: var(--btn-bg); color: var(--text-color); border: 1px solid var(--card-border);
             padding: 10px 18px; border-radius: 30px; font-size: 0.9rem; font-weight: 600; cursor: pointer;
             backdrop-filter: blur(5px); transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            box-sizing: border-box;
         }
         .custom-btn:hover { border-color: var(--accent-color); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
         .custom-btn:active { transform: scale(0.96); }
@@ -176,7 +176,7 @@
         .custom-btn.success { color: #10b981; border-color: rgba(16,185,129,0.4); }
         .custom-btn.success:hover { background: rgba(16,185,129,0.15); border-color: #10b981; }
 
-        /* --- 每周進度表 Weekly Chart --- */
+        /* --- 每周進度表 Weekly Chart (橫式星期、直排科目兩格) --- */
         .week-nav-bar {
             display: flex; justify-content: space-between; align-items: center;
             margin-bottom: 15px; flex-wrap: wrap; gap: 10px;
@@ -184,30 +184,52 @@
         .week-title { font-weight: bold; font-size: 1.05rem; text-align: center; }
         .weekly-wrapper { overflow-x: auto; margin-top: 10px; padding-bottom: 10px; }
         .weekly-table {
-            width: 100%; min-width: 750px; border-collapse: separate; border-spacing: 6px; table-layout: fixed;
+            width: 100%; min-width: 850px; border-collapse: separate; border-spacing: 5px; table-layout: fixed;
         }
         .weekly-table th, .weekly-table td {
             background: var(--btn-bg); border: 1px solid var(--card-border);
-            border-radius: 12px; padding: 10px 6px; text-align: center;
+            border-radius: 10px; padding: 8px 4px; text-align: center;
         }
-        .weekly-table th { font-weight: bold; background: rgba(128, 128, 128, 0.1); font-size: 0.85rem; }
-        .weekly-table th:first-child { width: 70px; }
+        .weekly-table th { font-weight: bold; background: rgba(128, 128, 128, 0.12); font-size: 0.85rem; }
+        .weekly-table th.day-header { width: 110px; }
+        .weekly-table th.sub-header { font-size: 0.75rem; font-weight: normal; opacity: 0.85; }
+        
         .exam-badge {
             display: block; margin-top: 4px; padding: 2px 4px;
             background: #ef4444; color: #ffffff; border-radius: 6px;
-            font-size: 0.72rem; font-weight: bold; line-height: 1.2;
+            font-size: 0.7rem; font-weight: bold; line-height: 1.2;
         }
+
         .weekly-cell {
-            cursor: pointer; min-height: 80px; position: relative; transition: transform 0.2s, border-color 0.2s;
+            cursor: pointer; min-height: 55px; height: 55px; position: relative; transition: all 0.2s ease;
             display: flex; flex-direction: column; justify-content: space-between; text-align: left;
-            font-size: 0.85rem; line-height: 1.4;
+            font-size: 0.8rem; line-height: 1.3; padding: 6px !important;
         }
-        .weekly-cell:hover { transform: translateY(-2px); border-color: var(--accent-color); background: rgba(99, 102, 241, 0.05); }
-        .weekly-cell.completed { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); opacity: 0.8; }
+        .weekly-cell:hover { transform: translateY(-2px); border-color: var(--accent-color); }
+        
+        /* 標記顏色樣式 */
+        .weekly-cell.color-green { background: rgba(16, 185, 129, 0.25) !important; border-color: rgba(16, 185, 129, 0.5) !important; }
+        .weekly-cell.color-blue { background: rgba(59, 130, 246, 0.25) !important; border-color: rgba(59, 130, 246, 0.5) !important; }
+        .weekly-cell.color-yellow { background: rgba(245, 158, 11, 0.25) !important; border-color: rgba(245, 158, 11, 0.5) !important; }
+        .weekly-cell.color-pink { background: rgba(236, 72, 153, 0.25) !important; border-color: rgba(236, 72, 153, 0.5) !important; }
+        
         .weekly-cell.completed .cell-content { text-decoration: line-through; opacity: 0.7; }
-        .cell-content { flex-grow: 1; margin-bottom: 10px; word-break: break-all; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-        .cell-status { align-self: flex-end; font-size: 1.1rem; height: 20px; }
-        .empty-hint { opacity: 0.4; font-style: italic; font-size: 0.8rem; text-align: center; width: 100%; margin-top: 10px; }
+        .cell-content { flex-grow: 1; word-break: break-all; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .cell-status { align-self: flex-end; font-size: 0.85rem; height: 14px; line-height: 1; }
+        .empty-hint { opacity: 0.3; font-style: italic; font-size: 0.75rem; text-align: center; width: 100%; margin-auto: 0; }
+
+        /* 顏色選擇按鈕 */
+        .color-picker { display: flex; gap: 8px; margin-bottom: 20px; align-items: center; justify-content: center; }
+        .color-option {
+            width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform 0.2s;
+        }
+        .color-option:hover { transform: scale(1.15); }
+        .color-option.selected { border-color: var(--text-color); transform: scale(1.2); }
+        .color-option.default { background: var(--btn-bg); border: 1px solid var(--card-border); }
+        .color-option.green { background: rgba(16, 185, 129, 0.8); }
+        .color-option.blue { background: rgba(59, 130, 246, 0.8); }
+        .color-option.yellow { background: rgba(245, 158, 11, 0.8); }
+        .color-option.pink { background: rgba(236, 72, 153, 0.8); }
 
         /* --- 待辦事項 Todo --- */
         .todo-input-group { display: flex; gap: 10px; margin-bottom: 20px; }
@@ -258,24 +280,25 @@
             border: 1px solid var(--card-border); border-radius: 20px; padding: 25px;
             width: 90%; max-width: 400px; box-shadow: var(--shadow);
             transform: scale(0.9); transition: transform 0.25s;
+            display: flex; flex-direction: column; align-items: center; text-align: center;
         }
         .modal-overlay.active .modal-card { transform: scale(1); }
-        .modal-card h3 { margin-top: 0; margin-bottom: 15px; font-size: 1.2rem; text-align: center; }
+        .modal-card h3 { margin-top: 0; margin-bottom: 15px; font-size: 1.2rem; width: 100%; }
         .modal-input, .modal-textarea {
             width: 100%; background: var(--input-bg); border: 1px solid var(--card-border);
             color: var(--text-color); padding: 10px 14px; border-radius: 12px; font-size: 0.95rem;
             outline: none; margin-bottom: 20px; font-family: inherit;
         }
-        .modal-textarea { resize: vertical; min-height: 100px; }
-        .modal-checkbox-wrapper { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; cursor: pointer; }
-        .modal-btns { display: flex; gap: 10px; justify-content: center; }
+        .modal-textarea { resize: vertical; min-height: 90px; text-align: left; }
+        .modal-checkbox-wrapper { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px; cursor: pointer; width: 100%; }
+        .modal-btns { display: flex; gap: 10px; justify-content: center; width: 100%; flex-wrap: wrap; }
 
         /* 轉盤結果專用樣式 */
-        .roulette-result { font-size: 2.2rem; font-weight: bold; color: var(--accent-color); margin: 20px 0; text-align: center; }
+        .roulette-result { font-size: 2.2rem; font-weight: bold; color: var(--accent-color); margin: 20px 0; text-align: center; width: 100%; }
 
         @media (max-width: 600px) {
             .fc .fc-daygrid-day-frame { min-height: 65px !important; }
-            .weekly-table th, .weekly-table td { padding: 6px; }
+            .weekly-table th, .weekly-table td { padding: 4px; }
         }
     </style>
 </head>
@@ -362,7 +385,7 @@
             <section id="tab-weekly" class="tab-content">
                 <div class="glass-card">
                     <h2 style="margin:0 0 10px 0; text-align: center;">📊 專屬每周進度表</h2>
-                    <p style="text-align:center; font-size:0.85rem; opacity:0.8; margin-top:0; margin-bottom:15px;">點擊對應格子，自訂讀書範圍與打勾紀錄！大考日期將以色彩標記顯示。</p>
+                    <p style="text-align:center; font-size:0.85rem; opacity:0.8; margin-top:0; margin-bottom:15px;">橫列為星期一至日，直排為五個科目（每科兩格）。點擊可填寫與選擇標記顏色！</p>
                     
                     <div class="week-nav-bar">
                         <button class="custom-btn" id="prevWeekBtn">◀ 上一週</button>
@@ -401,12 +424,14 @@
         </div>
     </main>
 
-    <!--轉盤 Modal -->
+    <!-- 轉盤 Modal -->
     <div class="modal-overlay" id="rouletteModal">
         <div class="modal-card">
             <h3>🎲 現在要讀：</h3>
             <div class="roulette-result" id="rouletteResult">❓</div>
-            <button class="custom-btn" id="closeRouletteBtn" style="display: none; margin: 0 auto;">好！去讀書</button>
+            <div class="modal-btns">
+                <button class="custom-btn success" id="closeRouletteBtn" style="display: none;">好！去讀書</button>
+            </div>
         </div>
     </div>
 
@@ -416,6 +441,15 @@
             <h3 id="weeklyModalTitle">編輯進度</h3>
             <textarea id="weeklyInputContent" class="modal-textarea" placeholder="例如：寫英文模考題、複習數學第一冊..."></textarea>
             
+            <div class="color-picker" id="colorPicker">
+                <span style="font-size: 0.85rem; font-weight: bold; margin-right: 4px;">標記顏色：</span>
+                <div class="color-option default selected" data-color=""></div>
+                <div class="color-option green" data-color="green"></div>
+                <div class="color-option blue" data-color="blue"></div>
+                <div class="color-option yellow" data-color="yellow"></div>
+                <div class="color-option pink" data-color="pink"></div>
+            </div>
+
             <label class="modal-checkbox-wrapper">
                 <input type="checkbox" id="weeklyCheckbox" class="todo-checkbox" style="margin:0;">
                 <span style="font-weight:bold;">標記為已完成 ✅</span>
@@ -478,9 +512,10 @@
         let calendarEvents = [];
         let todos = [];
         let weeklyData = {}; 
-        let spinInterval = null;
+        let spinInterval;
+        let selectedColor = "";
 
-        // 大考與模考時間設定 (固定顯示)
+        // 大考與模考時間設定
         const examEvents = {
             mock1: { title: '📝 115 高三第一次模考', shortTitle: '📝 模考1', date: '2026-09-02' },
             mock2: { title: '📚 115 高三第二次模考', shortTitle: '📚 模考2', date: '2026-10-28' },
@@ -540,7 +575,7 @@
             });
         });
 
-        const daysOfWeek = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
+        const daysOfWeek = ['一', '二', '三', '四', '五', '六', '日'];
         const subjects = ['國文', '英文', '數學', '自然', '社會'];
         let currentEditWeeklyKey = null;
 
@@ -560,6 +595,7 @@
             return `${yyyy}-${mm}-${dd}`;
         }
 
+        // 渲染每週進度表 (橫向：星期一~日，縱向：科目各2格)
         function renderWeeklyTable() {
             const table = document.getElementById('weeklyTable');
             const weekRangeTitle = document.getElementById('weekRangeTitle');
@@ -575,8 +611,22 @@
             const endStr = `${datesOfWeek[6].getFullYear()}/${String(datesOfWeek[6].getMonth() + 1).padStart(2, '0')}/${String(datesOfWeek[6].getDate()).padStart(2, '0')}`;
             weekRangeTitle.innerText = `${startStr} - ${endStr}`;
 
-            let html = '<tr><th>科目</th>';
-            datesOfWeek.forEach((dateObj, idx) => {
+            // 表頭 第一排：星期標題
+            let html = '<tr><th class="day-header" rowspan="2">日期 / 科目</th>';
+            subjects.forEach(subj => {
+                html += `<th colspan="2">${subj}</th>`;
+            });
+            html += '</tr>';
+
+            // 表頭 第二排：科目一/二格
+            html += '<tr>';
+            subjects.forEach(() => {
+                html += '<th class="sub-header">一</th><th class="sub-header">二</th>';
+            });
+            html += '</tr>';
+
+            // 表格內容：橫列為 星期一 ~ 星期日
+            datesOfWeek.forEach((dateObj, dayIdx) => {
                 const dateStr = formatDateString(dateObj);
                 const monthDay = `${String(dateObj.getMonth() + 1).padStart(2, '0')}/${String(dateObj.getDate()).padStart(2, '0')}`;
                 
@@ -587,33 +637,31 @@
                     }
                 });
 
-                html += `<th>
-                            ${daysOfWeek[idx]}<br><small style="font-weight:normal; opacity:0.8;">${monthDay}</small>
-                            ${examTag}
-                         </th>`;
-            });
-            html += '</tr>';
+                html += `<tr><th>週${daysOfWeek[dayIdx]}<br><small style="font-weight:normal; opacity:0.8;">${monthDay}</small>${examTag}</th>`;
 
-            subjects.forEach((subj, r) => {
-                html += `<tr><th>${subj}</th>`;
-                datesOfWeek.forEach((dateObj, c) => {
-                    const dateStr = formatDateString(dateObj);
-                    const key = `${dateStr}_${r}`;
-                    const data = weeklyData[key] || { text: '', done: false };
-                    const doneClass = data.done ? 'completed' : '';
-                    const checkIcon = data.done ? '✅' : '';
-                    
-                    let contentHtml = data.text 
-                        ? `<div class="cell-content">${data.text}</div><div class="cell-status">${checkIcon}</div>`
-                        : `<div class="empty-hint">+ 新增</div>`;
-                    
-                    const cellTitle = `${dateStr} (${daysOfWeek[c]}) - ${subj}`;
-                    html += `<td class="weekly-cell ${doneClass}" data-key="${key}" data-title="${cellTitle}">
-                                ${contentHtml}
-                             </td>`;
+                subjects.forEach((subj, subjIdx) => {
+                    // 每科有兩格：slot 0 與 slot 1
+                    for (let slot = 0; slot < 2; slot++) {
+                        const key = `${dateStr}_${subjIdx}_${slot}`;
+                        const data = weeklyData[key] || { text: '', done: false, color: '' };
+                        
+                        const doneClass = data.done ? 'completed' : '';
+                        const colorClass = data.color ? `color-${data.color}` : '';
+                        const checkIcon = data.done ? '✅' : '';
+                        
+                        let contentHtml = data.text 
+                            ? `<div class="cell-content">${data.text}</div><div class="cell-status">${checkIcon}</div>`
+                            : `<div class="empty-hint">+</div>`;
+                        
+                        const cellTitle = `${dateStr} (週${daysOfWeek[dayIdx]}) - ${subj} (格${slot + 1})`;
+                        html += `<td class="weekly-cell ${doneClass} ${colorClass}" data-key="${key}" data-title="${cellTitle}">
+                                    ${contentHtml}
+                                 </td>`;
+                    }
                 });
                 html += '</tr>';
             });
+
             table.innerHTML = html;
 
             document.querySelectorAll('.weekly-cell').forEach(cell => {
@@ -636,14 +684,33 @@
             renderWeeklyTable();
         });
 
+        // 顏色選擇器事件綁定
+        const colorOptions = document.querySelectorAll('.color-option');
+        colorOptions.forEach(opt => {
+            opt.addEventListener('click', () => {
+                colorOptions.forEach(o => o.classList.remove('selected'));
+                opt.classList.add('selected');
+                selectedColor = opt.getAttribute('data-color');
+            });
+        });
+
         function openWeeklyModal(key, title) {
             currentEditWeeklyKey = key;
             document.getElementById('weeklyModalTitle').innerText = `✏️ 編輯 ${title}`;
             
-            const data = weeklyData[key] || { text: '', done: false };
+            const data = weeklyData[key] || { text: '', done: false, color: '' };
             document.getElementById('weeklyInputContent').value = data.text;
             document.getElementById('weeklyCheckbox').checked = data.done;
             
+            selectedColor = data.color || '';
+            colorOptions.forEach(o => {
+                if (o.getAttribute('data-color') === selectedColor) {
+                    o.classList.add('selected');
+                } else {
+                    o.classList.remove('selected');
+                }
+            });
+
             document.getElementById('weeklyModal').classList.add('active');
         }
 
@@ -654,8 +721,6 @@
         document.getElementById('clearWeeklyBtn').addEventListener('click', () => {
             if (currentEditWeeklyKey) {
                 delete weeklyData[currentEditWeeklyKey];
-                document.getElementById('weeklyInputContent').value = '';
-                document.getElementById('weeklyCheckbox').checked = false;
                 saveUserData();
                 renderWeeklyTable();
             }
@@ -667,10 +732,10 @@
             const done = document.getElementById('weeklyCheckbox').checked;
             
             if (currentEditWeeklyKey) {
-                if (text === '') {
+                if (text === '' && !done && !selectedColor) {
                     delete weeklyData[currentEditWeeklyKey];
                 } else {
-                    weeklyData[currentEditWeeklyKey] = { text, done };
+                    weeklyData[currentEditWeeklyKey] = { text, done, color: selectedColor };
                 }
                 saveUserData();
                 renderWeeklyTable();
@@ -932,7 +997,6 @@
         const subjectsList = ['📖 國文', '🔠 英文', '📐 數學', '🔬 自然', '🌍 社會'];
 
         rouletteBtn.addEventListener('click', () => {
-            if (spinInterval) clearInterval(spinInterval);
             rouletteModal.classList.add('active');
             closeRouletteBtn.style.display = 'none';
             let counter = 0;
@@ -942,7 +1006,6 @@
             }, 80);
             setTimeout(() => {
                 if (spinInterval) clearInterval(spinInterval);
-                spinInterval = null;
                 rouletteResult.innerText = subjectsList[Math.floor(Math.random() * subjectsList.length)];
                 closeRouletteBtn.style.display = 'inline-flex';
             }, 2000);
