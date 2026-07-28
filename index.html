@@ -177,16 +177,26 @@
         .custom-btn.success:hover { background: rgba(16,185,129,0.15); border-color: #10b981; }
 
         /* --- 每周進度表 Weekly Chart --- */
-        .weekly-wrapper { overflow-x: auto; margin-top: 15px; padding-bottom: 10px; }
+        .week-nav-bar {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 15px; flex-wrap: wrap; gap: 10px;
+        }
+        .week-title { font-weight: bold; font-size: 1.05rem; text-align: center; }
+        .weekly-wrapper { overflow-x: auto; margin-top: 10px; padding-bottom: 10px; }
         .weekly-table {
-            width: 100%; min-width: 600px; border-collapse: separate; border-spacing: 6px; table-layout: fixed;
+            width: 100%; min-width: 750px; border-collapse: separate; border-spacing: 6px; table-layout: fixed;
         }
         .weekly-table th, .weekly-table td {
             background: var(--btn-bg); border: 1px solid var(--card-border);
-            border-radius: 12px; padding: 12px; text-align: center;
+            border-radius: 12px; padding: 10px 6px; text-align: center;
         }
-        .weekly-table th { font-weight: bold; background: rgba(128, 128, 128, 0.1); }
-        .weekly-table th:first-child { width: 80px; }
+        .weekly-table th { font-weight: bold; background: rgba(128, 128, 128, 0.1); font-size: 0.85rem; }
+        .weekly-table th:first-child { width: 70px; }
+        .exam-badge {
+            display: block; margin-top: 4px; padding: 2px 4px;
+            background: #ef4444; color: #ffffff; border-radius: 6px;
+            font-size: 0.72rem; font-weight: bold; line-height: 1.2;
+        }
         .weekly-cell {
             cursor: pointer; min-height: 80px; position: relative; transition: transform 0.2s, border-color 0.2s;
             display: flex; flex-direction: column; justify-content: space-between; text-align: left;
@@ -233,6 +243,7 @@
         .fc .fc-daygrid-day-frame { min-height: 85px !important; }
         .fc .fc-daygrid-day-number { color: var(--text-color); font-size: 0.9rem; font-weight: 600; padding: 6px 8px; }
         .fc-event { background-color: var(--accent-color) !important; border: none !important; border-radius: 6px !important; padding: 3px 6px !important; font-size: 0.82rem !important; cursor: pointer; }
+        .fc-event.exam-event { background-color: #ef4444 !important; }
 
         /* --- 通用 Modal --- */
         .modal-overlay {
@@ -264,7 +275,7 @@
 
         @media (max-width: 600px) {
             .fc .fc-daygrid-day-frame { min-height: 65px !important; }
-            .weekly-table th, .weekly-table td { padding: 8px; }
+            .weekly-table th, .weekly-table td { padding: 6px; }
         }
     </style>
 </head>
@@ -352,8 +363,19 @@
             <!-- 2. 每周進度表 -->
             <section id="tab-weekly" class="tab-content">
                 <div class="glass-card">
-                    <h2 style="margin:0 0 15px 0; text-align: center;">📊 專屬每周進度表</h2>
-                    <p style="text-align:center; font-size:0.9rem; opacity:0.8; margin-top:-10px; margin-bottom:15px;">點擊對應格子，自訂讀書範圍與打勾紀錄！</p>
+                    <h2 style="margin:0 0 10px 0; text-align: center;">📊 專屬每周進度表</h2>
+                    <p style="text-align:center; font-size:0.85rem; opacity:0.8; margin-top:0; margin-bottom:15px;">點擊對應格子，自訂讀書範圍與打勾紀錄！</p>
+                    
+                    <!-- 週別切換按鈕區 -->
+                    <div class="week-nav-bar">
+                        <button class="custom-btn" id="prevWeekBtn">◀ 上一週</button>
+                        <div class="week-title" id="weekRangeTitle">2026/03/30 - 2026/04/05</div>
+                        <div>
+                            <button class="custom-btn" id="todayWeekBtn" style="margin-right: 4px;">本週</button>
+                            <button class="custom-btn" id="nextWeekBtn">下一週 ▶</button>
+                        </div>
+                    </div>
+
                     <div class="weekly-wrapper">
                         <table class="weekly-table" id="weeklyTable">
                             <!-- JS 動態生成表格 -->
@@ -462,6 +484,14 @@
         let weeklyData = {}; 
         let spinInterval;
 
+        // 大考與模考時間設定
+        const examEvents = {
+            mock1: { title: '📝 115 高三第一次模考', shortTitle: '📝 模考1', date: '2026-09-02' },
+            mock2: { title: '📚 115 高三第二次模考', shortTitle: '📚 模考2', date: '2026-10-28' },
+            mock3: { title: '🔥 115 高三第三次模考', shortTitle: '🔥 模考3', date: '2026-12-08' },
+            gsat:  { title: '🎓 116 學測',          shortTitle: '🎓 學測',  date: '2027-01-22' }
+        };
+
         // ===== 側邊抽屜導航與分頁切換 =====
         const openDrawerBtn = document.getElementById('openDrawerBtn');
         const closeDrawerBtn = document.getElementById('closeDrawerBtn');
@@ -517,29 +547,77 @@
         });
 
         // ===== 每周進度表邏輯 =====
-        const days = ['星期一', '星期二', '星期三', '星期四', '星期五'];
+        const daysOfWeek = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
         const subjects = ['國文', '英文', '數學', '自然', '社會'];
         let currentEditWeeklyKey = null;
 
+        // 計算目前週一的 Date 物件
+        let currentMonday = getMonday(new Date());
+
+        function getMonday(d) {
+            const date = new Date(d);
+            const day = date.getDay();
+            const diff = date.getDate() - day + (day === 0 ? -6 : 1); 
+            return new Date(date.setDate(diff));
+        }
+
+        function formatDateString(date) {
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const dd = String(date.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+
         function renderWeeklyTable() {
             const table = document.getElementById('weeklyTable');
+            const weekRangeTitle = document.getElementById('weekRangeTitle');
+
+            const datesOfWeek = [];
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(currentMonday);
+                d.setDate(currentMonday.getDate() + i);
+                datesOfWeek.push(d);
+            }
+
+            const startStr = `${datesOfWeek[0].getFullYear()}/${String(datesOfWeek[0].getMonth() + 1).padStart(2, '0')}/${String(datesOfWeek[0].getDate()).padStart(2, '0')}`;
+            const endStr = `${datesOfWeek[6].getFullYear()}/${String(datesOfWeek[6].getMonth() + 1).padStart(2, '0')}/${String(datesOfWeek[6].getDate()).padStart(2, '0')}`;
+            weekRangeTitle.innerText = `${startStr} - ${endStr}`;
+
             let html = '<tr><th>科目</th>';
-            days.forEach(d => html += `<th>${d}</th>`);
+            datesOfWeek.forEach((dateObj, idx) => {
+                const dateStr = formatDateString(dateObj);
+                const monthDay = `${String(dateObj.getMonth() + 1).padStart(2, '0')}/${String(dateObj.getDate()).padStart(2, '0')}`;
+                
+                // 檢查當天是否有考試標記
+                let examTag = '';
+                Object.values(examEvents).forEach(exam => {
+                    if (exam.date === dateStr) {
+                        examTag = `<span class="exam-badge">${exam.shortTitle}</span>`;
+                    }
+                });
+
+                html += `<th>
+                            ${daysOfWeek[idx]}<br><small style="font-weight:normal; opacity:0.8;">${monthDay}</small>
+                            ${examTag}
+                         </th>`;
+            });
             html += '</tr>';
 
             subjects.forEach((subj, r) => {
                 html += `<tr><th>${subj}</th>`;
-                days.forEach((day, c) => {
-                    const key = `${r}-${c}`;
+                datesOfWeek.forEach((dateObj, c) => {
+                    const dateStr = formatDateString(dateObj);
+                    const key = `${dateStr}_${r}`; // 以日期與科目索引為Key
                     const data = weeklyData[key] || { text: '', done: false };
                     const doneClass = data.done ? 'completed' : '';
                     const checkIcon = data.done ? '✅' : '';
                     
                     let contentHtml = data.text 
                         ? `<div class="cell-content">${data.text}</div><div class="cell-status">${checkIcon}</div>`
-                        : `<div class="empty-hint">+ 點擊新增</div>`;
+                        : `<div class="empty-hint">+ 新增</div>`;
                     
-                    html += `<td class="weekly-cell ${doneClass}" data-key="${key}" data-title="${day} - ${subj}">
+                    const cellTitle = `${dateStr} (${daysOfWeek[c]}) - ${subj}`;
+                    html += `<td class="weekly-cell ${doneClass}" data-key="${key}" data-title="${cellTitle}">
                                 ${contentHtml}
                              </td>`;
                 });
@@ -553,6 +631,20 @@
                 });
             });
         }
+
+        // 換週按鈕事件綁定
+        document.getElementById('prevWeekBtn').addEventListener('click', () => {
+            currentMonday.setDate(currentMonday.getDate() - 7);
+            renderWeeklyTable();
+        });
+        document.getElementById('nextWeekBtn').addEventListener('click', () => {
+            currentMonday.setDate(currentMonday.getDate() + 7);
+            renderWeeklyTable();
+        });
+        document.getElementById('todayWeekBtn').addEventListener('click', () => {
+            currentMonday = getMonday(new Date());
+            renderWeeklyTable();
+        });
 
         function openWeeklyModal(key, title) {
             currentEditWeeklyKey = key;
@@ -625,14 +717,30 @@
                     
                     renderTodos();
                     renderWeeklyTable();
-                    if (calendar) {
-                        calendar.removeAllEvents();
-                        calendar.addEventSource(calendarEvents);
-                    }
+                    refreshCalendarEvents();
                 }
             } catch (e) {
                 console.error("雲端讀取失敗：", e);
             }
+        }
+
+        // 重新整合使用者事件與考試事件至 Calendar
+        function refreshCalendarEvents() {
+            if (!calendar) return;
+            calendar.removeAllEvents();
+            
+            // 1. 載入自訂行程
+            calendar.addEventSource(calendarEvents);
+            
+            // 2. 載入考試行程
+            const examEventsList = Object.values(examEvents).map(exam => ({
+                title: exam.title,
+                start: exam.date,
+                allDay: true,
+                className: 'exam-event',
+                editable: false
+            }));
+            calendar.addEventSource(examEventsList);
         }
 
         // ===== 登入與身份驗證 =====
@@ -666,10 +774,7 @@
                 calendarEvents = JSON.parse(localStorage.getItem('study_events')) || [];
                 renderTodos();
                 renderWeeklyTable();
-                if (calendar) {
-                    calendar.removeAllEvents();
-                    calendar.addEventSource(calendarEvents);
-                }
+                refreshCalendarEvents();
             }
         });
 
@@ -684,7 +789,6 @@
                 locale: 'zh-tw',
                 height: 'auto',
                 selectable: true,
-                events: calendarEvents,
                 dateClick: function(info) {
                     selectedDateStr = info.dateStr;
                     document.getElementById('eventAddDateText').innerText = '日期：' + selectedDateStr;
@@ -692,12 +796,18 @@
                     document.getElementById('eventAddModal').classList.add('active');
                 },
                 eventClick: function(info) {
+                    // 如果點到大考標記則不開放編輯/刪除
+                    if (info.event.classNames.includes('exam-event')) {
+                        alert(`📌 ${info.event.title}\n日期：${info.event.startStr}`);
+                        return;
+                    }
                     selectedEventObj = info.event;
                     document.getElementById('eventEditInput').value = selectedEventObj.title;
                     document.getElementById('eventEditModal').classList.add('active');
                 }
             });
             calendar.render();
+            refreshCalendarEvents();
             renderWeeklyTable();
         });
 
@@ -780,12 +890,6 @@
             document.getElementById('themeBtn').innerText = isDark ? '🌙 Dark mode' : '☀️ Bright mode';
         });
 
-        const examEvents = {
-            mock1: { title: '📝 115 高三第一次模考', date: '2026-09-02T00:00:00' },
-            mock2: { title: '📚 115 高三第二次模考', date: '2026-10-28T00:00:00' },
-            mock3: { title: '🔥 115 高三第三次模考', date: '2026-12-08T00:00:00' },
-            gsat: { title: '🎓 116 學測', date: '2027-01-22T00:00:00' }
-        };
         const examSelector = document.getElementById('examSelector');
         let currentExamKey = localStorage.getItem('selectedExamKey') || 'gsat';
         if (!examEvents[currentExamKey]) currentExamKey = 'gsat';
@@ -800,7 +904,7 @@
         function updateCountdown() {
             const now = new Date().getTime();
             const currentExam = examEvents[currentExamKey];
-            const targetDate = new Date(currentExam.date).getTime();
+            const targetDate = new Date(currentExam.date + 'T00:00:00').getTime();
             const difference = targetDate - now;
 
             document.getElementById('countdownTitle').innerText = currentExam.title;
@@ -819,7 +923,7 @@
         // 下一個重大關卡計算邏輯
         function updateNextEventHint(now) {
             const upcoming = Object.values(examEvents)
-                .map(event => ({ ...event, diff: new Date(event.date).getTime() - now }))
+                .map(event => ({ ...event, diff: new Date(event.date + 'T00:00:00').getTime() - now }))
                 .filter(event => event.diff > 0)
                 .sort((a, b) => a.diff - b.diff);
 
