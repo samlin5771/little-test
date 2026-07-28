@@ -21,6 +21,7 @@
             --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
             --input-bg: rgba(255, 255, 255, 0.6);
             --bg-fallback: #f8f9fa; 
+            --table-border: rgba(0, 0, 0, 0.08);
         }
 
         [data-theme="dark"] {
@@ -34,6 +35,7 @@
             --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
             --input-bg: rgba(0, 0, 0, 0.3);
             --bg-fallback: #0f1015;
+            --table-border: rgba(255, 255, 255, 0.1);
         }
 
         * { box-sizing: border-box; }
@@ -132,7 +134,7 @@
 
         /* --- 主要內容區 Main Content --- */
         .main-wrapper { padding: 25px 15px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 1000px; }
+        .container { width: 100%; max-width: 1100px; }
 
         .tab-content { display: none; }
         .tab-content.active { display: block; animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
@@ -176,47 +178,44 @@
         .custom-btn.success { color: #10b981; border-color: rgba(16,185,129,0.4); }
         .custom-btn.success:hover { background: rgba(16,185,129,0.15); border-color: #10b981; }
 
-        /* --- 每周進度表 Weekly Chart (橫式星期、直排科目兩格) --- */
+        /* --- 每周進度表 Weekly Chart (比照圖片一風格) --- */
         .week-nav-bar {
             display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 15px; flex-wrap: wrap; gap: 10px;
+            margin-bottom: 20px; flex-wrap: wrap; gap: 10px;
         }
-        .week-title { font-weight: bold; font-size: 1.05rem; text-align: center; }
+        .week-title { font-weight: bold; font-size: 1.1rem; text-align: center; }
         .weekly-wrapper { overflow-x: auto; margin-top: 10px; padding-bottom: 10px; }
+        
         .weekly-table {
-            width: 100%; min-width: 850px; border-collapse: separate; border-spacing: 5px; table-layout: fixed;
+            width: 100%; min-width: 850px; border-collapse: collapse; text-align: left;
         }
         .weekly-table th, .weekly-table td {
-            background: var(--btn-bg); border: 1px solid var(--card-border);
-            border-radius: 10px; padding: 8px 4px; text-align: center;
+            padding: 12px 14px; border-bottom: 1px solid var(--table-border);
+            vertical-align: middle;
         }
-        .weekly-table th { font-weight: bold; background: rgba(128, 128, 128, 0.12); font-size: 0.85rem; }
-        .weekly-table th.day-header { width: 110px; }
-        .weekly-table th.sub-header { font-size: 0.75rem; font-weight: normal; opacity: 0.85; }
-        
-        .exam-badge {
-            display: block; margin-top: 4px; padding: 2px 4px;
-            background: #ef4444; color: #ffffff; border-radius: 6px;
-            font-size: 0.7rem; font-weight: bold; line-height: 1.2;
+        .weekly-table th {
+            font-size: 1.05rem; font-weight: bold; opacity: 0.9; padding-bottom: 16px;
+        }
+        .weekly-table .subject-col {
+            font-weight: bold; font-size: 1.05rem; width: 140px; border-bottom: 2px solid var(--table-border);
         }
 
         .weekly-cell {
-            cursor: pointer; min-height: 55px; height: 55px; position: relative; transition: all 0.2s ease;
-            display: flex; flex-direction: column; justify-content: space-between; text-align: left;
-            font-size: 0.8rem; line-height: 1.3; padding: 6px !important;
+            cursor: pointer; transition: background-color 0.2s ease;
+            font-size: 0.95rem; border-radius: 6px; padding: 8px 10px !important;
+            margin: 2px 0;
         }
-        .weekly-cell:hover { transform: translateY(-2px); border-color: var(--accent-color); }
-        
+        .weekly-cell:hover { background: rgba(128, 128, 128, 0.15); }
+
         /* 標記顏色樣式 */
-        .weekly-cell.color-green { background: rgba(16, 185, 129, 0.25) !important; border-color: rgba(16, 185, 129, 0.5) !important; }
-        .weekly-cell.color-blue { background: rgba(59, 130, 246, 0.25) !important; border-color: rgba(59, 130, 246, 0.5) !important; }
-        .weekly-cell.color-yellow { background: rgba(245, 158, 11, 0.25) !important; border-color: rgba(245, 158, 11, 0.5) !important; }
-        .weekly-cell.color-pink { background: rgba(236, 72, 153, 0.25) !important; border-color: rgba(236, 72, 153, 0.5) !important; }
+        .weekly-cell.color-green { background: rgba(16, 185, 129, 0.2) !important; color: #10b981; }
+        .weekly-cell.color-blue { background: rgba(59, 130, 246, 0.2) !important; color: #3b82f6; }
+        .weekly-cell.color-yellow { background: rgba(245, 158, 11, 0.2) !important; color: #f59e0b; }
+        .weekly-cell.color-pink { background: rgba(236, 72, 153, 0.2) !important; color: #ec4899; }
         
-        .weekly-cell.completed .cell-content { text-decoration: line-through; opacity: 0.7; }
-        .cell-content { flex-grow: 1; word-break: break-all; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-        .cell-status { align-self: flex-end; font-size: 0.85rem; height: 14px; line-height: 1; }
-        .empty-hint { opacity: 0.3; font-style: italic; font-size: 0.75rem; text-align: center; width: 100%; margin-auto: 0; }
+        .weekly-cell.completed { text-decoration: line-through; opacity: 0.65; }
+        .cell-content-inline { display: flex; align-items: center; gap: 6px; }
+        .cell-prefix { font-weight: 600; opacity: 0.85; }
 
         /* 顏色選擇按鈕 */
         .color-picker { display: flex; gap: 8px; margin-bottom: 20px; align-items: center; justify-content: center; }
@@ -298,7 +297,7 @@
 
         @media (max-width: 600px) {
             .fc .fc-daygrid-day-frame { min-height: 65px !important; }
-            .weekly-table th, .weekly-table td { padding: 4px; }
+            .weekly-table th, .weekly-table td { padding: 8px 6px; }
         }
     </style>
 </head>
@@ -384,12 +383,9 @@
             <!-- 2. 每周進度表 -->
             <section id="tab-weekly" class="tab-content">
                 <div class="glass-card">
-                    <h2 style="margin:0 0 10px 0; text-align: center;">📊 專屬每周進度表</h2>
-                    <p style="text-align:center; font-size:0.85rem; opacity:0.8; margin-top:0; margin-bottom:15px;">橫列為星期一至日，直排為五個科目（每科兩格）。點擊可填寫與選擇標記顏色！</p>
-                    
                     <div class="week-nav-bar">
                         <button class="custom-btn" id="prevWeekBtn">◀ 上一週</button>
-                        <div class="week-title" id="weekRangeTitle">2026/03/30 - 2026/04/05</div>
+                        <div class="week-title" id="weekRangeTitle">2026/07/27 - 2026/08/02</div>
                         <div>
                             <button class="custom-btn" id="todayWeekBtn" style="margin-right: 4px;">本週</button>
                             <button class="custom-btn" id="nextWeekBtn">下一週 ▶</button>
@@ -439,7 +435,7 @@
     <div class="modal-overlay" id="weeklyModal">
         <div class="modal-card">
             <h3 id="weeklyModalTitle">編輯進度</h3>
-            <textarea id="weeklyInputContent" class="modal-textarea" placeholder="例如：寫英文模考題、複習數學第一冊..."></textarea>
+            <textarea id="weeklyInputContent" class="modal-textarea" placeholder="請輸入讀書進度..."></textarea>
             
             <div class="color-picker" id="colorPicker">
                 <span style="font-size: 0.85rem; font-weight: bold; margin-right: 4px;">標記顏色：</span>
@@ -515,12 +511,11 @@
         let spinInterval;
         let selectedColor = "";
 
-        // 大考與模考時間設定
         const examEvents = {
-            mock1: { title: '📝 115 高三第一次模考', shortTitle: '📝 模考1', date: '2026-09-02' },
-            mock2: { title: '📚 115 高三第二次模考', shortTitle: '📚 模考2', date: '2026-10-28' },
-            mock3: { title: '🔥 115 高三第三次模考', shortTitle: '🔥 模考3', date: '2026-12-08' },
-            gsat:  { title: '🎓 116 學測',          shortTitle: '🎓 學測',  date: '2027-01-22' }
+            mock1: { title: '📝 115 高三第一次模考', date: '2026-09-02' },
+            mock2: { title: '📚 115 高三第二次模考', date: '2026-10-28' },
+            mock3: { title: '🔥 115 高三第三次模考', date: '2026-12-08' },
+            gsat:  { title: '🎓 116 學測',          date: '2027-01-22' }
         };
 
         const openDrawerBtn = document.getElementById('openDrawerBtn');
@@ -576,7 +571,8 @@
         });
 
         const daysOfWeek = ['一', '二', '三', '四', '五', '六', '日'];
-        const subjects = ['國文', '英文', '數學', '自然', '社會'];
+        const subjects = ['數學', '物理/自然', '英文', '國文', '社會/自然'];
+        const slotLabels = ['上', '下'];
         let currentEditWeeklyKey = null;
 
         let currentMonday = getMonday(new Date());
@@ -595,7 +591,7 @@
             return `${yyyy}-${mm}-${dd}`;
         }
 
-        // 渲染每週進度表 (橫向：星期一~日，縱向：科目各2格)
+        // 渲染每週進度表 (比照圖片一：直排科目，橫排星期一至日)
         function renderWeeklyTable() {
             const table = document.getElementById('weeklyTable');
             const weekRangeTitle = document.getElementById('weekRangeTitle');
@@ -611,56 +607,45 @@
             const endStr = `${datesOfWeek[6].getFullYear()}/${String(datesOfWeek[6].getMonth() + 1).padStart(2, '0')}/${String(datesOfWeek[6].getDate()).padStart(2, '0')}`;
             weekRangeTitle.innerText = `${startStr} - ${endStr}`;
 
-            // 表頭 第一排：星期標題
-            let html = '<tr><th class="day-header" rowspan="2">日期 / 科目</th>';
-            subjects.forEach(subj => {
-                html += `<th colspan="2">${subj}</th>`;
-            });
-            html += '</tr>';
-
-            // 表頭 第二排：科目一/二格
-            html += '<tr>';
-            subjects.forEach(() => {
-                html += '<th class="sub-header">一</th><th class="sub-header">二</th>';
-            });
-            html += '</tr>';
-
-            // 表格內容：橫列為 星期一 ~ 星期日
+            // 表頭：星期 / 科目、星期一～星期日
+            let html = '<thead><tr><th class="subject-col">星期 / 科目</th>';
             datesOfWeek.forEach((dateObj, dayIdx) => {
-                const dateStr = formatDateString(dateObj);
-                const monthDay = `${String(dateObj.getMonth() + 1).padStart(2, '0')}/${String(dateObj.getDate()).padStart(2, '0')}`;
-                
-                let examTag = '';
-                Object.values(examEvents).forEach(exam => {
-                    if (exam.date === dateStr) {
-                        examTag = `<span class="exam-badge">${exam.shortTitle}</span>`;
+                html += `<th>星期${daysOfWeek[dayIdx]}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            // 內容：逐個科目處理，每個科目有「上」、「下」兩個 Row
+            subjects.forEach((subj, subjIdx) => {
+                for (let slot = 0; slot < 2; slot++) {
+                    html += '<tr>';
+                    // 科目名稱格（唯獨第一 Row 合併兩行 rowspan="2"）
+                    if (slot === 0) {
+                        html += `<td class="subject-col" rowspan="2">${subj}</td>`;
                     }
-                });
 
-                html += `<tr><th>週${daysOfWeek[dayIdx]}<br><small style="font-weight:normal; opacity:0.8;">${monthDay}</small>${examTag}</th>`;
-
-                subjects.forEach((subj, subjIdx) => {
-                    // 每科有兩格：slot 0 與 slot 1
-                    for (let slot = 0; slot < 2; slot++) {
+                    // 填入星期一 ~ 星期日的內容
+                    datesOfWeek.forEach((dateObj) => {
+                        const dateStr = formatDateString(dateObj);
                         const key = `${dateStr}_${subjIdx}_${slot}`;
                         const data = weeklyData[key] || { text: '', done: false, color: '' };
                         
                         const doneClass = data.done ? 'completed' : '';
                         const colorClass = data.color ? `color-${data.color}` : '';
-                        const checkIcon = data.done ? '✅' : '';
+                        const textDisplay = data.text ? data.text : '...';
                         
-                        let contentHtml = data.text 
-                            ? `<div class="cell-content">${data.text}</div><div class="cell-status">${checkIcon}</div>`
-                            : `<div class="empty-hint">+</div>`;
-                        
-                        const cellTitle = `${dateStr} (週${daysOfWeek[dayIdx]}) - ${subj} (格${slot + 1})`;
-                        html += `<td class="weekly-cell ${doneClass} ${colorClass}" data-key="${key}" data-title="${cellTitle}">
-                                    ${contentHtml}
+                        html += `<td>
+                                    <div class="weekly-cell ${doneClass} ${colorClass}" data-key="${key}" data-title="${dateStr} - ${subj} (${slotLabels[slot]})">
+                                        <div class="cell-content-inline">
+                                            <span class="cell-prefix">${slotLabels[slot]}：</span>
+                                            <span>${textDisplay}</span>
+                                        </div>
+                                    </div>
                                  </td>`;
-                    }
-                });
-                html += '</tr>';
+                    });
+                    html += '</tr>';
+                }
             });
+            html += '</tbody>';
 
             table.innerHTML = html;
 
@@ -684,7 +669,7 @@
             renderWeeklyTable();
         });
 
-        // 顏色選擇器事件綁定
+        // 顏色選擇器綁定
         const colorOptions = document.querySelectorAll('.color-option');
         colorOptions.forEach(opt => {
             opt.addEventListener('click', () => {
@@ -783,7 +768,6 @@
         function refreshCalendarEvents() {
             if (!calendar) return;
             calendar.removeAllEvents();
-            
             calendar.addEventSource(calendarEvents);
             
             const examEventsList = Object.values(examEvents).map(exam => ({
