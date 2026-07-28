@@ -119,7 +119,7 @@
 
         .target-select option {
             background: var(--bg-fallback);
-            color: #ffffff;
+            color: var(--text-color);
         }
 
         h1 {
@@ -434,7 +434,7 @@
         bgImg.src = 'bg.jpg';
         bgImg.onload = () => { document.body.classList.add('bg-loaded'); };
 
-        // --- 1. 更新後的考試日程資料庫 ---
+        // --- 1. 考試日程資料庫 ---
         const examEvents = {
             mock1: {
                 title: '📝 115 高三第一次模考',
@@ -444,7 +444,7 @@
             listening1: {
                 title: '🎧 116 英語聽力第一次測驗',
                 subtitle: '記得挖耳屎',
-                date: '2026-10-17T00:00:00' // 已更新為 10/17 00:00
+                date: '2026-10-17T00:00:00'
             },
             mock2: {
                 title: '📚 115 高三第二次模考',
@@ -459,7 +459,7 @@
             listening2: {
                 title: '🎧 116 英語聽力第二次測驗',
                 subtitle: '第三次段考12/30-31',
-                date: '2026-12-12T00:00:00' // 新增英聽第二次 12/12 00:00
+                date: '2026-12-12T00:00:00'
             },
             gsat: {
                 title: '🎓 116 學測正式登場',
@@ -533,6 +533,7 @@
         setInterval(updateCountdown, 1000);
         updateCountdown();
 
+        // --- 主題切換 ---
         const themeBtn = document.getElementById('themeBtn');
         const body = document.body;
 
@@ -547,11 +548,13 @@
             }
         });
 
+        // --- 小驚喜按鈕 ---
         const surpriseBtn = document.querySelector('#surpriseBtn');
         surpriseBtn.addEventListener('click', () => {
             window.location.href = 'https://www.youtube.com/watch?v=BpHvY8Wt2j0';
         });
 
+        // --- 抽籤輪盤 ---
         const rouletteBtn = document.getElementById('rouletteBtn');
         const rouletteModal = document.getElementById('rouletteModal');
         const rouletteResult = document.getElementById('rouletteResult');
@@ -580,13 +583,24 @@
             }, 2000);
         });
 
-        closeRouletteBtn.addEventListener('click', () => {
+        const closeRoulette = () => {
+            clearInterval(spinInterval);
             rouletteModal.classList.remove('active');
             setTimeout(() => {
                 rouletteResult.innerText = '❓'; 
             }, 300);
+        };
+
+        closeRouletteBtn.addEventListener('click', closeRoulette);
+
+        // 點擊 Modal 背景也可關閉
+        rouletteModal.addEventListener('click', (e) => {
+            if (e.target === rouletteModal) {
+                closeRoulette();
+            }
         });
 
+        // --- 待辦事項 ---
         const todoInput = document.getElementById('todoInput');
         const addTodoBtn = document.getElementById('addTodoBtn');
         const todoList = document.getElementById('todoList');
@@ -604,7 +618,7 @@
                 return;
             }
 
-            todos.forEach((todo, index) => {
+            todos.forEach((todo) => {
                 const li = document.createElement('li');
                 li.className = 'todo-item';
                 
@@ -620,7 +634,7 @@
                     if (checkbox.checked) {
                         li.classList.add('completed');
                         setTimeout(() => {
-                            todos.splice(index, 1);
+                            todos = todos.filter(t => t !== todo);
                             saveTodos();
                             renderTodos();
                         }, 400);
