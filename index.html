@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>學測與重大考試倒數</title>
+    <title>學測與重大考試倒數 & 讀書計畫</title>
 
     <link rel="preload" as="image" href="bg.jpg">
+    <!-- FullCalendar CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet" />
 
     <style>
         /* --- 全局變數（明亮/黑暗模式） --- */
@@ -13,6 +15,7 @@
             --bg-overlay: rgba(255, 255, 255, 0.4);
             --card-bg: rgba(255, 255, 255, 0.35);
             --card-border: rgba(255, 255, 255, 0.5);
+            --sidebar-bg: rgba(255, 255, 255, 0.45);
             --text-color: #222222;
             --accent-color: #4f46e5;
             --btn-bg: rgba(255, 255, 255, 0.7);
@@ -25,6 +28,7 @@
             --bg-overlay: rgba(0, 0, 0, 0.5);
             --card-bg: rgba(20, 20, 30, 0.45);
             --card-border: rgba(255, 255, 255, 0.18);
+            --sidebar-bg: rgba(15, 16, 25, 0.65);
             --text-color: #ffffff;
             --accent-color: #818cf8;
             --btn-bg: rgba(255, 255, 255, 0.15);
@@ -35,7 +39,7 @@
 
         * {
             box-sizing: border-box;
-            transition: background-color 0.4s, color 0.4s, border-color 0.4s, transform 0.2s;
+            transition: background-color 0.3s, color 0.3s, border-color 0.3s, transform 0.2s;
         }
 
         body {
@@ -44,12 +48,9 @@
             margin: 0;
             min-height: 100vh;
             display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 40px 20px;
             position: relative;
             background-color: var(--bg-fallback);
+            overflow-x: hidden;
         }
 
         body::after {
@@ -67,9 +68,7 @@
             transform: translateZ(0);
         }
 
-        body.bg-loaded::after {
-            opacity: 1;
-        }
+        body.bg-loaded::after { opacity: 1; }
 
         body::before {
             content: '';
@@ -80,14 +79,114 @@
             transition: background-color 0.4s;
         }
 
-        .container {
-            position: relative;
-            z-index: 1;
-            text-align: center;
-            width: 100%;
-            max-width: 600px;
+        /* --- 側邊欄 Sidebar --- */
+        .sidebar {
+            width: 260px;
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-right: 1px solid var(--card-border);
+            display: flex;
+            flex-direction: column;
+            padding: 20px 15px;
+            z-index: 10;
+            flex-shrink: 0;
         }
 
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--card-bg);
+            border-radius: 15px;
+            border: 1px solid var(--card-border);
+            margin-bottom: 25px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: var(--btn-bg);
+        }
+
+        .user-info {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .user-name {
+            font-weight: bold;
+            font-size: 0.95rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .user-status {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        .nav-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.95rem;
+            border: 1px solid transparent;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: var(--btn-bg);
+            border-color: var(--card-border);
+            color: var(--accent-color);
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* --- 主要內容區 Main Content --- */
+        .main-wrapper {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            max-height: 100vh;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* --- 卡片與元件通用樣式 --- */
         .glass-card {
             background: var(--card-bg);
             backdrop-filter: blur(12px);
@@ -99,9 +198,7 @@
             margin-bottom: 20px;
         }
 
-        .target-select-wrapper {
-            margin-bottom: 15px;
-        }
+        .target-select-wrapper { margin-bottom: 15px; }
 
         .target-select {
             background: var(--input-bg);
@@ -113,7 +210,6 @@
             font-weight: 600;
             outline: none;
             cursor: pointer;
-            backdrop-filter: blur(5px);
             text-align: center;
         }
 
@@ -122,23 +218,15 @@
             color: var(--text-color);
         }
 
-        h1 {
-            margin: 0 0 10px 0;
-            font-size: 2rem;
-            font-weight: 700;
-        }
-
-        .subtitle {
-            font-size: 1rem;
-            opacity: 0.85;
-            margin-bottom: 20px;
-        }
+        h1 { margin: 0 0 10px 0; font-size: 2rem; font-weight: 700; text-align: center; }
+        .subtitle { font-size: 1rem; opacity: 0.85; margin-bottom: 20px; text-align: center; }
 
         .countdown-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 12px;
             margin: 20px 0;
+            text-align: center;
         }
 
         .time-box {
@@ -148,83 +236,46 @@
             border: 1px solid var(--card-border);
         }
 
-        .time-number {
-            font-size: 1.8rem;
-            font-weight: bold;
-            color: var(--accent-color);
-            display: block;
-        }
-
-        .time-label {
-            font-size: 0.85rem;
-            opacity: 0.8;
-        }
+        .time-number { font-size: 1.8rem; font-weight: bold; color: var(--accent-color); display: block; }
+        .time-label { font-size: 0.85rem; opacity: 0.8; }
 
         .next-event-badge {
-            display: inline-block;
+            display: block;
+            text-align: center;
             background: var(--btn-bg);
             border: 1px solid var(--card-border);
-            padding: 6px 16px;
+            padding: 8px 16px;
             border-radius: 15px;
             font-size: 0.85rem;
             opacity: 0.9;
-            margin-top: 5px;
-            margin-bottom: 15px;
+            margin: 15px auto;
         }
+        .next-event-badge strong { color: var(--accent-color); }
 
-        .next-event-badge strong {
-            color: var(--accent-color);
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-top: 15px;
-        }
+        .btn-group { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 15px; }
 
         .custom-btn {
             background: var(--btn-bg);
             color: var(--text-color);
             border: 1px solid var(--card-border);
-            padding: 12px 24px;
+            padding: 10px 20px;
             border-radius: 30px;
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-weight: 600;
             cursor: pointer;
             backdrop-filter: blur(5px);
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            transition: all 0.3s ease;
         }
 
         .custom-btn:hover {
-            transform: translateY(-3px) scale(1.05);
-            box-shadow: 0 8px 25px rgba(129, 140, 248, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(129, 140, 248, 0.3);
             border-color: var(--accent-color);
         }
 
-        .custom-btn:active {
-            transform: translateY(1px) scale(0.98);
-        }
-
-        .theme-toggle-container {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 10;
-        }
-
-        .todo-section {
-            text-align: left;
-        }
-
-        .todo-input-group {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
+        /* --- 待辦事項 Todo --- */
+        .todo-input-group { display: flex; gap: 10px; margin-bottom: 20px; }
         .todo-input {
             flex: 1;
             background: var(--input-bg);
@@ -234,24 +285,9 @@
             border-radius: 30px;
             font-size: 0.95rem;
             outline: none;
-            backdrop-filter: blur(5px);
         }
 
-        .todo-input::placeholder {
-            color: var(--text-color);
-            opacity: 0.6;
-        }
-
-        .todo-input:focus {
-            border-color: var(--accent-color);
-        }
-
-        .todo-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
+        .todo-list { list-style: none; padding: 0; margin: 0; }
         .todo-item {
             display: flex;
             align-items: center;
@@ -261,166 +297,143 @@
             border-radius: 12px;
             margin-bottom: 10px;
             gap: 12px;
-            transition: all 0.4s ease;
         }
-
         .todo-checkbox {
             appearance: none;
-            -webkit-appearance: none;
-            width: 20px;
-            height: 20px;
+            width: 20px; height: 20px;
             border: 2px solid var(--card-border);
             border-radius: 6px;
             cursor: pointer;
-            outline: none;
             position: relative;
-            background: transparent;
-            transition: all 0.2s;
-            flex-shrink: 0;
         }
-
-        .todo-checkbox:checked {
-            background-color: var(--accent-color);
-            border-color: var(--accent-color);
-        }
-
+        .todo-checkbox:checked { background-color: var(--accent-color); border-color: var(--accent-color); }
         .todo-checkbox:checked::after {
-            content: '✓';
-            position: absolute;
-            color: white;
-            font-size: 14px;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-weight: bold;
+            content: '✓'; position: absolute; color: white; font-size: 14px;
+            top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold;
         }
+        .todo-text { flex: 1; word-break: break-all; }
+        .todo-item.completed { opacity: 0; transform: translateX(30px); }
 
-        .todo-text {
-            font-size: 1rem;
-            word-break: break-all;
-            flex: 1;
-        }
-
-        .todo-item.completed {
-            opacity: 0;
-            transform: translateX(30px);
-        }
-
-        .todo-item.completed .todo-text {
-            text-decoration: line-through;
-            opacity: 0.6;
-        }
-
-        .todo-empty {
-            text-align: center;
-            opacity: 0.6;
-            font-size: 0.9rem;
-            padding: 10px 0;
-        }
-
+        /* --- Modal 輪盤 & 行事曆紀錄 --- */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0, 0, 0, 0.6);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-            opacity: 0;
-            pointer-events: none;
+            display: flex; justify-content: center; align-items: center;
+            z-index: 100; opacity: 0; pointer-events: none;
             transition: opacity 0.3s ease;
         }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .modal-content { text-align: center; min-width: 320px; }
+        .roulette-result { font-size: 2.5rem; font-weight: bold; color: var(--accent-color); margin: 25px 0; }
 
-        .modal-overlay.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
+        /* --- FullCalendar 樣式微調 --- */
+        .fc { color: var(--text-color); }
+        .fc-theme-standard td, .fc-theme-standard th { border-color: var(--card-border); }
+        .fc-button-primary { background-color: var(--btn-bg) !important; border-color: var(--card-border) !important; color: var(--text-color) !important; }
+        .fc-button-primary:hover { border-color: var(--accent-color) !important; }
 
-        .modal-content {
-            transform: translateY(-20px) scale(0.95);
-            transition: transform 0.3s ease;
-            text-align: center;
-            min-width: 300px;
-            margin-bottom: 0; 
-        }
-
-        .modal-overlay.active .modal-content {
-            transform: translateY(0) scale(1);
-        }
-
-        .roulette-result {
-            font-size: 3rem;
-            font-weight: bold;
-            color: var(--accent-color);
-            margin: 30px 0;
-            height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-
-        @media (max-width: 480px) {
-            body { padding: 20px 12px; }
-            .glass-card { padding: 20px 15px; }
-            h1 { font-size: 1.5rem; }
-            .countdown-grid { gap: 8px; }
-            .time-number { font-size: 1.3rem; }
-            .time-label { font-size: 0.75rem; }
-            .custom-btn { padding: 10px 18px; font-size: 0.9rem; }
-            .theme-toggle-container { bottom: 12px; right: 12px; }
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            .sidebar { width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--card-border); }
+            .main-wrapper { padding: 15px; max-height: none; }
         }
     </style>
 </head>
 <body data-theme="dark">
 
-    <div class="theme-toggle-container">
-        <button class="custom-btn" id="themeBtn">☀️ Bright mode</button>
-    </div>
-
-    <div class="container">
-        <div class="glass-card">
-            <div class="target-select-wrapper">
-                <select id="examSelector" class="target-select">
-                    <option value="gsat">🎓 116 學測倒數</option>
-                    <option value="mock1">📝 高三第一次模考</option>
-                    <option value="listening1">🎧 英語聽力第一次測驗</option>
-                    <option value="mock2">📚 高三第二次模考</option>
-                    <option value="mock3">🔥 高三第三次模考</option>
-                    <option value="listening2">🎧 英語聽力第二次測驗</option>
-                </select>
-            </div>
-
-            <h1 id="countdownTitle">🎓 116 學測倒數</h1>
-            <p class="subtitle" id="countdownSubtitle">穩住節奏，每一天都是進步！</p>
-
-            <div class="countdown-grid" id="countdownGrid">
-                <div class="time-box"><span class="time-number" id="days">00</span><span class="time-label">天</span></div>
-                <div class="time-box"><span class="time-number" id="hours">00</span><span class="time-label">時</span></div>
-                <div class="time-box"><span class="time-number" id="minutes">00</span><span class="time-label">分</span></div>
-                <div class="time-box"><span class="time-number" id="seconds">00</span><span class="time-label">秒</span></div>
-            </div>
-
-            <div class="next-event-badge" id="nextEventBadge">
-                ⏳ 計算下一個重大關卡中...
-            </div>
-
-            <div class="btn-group">
-                <button class="custom-btn" id="rouletteBtn">🤔 現在要幹嘛</button>
-                <button class="custom-btn" id="surpriseBtn">✨ 查看小驚喜</button>
+    <!-- 1. 左側側邊欄 Sidebar -->
+    <aside class="sidebar">
+        <div class="user-profile">
+            <img src="https://via.placeholder.com/40" alt="Avatar" class="user-avatar" id="userAvatar">
+            <div class="user-info">
+                <span class="user-name" id="userName">未登入訪客</span>
+                <span class="user-status" id="userStatus">點擊下方登入同步資料</span>
             </div>
         </div>
 
-        <div class="glass-card todo-section">
-            <h2>📝 今日待辦事項</h2>
-            <div class="todo-input-group">
-                <input type="text" id="todoInput" class="todo-input" placeholder="新增待辦事項..." />
-                <button class="custom-btn" id="addTodoBtn">新增＋</button>
+        <nav class="nav-menu">
+            <div class="nav-item active" data-tab="tab-countdown">
+                <span>⏱️</span> 考試倒數
             </div>
-            <ul class="todo-list" id="todoList"></ul>
-        </div>
-    </div>
+            <div class="nav-item" data-tab="tab-calendar">
+                <span>📅</span> 學習行事曆
+            </div>
+            <div class="nav-item" data-tab="tab-todo">
+                <span>📝</span> 待辦事項
+            </div>
+        </nav>
 
+        <div class="sidebar-footer">
+            <button class="custom-btn" id="loginBtn">🔐 Google 帳號登入</button>
+            <button class="custom-btn" id="themeBtn">☀️ 切換明亮模式</button>
+        </div>
+    </aside>
+
+    <!-- 2. 主要內容區 Main Content -->
+    <main class="main-wrapper">
+        <div class="container">
+
+            <!-- 分頁 1: 倒數計時 -->
+            <section id="tab-countdown" class="tab-content active">
+                <div class="glass-card" style="text-align: center;">
+                    <div class="target-select-wrapper">
+                        <select id="examSelector" class="target-select">
+                            <option value="gsat">🎓 116 學測倒數</option>
+                            <option value="mock1">📝 高三第一次模考</option>
+                            <option value="listening1">🎧 英語聽力第一次測驗</option>
+                            <option value="mock2">📚 高三第二次模考</option>
+                            <option value="mock3">🔥 高三第三次模考</option>
+                            <option value="listening2">🎧 英語聽力第二次測驗</option>
+                        </select>
+                    </div>
+
+                    <h1 id="countdownTitle">🎓 116 學測倒數</h1>
+                    <p class="subtitle" id="countdownSubtitle">穩住節奏，每一天都是進步！</p>
+
+                    <div class="countdown-grid">
+                        <div class="time-box"><span class="time-number" id="days">00</span><span class="time-label">天</span></div>
+                        <div class="time-box"><span class="time-number" id="hours">00</span><span class="time-label">時</span></div>
+                        <div class="time-box"><span class="time-number" id="minutes">00</span><span class="time-label">分</span></div>
+                        <div class="time-box"><span class="time-number" id="seconds">00</span><span class="time-label">秒</span></div>
+                    </div>
+
+                    <div class="next-event-badge" id="nextEventBadge">
+                        ⏳ 計算下一個重大關卡中...
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="custom-btn" id="rouletteBtn">🤔 現在要幹嘛</button>
+                        <button class="custom-btn" id="surpriseBtn">✨ 查看小驚喜</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 分頁 2: 行事曆 ( FullCalendar ) -->
+            <section id="tab-calendar" class="tab-content">
+                <div class="glass-card">
+                    <h2>📅 每日學習進度紀錄</h2>
+                    <p style="font-size:0.85rem; opacity:0.8;">點擊日期即可新增或查看當天的讀書心得與進度！</p>
+                    <div id="calendar" style="margin-top: 20px;"></div>
+                </div>
+            </section>
+
+            <!-- 分頁 3: 待辦事項 -->
+            <section id="tab-todo" class="tab-content">
+                <div class="glass-card">
+                    <h2>📝 今日待辦事項</h2>
+                    <div class="todo-input-group">
+                        <input type="text" id="todoInput" class="todo-input" placeholder="新增待辦事項..." />
+                        <button class="custom-btn" id="addTodoBtn">新增＋</button>
+                    </div>
+                    <ul class="todo-list" id="todoList"></ul>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- 轉盤 Modal -->
     <div class="modal-overlay" id="rouletteModal">
         <div class="glass-card modal-content">
             <h2>現在要讀：</h2>
@@ -429,50 +442,155 @@
         </div>
     </div>
 
-    <script>
-        const bgImg = new Image();
-        bgImg.src = 'bg.jpg';
-        bgImg.onload = () => { document.body.classList.add('bg-loaded'); };
+    <!-- FullCalendar JS -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
 
-        // --- 1. 考試日程資料庫 ---
-        const examEvents = {
-            mock1: {
-                title: '📝 115 高三第一次模考',
-                subtitle: '第一次段考10/13-14',
-                date: '2026-09-02T00:00:00'
-            },
-            listening1: {
-                title: '🎧 116 英語聽力第一次測驗',
-                subtitle: '記得挖耳屎',
-                date: '2026-10-17T00:00:00'
-            },
-            mock2: {
-                title: '📚 115 高三第二次模考',
-                subtitle: '第二次段考11/18-19',
-                date: '2026-10-28T00:00:00'
-            },
-            mock3: {
-                title: '🔥 115 高三第三次模考',
-                subtitle: '最後衝刺階段',
-                date: '2026-12-08T00:00:00'
-            },
-            listening2: {
-                title: '🎧 116 英語聽力第二次測驗',
-                subtitle: '第三次段考12/30-31',
-                date: '2026-12-12T00:00:00'
-            },
-            gsat: {
-                title: '🎓 116 學測正式登場',
-                subtitle: '堅持到底，成功就在前方！',
-                date: '2027-01-22T00:00:00'
+    <!-- Firebase 模組整合腳本 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // ⚠️ 請填入你的 Firebase 專案設定值（在 Firebase Console 專案設定取得）
+        const firebaseConfig = {
+            apiKey:"AIzaSyCsoIvDKShBF1w39m9JzRNPUrkA4UDx5hk",
+            authDomain: "study-countdown.firebaseapp.com",
+              projectId: "study-countdown",
+              storageBucket: "study-countdown.firebasestorage.app",
+              messagingSenderId: "28447904418",
+              appId: "1:28447904418:web:dbf52d5d9ad0b7aef27dfb",
+              measurementId: "G-01SBVEFL1R"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+
+        let currentUser = null;
+        let calendar = null;
+        let calendarEvents = [];
+        let todos = [];
+
+        // --- 初始化 FullCalendar ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const calendarEl = document.getElementById('calendar');
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'zh-tw',
+                selectable: true,
+                events: calendarEvents,
+                dateClick: function(info) {
+                    const title = prompt('請輸入【' + info.dateStr + '】的進度或記錄：');
+                    if (title) {
+                        const newEvent = { title: title, start: info.dateStr, allDay: true };
+                        calendarEvents.push(newEvent);
+                        calendar.addEvent(newEvent);
+                        saveUserData();
+                    }
+                }
+            });
+            calendar.render();
+        });
+
+        // --- Google 登入 / 登出邏輯 ---
+        const loginBtn = document.getElementById('loginBtn');
+        loginBtn.addEventListener('click', () => {
+            if (currentUser) {
+                signOut(auth).then(() => alert("已成功登出！"));
+            } else {
+                signInWithPopup(auth, provider).catch(err => alert("登入失敗：" + err.message));
             }
+        });
+
+        onAuthStateChanged(auth, async (user) => {
+            currentUser = user;
+            if (user) {
+                document.getElementById('userName').innerText = user.displayName;
+                document.getElementById('userStatus').innerText = "雲端同步已啟用";
+                document.getElementById('userAvatar').src = user.photoURL;
+                loginBtn.innerText = "🔒 登出帳號";
+                await loadUserData();
+            } else {
+                document.getElementById('userName').innerText = "未登入訪客";
+                document.getElementById('userStatus').innerText = "僅使用本機快取資料";
+                document.getElementById('userAvatar').src = "https://via.placeholder.com/40";
+                loginBtn.innerText = "🔐 Google 帳號登入";
+                
+                // 本地讀取
+                todos = JSON.parse(localStorage.getItem('study_todos')) || [];
+                renderTodos();
+            }
+        });
+
+        // 儲存與載入 Firebase 使用者資料
+        async function saveUserData() {
+            if (!currentUser) {
+                localStorage.setItem('study_todos', JSON.stringify(todos));
+                return;
+            }
+            try {
+                await setDoc(doc(db, "users", currentUser.uid), {
+                    todos: todos,
+                    events: calendarEvents
+                });
+            } catch (e) {
+                console.error("雲端儲存失敗：", e);
+            }
+        }
+
+        async function loadUserData() {
+            if (!currentUser) return;
+            try {
+                const docSnap = await getDoc(doc(db, "users", currentUser.uid));
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    todos = data.todos || [];
+                    calendarEvents = data.events || [];
+                    
+                    renderTodos();
+                    if (calendar) {
+                        calendar.removeAllEvents();
+                        calendar.addEventSource(calendarEvents);
+                    }
+                }
+            } catch (e) {
+                console.error("雲端讀取失敗：", e);
+            }
+        }
+
+        // --- 頁面側邊欄 Tab 切換邏輯 ---
+        const navItems = document.querySelectorAll('.nav-item');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                const targetTab = item.getAttribute('data-tab');
+                
+                navItems.forEach(i => i.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+
+                item.classList.add('active');
+                document.getElementById(targetTab).classList.add('active');
+
+                // 切換至行事曆時重新渲染以修正圖表大小
+                if (targetTab === 'tab-calendar' && calendar) {
+                    setTimeout(() => calendar.updateSize(), 100);
+                }
+            });
+        });
+
+        // --- 原有倒數與待辦事項系統 ---
+        const examEvents = {
+            mock1: { title: '📝 115 高三第一次模考', subtitle: '第一次段考10/13-14', date: '2026-09-02T00:00:00' },
+            listening1: { title: '🎧 116 英語聽力第一次測驗', subtitle: '記得挖耳屎', date: '2026-10-17T00:00:00' },
+            mock2: { title: '📚 115 高三第二次模考', subtitle: '第二次段考11/18-19', date: '2026-10-28T00:00:00' },
+            mock3: { title: '🔥 115 高三第三次模考', subtitle: '最後衝刺階段', date: '2026-12-08T00:00:00' },
+            listening2: { title: '🎧 116 英語聽力第二次測驗', subtitle: '第三次段考12/30-31', date: '2026-12-12T00:00:00' },
+            gsat: { title: '🎓 116 學測正式登場', subtitle: '堅持到底，成功就在前方！', date: '2027-01-22T00:00:00' }
         };
 
         const examSelector = document.getElementById('examSelector');
-        const countdownTitle = document.getElementById('countdownTitle');
-        const countdownSubtitle = document.getElementById('countdownSubtitle');
-        const nextEventBadge = document.getElementById('nextEventBadge');
-
         let currentExamKey = localStorage.getItem('selectedExamKey') || 'gsat';
         if (!examEvents[currentExamKey]) currentExamKey = 'gsat';
         examSelector.value = currentExamKey;
@@ -489,135 +607,47 @@
             const targetDate = new Date(currentExam.date).getTime();
             const difference = targetDate - now;
 
-            countdownTitle.innerText = currentExam.title;
-            countdownSubtitle.innerText = currentExam.subtitle;
+            document.getElementById('countdownTitle').innerText = currentExam.title;
+            document.getElementById('countdownSubtitle').innerText = currentExam.subtitle;
 
             if (difference > 0) {
-                const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-
-                document.getElementById('days').innerText = String(days).padStart(2, '0');
-                document.getElementById('hours').innerText = String(hours).padStart(2, '0');
-                document.getElementById('minutes').innerText = String(minutes).padStart(2, '0');
-                document.getElementById('seconds').innerText = String(seconds).padStart(2, '0');
+                document.getElementById('days').innerText = String(Math.floor(difference / (1000 * 60 * 60 * 24))).padStart(2, '0');
+                document.getElementById('hours').innerText = String(Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))).padStart(2, '0');
+                document.getElementById('minutes').innerText = String(Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60))).padStart(2, '0');
+                document.getElementById('seconds').innerText = String(Math.floor((difference % (1000 * 60)) / 1000)).padStart(2, '0');
             } else {
-                document.getElementById('days').innerText = '00';
-                document.getElementById('hours').innerText = '00';
-                document.getElementById('minutes').innerText = '00';
-                document.getElementById('seconds').innerText = '00';
+                ['days','hours','minutes','seconds'].forEach(id => document.getElementById(id).innerText = '00');
             }
-
             updateNextEventHint(now);
         }
 
         function updateNextEventHint(now) {
             const upcoming = Object.values(examEvents)
-                .map(event => ({
-                    ...event,
-                    diff: new Date(event.date).getTime() - now
-                }))
+                .map(event => ({ ...event, diff: new Date(event.date).getTime() - now }))
                 .filter(event => event.diff > 0)
                 .sort((a, b) => a.diff - b.diff);
 
             if (upcoming.length > 0) {
                 const next = upcoming[0];
                 const daysLeft = Math.ceil(next.diff / (1000 * 60 * 60 * 24));
-                nextEventBadge.innerHTML = `📍 下一個最近關卡：<strong>${next.title.split(' ')[1] || next.title}</strong>（還剩 <strong>${daysLeft}</strong> 天）`;
+                document.getElementById('nextEventBadge').innerHTML = `📍 下一個最近關卡：<strong>${next.title.split(' ')[1] || next.title}</strong>（還剩 <strong>${daysLeft}</strong> 天）`;
             } else {
-                nextEventBadge.innerHTML = `🎉 所有的挑戰都已經順利完成了！`;
+                document.getElementById('nextEventBadge').innerHTML = `🎉 所有的挑戰都已經順利完成了！`;
             }
         }
-
         setInterval(updateCountdown, 1000);
         updateCountdown();
 
-        // --- 主題切換 ---
-        const themeBtn = document.getElementById('themeBtn');
-        const body = document.body;
-
-        themeBtn.addEventListener('click', () => {
-            const currentTheme = body.getAttribute('data-theme');
-            if (currentTheme === 'dark') {
-                body.setAttribute('data-theme', 'light');
-                themeBtn.innerText = '🌙 Dark mode';
-            } else {
-                body.setAttribute('data-theme', 'dark');
-                themeBtn.innerText = '☀️ Bright mode';
-            }
-        });
-
-        // --- 小驚喜按鈕 ---
-        const surpriseBtn = document.querySelector('#surpriseBtn');
-        surpriseBtn.addEventListener('click', () => {
-            window.location.href = 'https://www.youtube.com/watch?v=BpHvY8Wt2j0';
-        });
-
-        // --- 抽籤輪盤 ---
-        const rouletteBtn = document.getElementById('rouletteBtn');
-        const rouletteModal = document.getElementById('rouletteModal');
-        const rouletteResult = document.getElementById('rouletteResult');
-        const closeRouletteBtn = document.getElementById('closeRouletteBtn');
-
-        const subjects = ['📖 國文', '🔠 英文', '📐 數學', '🔬 自然', '🌍 社會'];
-        let spinInterval;
-
-        rouletteBtn.addEventListener('click', () => {
-            rouletteModal.classList.add('active');
-            closeRouletteBtn.style.display = 'none';
-            rouletteResult.style.color = 'var(--text-color)';
-            
-            let counter = 0;
-            spinInterval = setInterval(() => {
-                rouletteResult.innerText = subjects[counter % subjects.length];
-                counter++;
-            }, 80); 
-
-            setTimeout(() => {
-                clearInterval(spinInterval);
-                const finalSubject = subjects[Math.floor(Math.random() * subjects.length)];
-                rouletteResult.innerText = finalSubject;
-                rouletteResult.style.color = 'var(--accent-color)';
-                closeRouletteBtn.style.display = 'block'; 
-            }, 2000);
-        });
-
-        const closeRoulette = () => {
-            clearInterval(spinInterval);
-            rouletteModal.classList.remove('active');
-            setTimeout(() => {
-                rouletteResult.innerText = '❓'; 
-            }, 300);
-        };
-
-        closeRouletteBtn.addEventListener('click', closeRoulette);
-
-        // 點擊 Modal 背景也可關閉
-        rouletteModal.addEventListener('click', (e) => {
-            if (e.target === rouletteModal) {
-                closeRoulette();
-            }
-        });
-
-        // --- 待辦事項 ---
+        // 待辦事項邏輯
         const todoInput = document.getElementById('todoInput');
-        const addTodoBtn = document.getElementById('addTodoBtn');
         const todoList = document.getElementById('todoList');
-
-        let todos = JSON.parse(localStorage.getItem('study_todos')) || [];
-
-        function saveTodos() {
-            localStorage.setItem('study_todos', JSON.stringify(todos));
-        }
 
         function renderTodos() {
             todoList.innerHTML = '';
             if (todos.length === 0) {
-                todoList.innerHTML = '<li class="todo-empty">目前沒有待辦事項，太棒了！✨</li>';
+                todoList.innerHTML = '<li style="text-align:center; opacity:0.6; padding:10px;">目前沒有待辦事項，太棒了！✨</li>';
                 return;
             }
-
             todos.forEach((todo) => {
                 const li = document.createElement('li');
                 li.className = 'todo-item';
@@ -635,7 +665,7 @@
                         li.classList.add('completed');
                         setTimeout(() => {
                             todos = todos.filter(t => t !== todo);
-                            saveTodos();
+                            saveUserData();
                             renderTodos();
                         }, 400);
                     }
@@ -647,25 +677,53 @@
             });
         }
 
-        function addTodo() {
+        document.getElementById('addTodoBtn').addEventListener('click', () => {
             const text = todoInput.value.trim();
             if (text !== '') {
                 todos.push(text);
-                saveTodos();
+                saveUserData();
                 renderTodos();
                 todoInput.value = '';
             }
-        }
-
-        addTodoBtn.addEventListener('click', addTodo);
-
-        todoInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                addTodo();
-            }
         });
 
-        renderTodos();
+        // 深色 / 明亮模式切換
+        document.getElementById('themeBtn').addEventListener('click', () => {
+            const isDark = document.body.getAttribute('data-theme') === 'dark';
+            document.body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            document.getElementById('themeBtn').innerText = isDark ? '🌙 切換暗黑模式' : '☀️ 切換明亮模式';
+        });
+
+        // 小驚喜與輪盤功能
+        document.getElementById('surpriseBtn').addEventListener('click', () => {
+            window.location.href = 'https://www.youtube.com/watch?v=BpHvY8Wt2j0';
+        });
+
+        const rouletteBtn = document.getElementById('rouletteBtn');
+        const rouletteModal = document.getElementById('rouletteModal');
+        const rouletteResult = document.getElementById('rouletteResult');
+        const closeRouletteBtn = document.getElementById('closeRouletteBtn');
+        const subjects = ['📖 國文', '🔠 英文', '📐 數學', '🔬 自然', '🌍 社會'];
+        let spinInterval;
+
+        rouletteBtn.addEventListener('click', () => {
+            rouletteModal.classList.add('active');
+            closeRouletteBtn.style.display = 'none';
+            let counter = 0;
+            spinInterval = setInterval(() => {
+                rouletteResult.innerText = subjects[counter % subjects.length];
+                counter++;
+            }, 80);
+            setTimeout(() => {
+                clearInterval(spinInterval);
+                rouletteResult.innerText = subjects[Math.floor(Math.random() * subjects.length)];
+                closeRouletteBtn.style.display = 'block';
+            }, 2000);
+        });
+
+        closeRouletteBtn.addEventListener('click', () => {
+            rouletteModal.classList.remove('active');
+        });
     </script>
 </body>
 </html>
