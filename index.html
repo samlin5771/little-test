@@ -285,7 +285,7 @@
     <header class="top-navbar">
         <button class="menu-toggle-btn" id="openDrawerBtn">☰</button>
         <div class="header-title" id="headerTitle">⏱️ 倒數計時</div>
-        <div style="width: 40px;"></div> <!-- 平衡佔位 -->
+        <div style="width: 40px;"></div>
     </header>
 
     <!-- 側邊抽屜選單 -->
@@ -349,10 +349,8 @@
                         <div class="time-box"><span class="time-number" id="seconds">00</span><span class="time-label">秒</span></div>
                     </div>
                     
-                    <!-- 下一個重大關卡提示 -->
                     <div class="next-event-badge" id="nextEventBadge">⏳ 計算下一個重大關卡中...</div>
                     
-                    <!-- 趣味轉盤與驚喜按鈕 -->
                     <div class="btn-group">
                         <button class="custom-btn" id="rouletteBtn">🎲 現在要幹嘛</button>
                         <button class="custom-btn" id="surpriseBtn">✨ 查看小驚喜</button>
@@ -364,9 +362,8 @@
             <section id="tab-weekly" class="tab-content">
                 <div class="glass-card">
                     <h2 style="margin:0 0 10px 0; text-align: center;">📊 專屬每周進度表</h2>
-                    <p style="text-align:center; font-size:0.85rem; opacity:0.8; margin-top:0; margin-bottom:15px;">點擊對應格子，自訂讀書範圍與打勾紀錄！</p>
+                    <p style="text-align:center; font-size:0.85rem; opacity:0.8; margin-top:0; margin-bottom:15px;">點擊對應格子，自訂讀書範圍與打勾紀錄！大考日期將以色彩標記顯示。</p>
                     
-                    <!-- 週別切換按鈕區 -->
                     <div class="week-nav-bar">
                         <button class="custom-btn" id="prevWeekBtn">◀ 上一週</button>
                         <div class="week-title" id="weekRangeTitle">2026/03/30 - 2026/04/05</div>
@@ -378,7 +375,6 @@
 
                     <div class="weekly-wrapper">
                         <table class="weekly-table" id="weeklyTable">
-                            <!-- JS 動態生成表格 -->
                         </table>
                     </div>
                 </div>
@@ -484,7 +480,7 @@
         let weeklyData = {}; 
         let spinInterval;
 
-        // 大考與模考時間設定
+        // 大考與模考時間設定 (固定顯示)
         const examEvents = {
             mock1: { title: '📝 115 高三第一次模考', shortTitle: '📝 模考1', date: '2026-09-02' },
             mock2: { title: '📚 115 高三第二次模考', shortTitle: '📚 模考2', date: '2026-10-28' },
@@ -492,7 +488,6 @@
             gsat:  { title: '🎓 116 學測',          shortTitle: '🎓 學測',  date: '2027-01-22' }
         };
 
-        // ===== 側邊抽屜導航與分頁切換 =====
         const openDrawerBtn = document.getElementById('openDrawerBtn');
         const closeDrawerBtn = document.getElementById('closeDrawerBtn');
         const sidebarDrawer = document.getElementById('sidebarDrawer');
@@ -536,7 +531,6 @@
             });
         });
 
-        // ===== 通用 Modal 背景點擊關閉 =====
         document.querySelectorAll('.modal-overlay').forEach(overlay => {
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) {
@@ -546,12 +540,10 @@
             });
         });
 
-        // ===== 每周進度表邏輯 =====
         const daysOfWeek = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
         const subjects = ['國文', '英文', '數學', '自然', '社會'];
         let currentEditWeeklyKey = null;
 
-        // 計算目前週一的 Date 物件
         let currentMonday = getMonday(new Date());
 
         function getMonday(d) {
@@ -588,7 +580,6 @@
                 const dateStr = formatDateString(dateObj);
                 const monthDay = `${String(dateObj.getMonth() + 1).padStart(2, '0')}/${String(dateObj.getDate()).padStart(2, '0')}`;
                 
-                // 檢查當天是否有考試標記
                 let examTag = '';
                 Object.values(examEvents).forEach(exam => {
                     if (exam.date === dateStr) {
@@ -607,7 +598,7 @@
                 html += `<tr><th>${subj}</th>`;
                 datesOfWeek.forEach((dateObj, c) => {
                     const dateStr = formatDateString(dateObj);
-                    const key = `${dateStr}_${r}`; // 以日期與科目索引為Key
+                    const key = `${dateStr}_${r}`;
                     const data = weeklyData[key] || { text: '', done: false };
                     const doneClass = data.done ? 'completed' : '';
                     const checkIcon = data.done ? '✅' : '';
@@ -632,7 +623,6 @@
             });
         }
 
-        // 換週按鈕事件綁定
         document.getElementById('prevWeekBtn').addEventListener('click', () => {
             currentMonday.setDate(currentMonday.getDate() - 7);
             renderWeeklyTable();
@@ -686,7 +676,6 @@
             document.getElementById('weeklyModal').classList.remove('active');
         });
 
-        // ===== 資料儲存與讀取 (Firebase / LocalStorage) =====
         async function saveUserData() {
             if (!currentUser) {
                 localStorage.setItem('study_todos', JSON.stringify(todos));
@@ -724,15 +713,12 @@
             }
         }
 
-        // 重新整合使用者事件與考試事件至 Calendar
         function refreshCalendarEvents() {
             if (!calendar) return;
             calendar.removeAllEvents();
             
-            // 1. 載入自訂行程
             calendar.addEventSource(calendarEvents);
             
-            // 2. 載入考試行程
             const examEventsList = Object.values(examEvents).map(exam => ({
                 title: exam.title,
                 start: exam.date,
@@ -743,7 +729,6 @@
             calendar.addEventSource(examEventsList);
         }
 
-        // ===== 登入與身份驗證 =====
         const loginBtn = document.getElementById('loginBtn');
         loginBtn.addEventListener('click', () => {
             if (currentUser) {
@@ -778,7 +763,6 @@
             }
         });
 
-        // ===== 行事曆邏輯 (FullCalendar) =====
         let selectedDateStr = "";
         let selectedEventObj = null;
 
@@ -796,7 +780,6 @@
                     document.getElementById('eventAddModal').classList.add('active');
                 },
                 eventClick: function(info) {
-                    // 如果點到大考標記則不開放編輯/刪除
                     if (info.event.classNames.includes('exam-event')) {
                         alert(`📌 ${info.event.title}\n日期：${info.event.startStr}`);
                         return;
@@ -847,7 +830,6 @@
             document.getElementById('eventEditModal').classList.remove('active');
         });
 
-        // ===== 待辦事項邏輯 =====
         const todoInput = document.getElementById('todoInput');
         const todoList = document.getElementById('todoList');
         function renderTodos() {
@@ -883,7 +865,6 @@
             }
         });
 
-        // ===== 主題與倒數器 =====
         document.getElementById('themeBtn').addEventListener('click', () => {
             const isDark = document.body.getAttribute('data-theme') === 'dark';
             document.body.setAttribute('data-theme', isDark ? 'light' : 'dark');
@@ -920,7 +901,6 @@
             updateNextEventHint(now); 
         }
 
-        // 下一個重大關卡計算邏輯
         function updateNextEventHint(now) {
             const upcoming = Object.values(examEvents)
                 .map(event => ({ ...event, diff: new Date(event.date + 'T00:00:00').getTime() - now }))
