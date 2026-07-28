@@ -478,7 +478,7 @@
         let calendarEvents = [];
         let todos = [];
         let weeklyData = {}; 
-        let spinInterval;
+        let spinInterval = null;
 
         // 大考與模考時間設定 (固定顯示)
         const examEvents = {
@@ -654,6 +654,8 @@
         document.getElementById('clearWeeklyBtn').addEventListener('click', () => {
             if (currentEditWeeklyKey) {
                 delete weeklyData[currentEditWeeklyKey];
+                document.getElementById('weeklyInputContent').value = '';
+                document.getElementById('weeklyCheckbox').checked = false;
                 saveUserData();
                 renderWeeklyTable();
             }
@@ -930,6 +932,7 @@
         const subjectsList = ['📖 國文', '🔠 英文', '📐 數學', '🔬 自然', '🌍 社會'];
 
         rouletteBtn.addEventListener('click', () => {
+            if (spinInterval) clearInterval(spinInterval);
             rouletteModal.classList.add('active');
             closeRouletteBtn.style.display = 'none';
             let counter = 0;
@@ -939,6 +942,7 @@
             }, 80);
             setTimeout(() => {
                 if (spinInterval) clearInterval(spinInterval);
+                spinInterval = null;
                 rouletteResult.innerText = subjectsList[Math.floor(Math.random() * subjectsList.length)];
                 closeRouletteBtn.style.display = 'inline-flex';
             }, 2000);
