@@ -506,13 +506,13 @@
             <img src="https://via.placeholder.com/40" alt="Avatar" class="user-avatar" id="userAvatar">
             <div class="user-info">
                 <span class="user-name" id="userName">未登入訪客</span>
-                <span class="user-status" id="userStatus">僅使用本機快取</span>
+                <span class="user-status" id="userStatus">僅使用本地資料</span>
             </div>
         </div>
 
         <div class="drawer-actions">
             <button class="custom-btn" id="loginBtn">🔐 Google 帳號登入</button>
-            <button class="custom-btn" id="themeBtn">☀️ 切換明亮模式</button>
+            <button class="custom-btn" id="themeBtn">☀️Bright mode</button>
         </div>
     </aside>
 
@@ -567,7 +567,7 @@
                     <h2 style="margin:0 0 15px 0; text-align: center;">📝 今日待辦事項</h2>
                     <div class="todo-input-group">
                         <input type="text" id="todoInput" class="todo-input" placeholder="新增待辦事項..." />
-                        <button class="custom-btn" id="addTodoBtn">➕ 新增</button>
+                        <button class="custom-btn" id="addTodoBtn">新增➕</button>
                     </div>
                     <ul class="todo-list" id="todoList"></ul>
                 </div>
@@ -601,7 +601,7 @@
     <!-- 行事曆編輯/刪除 Modal -->
     <div class="modal-overlay" id="eventEditModal">
         <div class="modal-card">
-            <h3>✏️ 編輯行程事件</h3>
+            <h3>✏️ 編輯事件</h3>
             <input type="text" id="eventEditInput" class="modal-input" />
             <div class="modal-btns">
                 <button class="custom-btn danger" id="deleteEventBtn">🗑️ 刪除</button>
@@ -789,7 +789,7 @@
                 await loadUserData();
             } else {
                 document.getElementById('userName').innerText = "未登入訪客";
-                document.getElementById('userStatus').innerText = "僅使用本機快取";
+                document.getElementById('userStatus').innerText = "僅使用本地資料";
                 document.getElementById('userAvatar').src = "https://via.placeholder.com/40";
                 loginBtn.innerText = "🔐 Google 帳號登入";
                 
@@ -861,7 +861,7 @@
             mock2: { title: '📚 115 高三第二次模考', subtitle: '第二次段考11/18-19', date: '2026-10-28T00:00:00' },
             mock3: { title: '🔥 115 高三第三次模考', subtitle: '最後衝刺階段', date: '2026-12-08T00:00:00' },
             listening2: { title: '🎧 116 英語聽力第二次測驗', subtitle: '第三次段考12/30-31', date: '2026-12-12T00:00:00' },
-            gsat: { title: '🎓 116 學測正式登場', subtitle: '堅持到底，成功就在前方！', date: '2027-01-22T00:00:00' }
+            gsat: { title: '🎓 116 學測', subtitle: '今天讀多少書了 ', date: '2027-01-22T00:00:00' }
         };
 
         const examSelector = document.getElementById('examSelector');
@@ -966,7 +966,7 @@
         document.getElementById('themeBtn').addEventListener('click', () => {
             const isDark = document.body.getAttribute('data-theme') === 'dark';
             document.body.setAttribute('data-theme', isDark ? 'light' : 'dark');
-            document.getElementById('themeBtn').innerText = isDark ? '🌙 切換暗黑模式' : '☀️ 切換明亮模式';
+            document.getElementById('themeBtn').innerText = isDark ? '🌙 Dark mode' : '☀️ Bright mode';
         });
 
         document.getElementById('surpriseBtn').addEventListener('click', () => {
