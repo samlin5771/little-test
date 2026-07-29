@@ -249,10 +249,10 @@
         .color-option.yellow { background: rgba(245, 158, 11, 0.8); }
         .color-option.pink { background: rgba(236, 72, 153, 0.8); }
 
-        /* --- 待辦事項 Todo --- */
-        .todo-input-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        /* --- 待辦事項 Todo & 預計複習 Memo --- */
+        .todo-input-group { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
         .todo-input {
-            flex: 1; background: var(--input-bg); border: 1px solid var(--card-border);
+            flex: 1; min-width: 200px; background: var(--input-bg); border: 1px solid var(--card-border);
             color: var(--text-color); padding: 10px 16px; border-radius: 30px;
             font-size: 0.95rem; outline: none; transition: border-color 0.2s;
         }
@@ -266,7 +266,7 @@
         @keyframes slideIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         .todo-checkbox {
             appearance: none; width: 20px; height: 20px; border: 2px solid var(--card-border);
-            border-radius: 6px; cursor: pointer; position: relative; transition: all 0.2s;
+            border-radius: 6px; cursor: pointer; position: relative; transition: all 0.2s; flex-shrink: 0;
         }
         .todo-checkbox:checked { background-color: var(--accent-color); border-color: var(--accent-color); }
         .todo-checkbox:checked::after {
@@ -274,6 +274,16 @@
             top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold;
         }
         .todo-text { flex: 1; word-break: break-all; }
+        
+        .subject-badge {
+            background: var(--accent-color);
+            color: #ffffff;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.82rem;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
 
         /* --- 行事曆 FullCalendar --- */
         .fc { --fc-border-color: var(--card-border); --fc-page-bg-color: transparent; --fc-neutral-bg-color: transparent; --fc-list-event-hover-bg-color: var(--btn-bg); --fc-today-bg-color: rgba(99, 102, 241, 0.15); font-family: inherit; }
@@ -358,6 +368,9 @@
             <button class="drawer-nav-item" data-tab="tab-todo" data-title="📝 待辦事項">
                 📝 待辦事項
             </button>
+            <button class="drawer-nav-item" data-tab="tab-review-plan" data-title="📌 預計複習">
+                📌 預計複習
+            </button>
         </nav>
 
         <div class="drawer-actions">
@@ -433,6 +446,24 @@
                         <button class="custom-btn" id="addTodoBtn">➕ 新增</button>
                     </div>
                     <ul class="todo-list" id="todoList"></ul>
+                </div>
+            </section>
+
+            <!-- 5. 預計複習分頁 -->
+            <section id="tab-review-plan" class="tab-content">
+                <div class="glass-card">
+                    <div class="todo-input-group">
+                        <select id="reviewSubjectSelect" class="target-select" style="border-radius: 30px;">
+                            <option value="📖 國文">📖 國文</option>
+                            <option value="🔠 英文">🔠 英文</option>
+                            <option value="📐 數學">📐 數學</option>
+                            <option value="🔬 自然">🔬 自然</option>
+                            <option value="🌍 社會">🌍 社會</option>
+                        </select>
+                        <input type="text" id="reviewInput" class="todo-input" placeholder="記錄預計複習單元、重點或備忘內容..." />
+                        <button class="custom-btn" id="addReviewBtn">➕ 新增計畫</button>
+                    </div>
+                    <ul class="todo-list" id="reviewList"></ul>
                 </div>
             </section>
 
@@ -526,6 +557,7 @@
         let calendar = null;
         let calendarEvents = [];
         let todos = [];
+        let reviewPlans = []; // 預計複習清單
         let weeklyData = {}; 
         let spinInterval;
         let selectedColor = "";
@@ -647,7 +679,6 @@
             subjects.forEach((subj, subjIdx) => {
                 for (let slot = 0; slot < 2; slot++) {
                     html += '<tr>';
-                    // 科目名稱格（唯獨第一 Row 合併兩行 rowspan="2"）
                     if (slot === 0) {
                         html += `<td class="subject-col" rowspan="2">${subj}</td>`;
                     }
@@ -760,6 +791,7 @@
         async function saveUserData() {
             if (!currentUser) {
                 localStorage.setItem('study_todos', JSON.stringify(todos));
+                localStorage.setItem('study_review_plans', JSON.stringify(reviewPlans));
                 localStorage.setItem('study_weekly', JSON.stringify(weeklyData));
                 localStorage.setItem('study_events', JSON.stringify(calendarEvents));
                 return;
@@ -767,6 +799,7 @@
             try {
                 await setDoc(doc(db, "users", currentUser.uid), {
                     todos: todos,
+                    reviewPlans: reviewPlans,
                     events: calendarEvents,
                     weekly: weeklyData
                 });
@@ -782,10 +815,12 @@
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     todos = data.todos || [];
+                    reviewPlans = data.reviewPlans || [];
                     calendarEvents = data.events || [];
                     weeklyData = data.weekly || {};
                     
                     renderTodos();
+                    renderReviewPlans();
                     renderWeeklyTable();
                     refreshCalendarEvents();
                 }
@@ -835,9 +870,11 @@
                 loginBtn.innerText = "🔐 Google 帳號登入";
                 
                 todos = JSON.parse(localStorage.getItem('study_todos')) || [];
+                reviewPlans = JSON.parse(localStorage.getItem('study_review_plans')) || [];
                 weeklyData = JSON.parse(localStorage.getItem('study_weekly')) || {};
                 calendarEvents = JSON.parse(localStorage.getItem('study_events')) || [];
                 renderTodos();
+                renderReviewPlans();
                 renderWeeklyTable();
                 refreshCalendarEvents();
             }
@@ -910,6 +947,7 @@
             document.getElementById('eventEditModal').classList.remove('active');
         });
 
+        // --- 待辦事項邏輯 ---
         const todoInput = document.getElementById('todoInput');
         const todoList = document.getElementById('todoList');
         function renderTodos() {
@@ -942,6 +980,63 @@
             const text = todoInput.value.trim();
             if (text !== '') {
                 todos.push(text); saveUserData(); renderTodos(); todoInput.value = '';
+            }
+        });
+
+        // --- 預計複習邏輯 ---
+        const reviewInput = document.getElementById('reviewInput');
+        const reviewSubjectSelect = document.getElementById('reviewSubjectSelect');
+        const reviewList = document.getElementById('reviewList');
+
+        function renderReviewPlans() {
+            reviewList.innerHTML = '';
+            if (reviewPlans.length === 0) {
+                reviewList.innerHTML = '<li style="text-align:center; opacity:0.6; padding:15px;">目前沒有預計複習內容，快新增一個吧！🎯</li>';
+                return;
+            }
+            reviewPlans.forEach((plan, index) => {
+                const li = document.createElement('li');
+                li.className = 'todo-item';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox'; 
+                checkbox.className = 'todo-checkbox';
+                
+                const badge = document.createElement('span');
+                badge.className = 'subject-badge';
+                badge.innerText = plan.subject;
+
+                const textSpan = document.createElement('span');
+                textSpan.className = 'todo-text'; 
+                textSpan.innerText = plan.text;
+
+                checkbox.addEventListener('change', () => {
+                    if (checkbox.checked) {
+                        li.style.opacity = '0'; 
+                        li.style.transform = 'translateY(-6px)';
+                        setTimeout(() => {
+                            reviewPlans.splice(index, 1);
+                            saveUserData(); 
+                            renderReviewPlans();
+                        }, 200);
+                    }
+                });
+
+                li.appendChild(checkbox); 
+                li.appendChild(badge);
+                li.appendChild(textSpan);
+                reviewList.appendChild(li);
+            });
+        }
+
+        document.getElementById('addReviewBtn').addEventListener('click', () => {
+            const text = reviewInput.value.trim();
+            const subject = reviewSubjectSelect.value;
+            if (text !== '') {
+                reviewPlans.push({ subject, text }); 
+                saveUserData(); 
+                renderReviewPlans(); 
+                reviewInput.value = '';
             }
         });
 
