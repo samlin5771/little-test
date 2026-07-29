@@ -504,9 +504,9 @@
                     <div class="target-select-wrapper">
                         <select id="examSelector" class="target-select">
                             <option value="gsat">🎓 116 學測倒數</option>
-                            <option value="mock1">📝 高三第一次模考</option>
-                            <option value="mock2">📚 高三第二次模考</option>
-                            <option value="mock3">🔥 高三第三次模考</option>
+                            <option value="mock1">📝 第一次模考</option>
+                            <option value="mock2">📚 第二次模考</option>
+                            <option value="mock3">🔥 第三次模考</option>
                         </select>
                     </div>
                     <h1 id="countdownTitle">🎓 116 學測倒數</h1>
@@ -518,7 +518,7 @@
                         <div class="time-box"><span class="time-number" id="seconds">00</span><span class="time-label">秒</span></div>
                     </div>
                     
-                    <div class="next-event-badge" id="nextEventBadge">⏳ 計算下一個重大關卡中...</div>
+                    <div class="next-event-badge" id="nextEventBadge">⏳ 計算下一考試中...</div>
                     
                     <div class="btn-group">
                         <button class="custom-btn" id="rouletteBtn">🎲 現在要幹嘛</button>
@@ -678,10 +678,10 @@
         let selectedColor = "";
 
         const examEvents = {
-            mock1: { title: '📝 115 高三第一次模考', date: '2026-09-02', shortTitle: '🔥第一次模考' },
-            mock2: { title: '📚 115 高三第二次模考', date: '2026-10-28', shortTitle: '🔥第二次模考' },
-            mock3: { title: '🔥 115 高三第三次模考', date: '2026-12-08', shortTitle: '🔥第三次模考' },
-            gsat:  { title: '🎓 116 學測',          date: '2027-01-22', shortTitle: '🎓 116 學測' }
+            mock1: { title: '📝 第一次模考', date: '2026-09-02', shortTitle: '🔥第一次模考' },
+            mock2: { title: '📚 第二次模考', date: '2026-10-28', shortTitle: '🔥第二次模考' },
+            mock3: { title: '🔥 第三次模考', date: '2026-12-08', shortTitle: '🔥第三次模考' },
+            gsat:  { title: '🎓 116學測',          date: '2027-01-22', shortTitle: '🎓 116 學測' }
         };
 
         const openDrawerBtn = document.getElementById('openDrawerBtn');
