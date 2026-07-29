@@ -17,25 +17,29 @@
             --sidebar-bg: rgba(255, 255, 255, 0.9);
             --text-color: #222222;
             --accent-color: #6366f1;
-            --btn-bg: rgba(255, 255, 255, 0.7);
+            --btn-bg: rgba(255, 255, 255, 0.75);
             --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-            --input-bg: rgba(255, 255, 255, 0.6);
+            --input-bg: rgba(255, 255, 255, 0.8);
             --bg-fallback: #f8f9fa; 
             --table-border: rgba(0, 0, 0, 0.08);
+            --dropdown-bg: #ffffff;
+            --dropdown-border: rgba(0, 0, 0, 0.15);
         }
 
         [data-theme="dark"] {
             --bg-overlay: rgba(0, 0, 0, 0.55);
-            --card-bg: rgba(20, 20, 32, 0.55);
-            --card-border: rgba(255, 255, 255, 0.15);
+            --card-bg: rgba(20, 20, 32, 0.65);
+            --card-border: rgba(255, 255, 255, 0.18);
             --sidebar-bg: rgba(15, 16, 26, 0.95);
             --text-color: #ffffff;
             --accent-color: #818cf8;
             --btn-bg: rgba(255, 255, 255, 0.12);
             --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-            --input-bg: rgba(0, 0, 0, 0.3);
+            --input-bg: rgba(30, 31, 46, 0.85);
             --bg-fallback: #0f1015;
-            --table-border: rgba(255, 255, 255, 0.1);
+            --table-border: rgba(255, 255, 255, 0.12);
+            --dropdown-bg: #242535;
+            --dropdown-border: rgba(255, 255, 255, 0.25);
         }
 
         * { box-sizing: border-box; }
@@ -149,12 +153,43 @@
             box-shadow: var(--shadow); margin-bottom: 20px;
         }
 
-        /* 倒數區塊 */
-        .target-select-wrapper { margin-bottom: 15px; text-align: center; }
+        /* --------------------------------------------------
+           3 & 4. 優化下拉選單（Target Select）
+        -------------------------------------------------- */
+        .target-select-wrapper { margin-bottom: 20px; text-align: center; }
+        
         .target-select {
-            background: var(--input-bg); color: var(--text-color); border: 1px solid var(--card-border);
-            padding: 8px 16px; border-radius: 20px; font-size: 0.95rem; font-weight: 600; outline: none; cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-color: var(--dropdown-bg);
+            color: var(--text-color);
+            border: 1px solid var(--dropdown-border);
+            padding: 10px 40px 10px 18px;
+            border-radius: 30px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23818cf8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            background-size: 16px;
         }
+
+        .target-select:hover, .target-select:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+        }
+
+        .target-select option {
+            background-color: #1f202e;
+            color: #ffffff;
+            padding: 10px;
+        }
+
         h1 { margin: 0 0 10px 0; font-size: 1.8rem; font-weight: 700; text-align: center; }
         .subtitle { font-size: 0.95rem; opacity: 0.85; margin-bottom: 20px; text-align: center; }
         .countdown-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 20px 0; text-align: center; }
@@ -178,12 +213,35 @@
         .custom-btn.success { color: #10b981; border-color: rgba(16,185,129,0.4); }
         .custom-btn.success:hover { background: rgba(16,185,129,0.15); border-color: #10b981; }
 
-        /* --- 每周進度表 Weekly Chart --- */
+        /* --------------------------------------------------
+           2. 每周進度表控制列優化 (Weekly Chart)
+        -------------------------------------------------- */
         .week-nav-bar {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 20px; flex-wrap: wrap; gap: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+            background: rgba(0, 0, 0, 0.1);
+            padding: 12px 18px;
+            border-radius: 16px;
+            border: 1px solid var(--card-border);
         }
-        .week-title { font-weight: bold; font-size: 1.1rem; text-align: center; }
+
+        .week-title {
+            font-weight: 700;
+            font-size: 1.15rem;
+            color: var(--text-color);
+            letter-spacing: 0.5px;
+        }
+
+        .week-controls-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         .weekly-wrapper { overflow-x: auto; margin-top: 10px; padding-bottom: 10px; }
         
         .weekly-table {
@@ -285,11 +343,67 @@
             flex-shrink: 0;
         }
 
-        /* --- 行事曆 FullCalendar --- */
-        .fc { --fc-border-color: var(--card-border); --fc-page-bg-color: transparent; --fc-neutral-bg-color: transparent; --fc-list-event-hover-bg-color: var(--btn-bg); --fc-today-bg-color: rgba(99, 102, 241, 0.15); font-family: inherit; }
-        .fc .fc-toolbar-title { font-size: 1.2rem; font-weight: bold; color: var(--text-color); }
-        .fc .fc-button-primary { background-color: var(--btn-bg) !important; border-color: var(--card-border) !important; color: var(--text-color) !important; border-radius: 20px !important; font-weight: 600; padding: 6px 14px !important; text-transform: capitalize; box-shadow: none !important; transition: all 0.2s ease !important; }
-        .fc .fc-button-primary:hover { border-color: var(--accent-color) !important; color: var(--accent-color) !important; transform: translateY(-1px); }
+        /* --------------------------------------------------
+           1 & 4. 行事曆 FullCalendar 全面優化
+        -------------------------------------------------- */
+        .fc {
+            --fc-border-color: var(--card-border);
+            --fc-page-bg-color: transparent;
+            --fc-neutral-bg-color: transparent;
+            --fc-list-event-hover-bg-color: var(--btn-bg);
+            --fc-today-bg-color: rgba(99, 102, 241, 0.18);
+            font-family: inherit;
+        }
+
+        .fc .fc-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 18px !important;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .fc .fc-toolbar-title {
+            font-size: 1.35rem !important;
+            font-weight: 700;
+            color: var(--text-color);
+            letter-spacing: 0.5px;
+        }
+
+        /* 左右箭頭按鈕間距修復 */
+        .fc .fc-button-group {
+            display: inline-flex !important;
+            gap: 8px !important; /* 按鈕拉開間距 */
+        }
+
+        .fc .fc-button-group > .fc-button {
+            border-radius: 12px !important; /* 個別獨立圓角 */
+            margin: 0 !important;
+        }
+
+        .fc .fc-button-primary {
+            background-color: var(--btn-bg) !important;
+            border: 1px solid var(--card-border) !important;
+            color: var(--text-color) !important;
+            border-radius: 12px !important;
+            font-weight: 600;
+            padding: 8px 16px !important;
+            text-transform: capitalize;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+            transition: all 0.2s ease !important;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fc .fc-button-primary:hover {
+            border-color: var(--accent-color) !important;
+            color: var(--accent-color) !important;
+            background-color: rgba(99, 102, 241, 0.15) !important;
+            transform: translateY(-1px);
+        }
+
         .fc .fc-daygrid-day-frame { min-height: 85px !important; }
         .fc .fc-daygrid-day-number { color: var(--text-color); font-size: 0.9rem; font-weight: 600; padding: 6px 8px; }
         .fc-event { background-color: var(--accent-color) !important; border: none !important; border-radius: 6px !important; padding: 3px 6px !important; font-size: 0.82rem !important; cursor: pointer; }
@@ -327,6 +441,7 @@
         @media (max-width: 600px) {
             .fc .fc-daygrid-day-frame { min-height: 65px !important; }
             .weekly-table th, .weekly-table td { padding: 8px 6px; }
+            .week-nav-bar { flex-direction: column; text-align: center; }
         }
     </style>
 </head>
@@ -416,10 +531,10 @@
             <section id="tab-weekly" class="tab-content">
                 <div class="glass-card">
                     <div class="week-nav-bar">
-                        <button class="custom-btn" id="prevWeekBtn">◀ 上一週</button>
                         <div class="week-title" id="weekRangeTitle">2026/07/27 - 2026/08/02</div>
-                        <div>
-                            <button class="custom-btn" id="todayWeekBtn" style="margin-right: 4px;">本週</button>
+                        <div class="week-controls-right">
+                            <button class="custom-btn" id="prevWeekBtn">◀ 上一週</button>
+                            <button class="custom-btn" id="todayWeekBtn">本週</button>
                             <button class="custom-btn" id="nextWeekBtn">下一週 ▶</button>
                         </div>
                     </div>
@@ -453,7 +568,7 @@
             <section id="tab-review-plan" class="tab-content">
                 <div class="glass-card">
                     <div class="todo-input-group">
-                        <select id="reviewSubjectSelect" class="target-select" style="border-radius: 30px;">
+                        <select id="reviewSubjectSelect" class="target-select">
                             <option value="📖 國文">📖 國文</option>
                             <option value="🔠 英文">🔠 英文</option>
                             <option value="📐 數學">📐 數學</option>
