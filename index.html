@@ -1200,7 +1200,7 @@
             if (upcoming.length > 0) {
                 const next = upcoming[0];
                 const daysLeft = Math.ceil(next.diff / (1000 * 60 * 60 * 24));
-                document.getElementById('nextEventBadge').innerHTML = `📍 下一個最近關卡：<strong>${next.title.split(' ')[1] || next.title}</strong>（還剩 <strong>${daysLeft}</strong> 天）`;
+                document.getElementById('nextEventBadge').innerHTML = `📍 下一個最近考試：<strong>${next.title.split(' ')[1] || next.title}</strong>（還剩 <strong>${daysLeft}</strong> 天）`;
             } else {
                 document.getElementById('nextEventBadge').innerHTML = `🎉 所有的挑戰都已經順利完成了！`;
             }
