@@ -664,6 +664,8 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         const provider = new GoogleAuthProvider();
+        // 每次登入都強制顯示 Google 帳號選擇畫面，不自動帶入上次登入的帳號
+        provider.setCustomParameters({ prompt: 'select_account' });
 
         let currentUser = null;
         let calendar = null;
