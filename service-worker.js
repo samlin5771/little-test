@@ -1,8 +1,8 @@
-// 快取版本號：以後更新網頁內容時，把這個數字改一下（例如 v2, v3...）
-// 才能讓使用者的手機抓到新版本，否則會一直讀到舊的快取
-const CACHE_NAME = 'study-countdown-v1';
+// 快取版本號：以後更新網頁內容時，把這個數字改一下（例如 v3, v4...）
+// 才能讓使用者的手機抓到新版本並清掉舊快取
+const CACHE_NAME = 'study-countdown-v2';
 
-// 開啟時要預先快取的檔案（放最基本、不常變動的東西）
+// 開啟時要預先快取的本機檔案
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -12,7 +12,10 @@ const PRECACHE_URLS = [
   './bg.jpg'
 ];
 
-// 安裝階段：把基本檔案存進快取
+// 可以存進快取、讓 App 離線也能開的外部資源（FullCalendar、Firebase 程式庫）
+const CACHEABLE_CDN_HOSTS = ['cdn.jsdelivr.net', 'www.gstatic.com'];
+
+// 安裝：把基本檔案存進快取
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
@@ -20,40 +23,41 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// 啟用階段：清掉舊版本的快取
+// 啟用：清掉舊版本的快取
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((names) =>
-      Promise.all(
-        names.map((name) => {
-          if (name !== CACHE_NAME) return caches.delete(name);
-        })
-      )
+      Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n)))
     )
   );
   self.clients.claim();
 });
 
-// 攔截網路請求：
-// 本機檔案（HTML/CSS/圖示）→ 網路優先，永遠拿最新版；斷網才退回快取
-// 外部資源（Firebase、FullCalendar CDN）→ 直接連網，失敗才退回快取
+// 攔截請求：網路優先（永遠拿最新版），斷網才退回快取
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-  const isSameOrigin = url.origin === self.location.origin;
+  const req = event.request;
+  if (req.method !== 'GET') return; // Firebase 寫入等請求不處理
 
-  if (isSameOrigin) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
+  const url = new URL(req.url);
+  const isSameOrigin = url.origin === self.location.origin;
+  const isCdn = CACHEABLE_CDN_HOSTS.includes(url.hostname);
+
+  // 其他外部請求（Firestore 連線、Google 登入、YouTube）直接交給瀏覽器
+  if (!isSameOrigin && !isCdn) return;
+
+  event.respondWith(
+    fetch(req)
+      .then((response) => {
+        if (response && (response.ok || response.type === 'opaque')) {
           const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return response;
-        })
-        .catch(() => caches.match(event.request))
-    );
-  } else {
-    event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
-    );
-  }
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+        }
+        return response;
+      })
+      .catch(() =>
+        caches.match(req, { ignoreSearch: isSameOrigin }).then(
+          (cached) => cached || (req.mode === 'navigate' ? caches.match('./index.html') : Response.error())
+        )
+      )
+  );
 });

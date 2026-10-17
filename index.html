@@ -1,40 +1,51 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-TW" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>學測倒數 & 讀書計畫</title>
 
-    <!-- ===== PWA 設定 開始 ===== -->
+    <!-- ===== PWA 設定 ===== -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f1015">
-
-    <!-- iOS Safari 專用：加入主畫面後全螢幕、無網址列 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="學測倒數">
     <link rel="apple-touch-icon" href="icon-192.png">
-    <!-- ===== PWA 設定 結束 ===== -->
+
+    <!-- 在畫面出現前就套用上次選的主題，避免閃一下 -->
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('study_theme');
+                if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+            } catch (e) {}
+        })();
+    </script>
 
     <link rel="preload" as="image" href="bg.jpg">
-    <!-- FullCalendar CSS -->
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet" />
 
     <style>
         :root {
             --bg-overlay: rgba(255, 255, 255, 0.4);
-            --card-bg: rgba(255, 255, 255, 0.45);
+            --card-bg: rgba(255, 255, 255, 0.55);
             --card-border: rgba(255, 255, 255, 0.5);
-            --sidebar-bg: rgba(255, 255, 255, 0.9);
+            --sidebar-bg: rgba(255, 255, 255, 0.92);
             --text-color: #222222;
+            --muted-color: rgba(34, 34, 34, 0.65);
             --accent-color: #6366f1;
+            --accent-soft: rgba(99, 102, 241, 0.15);
             --btn-bg: rgba(255, 255, 255, 0.75);
             --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-            --input-bg: rgba(255, 255, 255, 0.8);
-            --bg-fallback: #f8f9fa; 
+            --input-bg: rgba(255, 255, 255, 0.85);
+            --bg-fallback: #f8f9fa;
             --table-border: rgba(0, 0, 0, 0.08);
             --dropdown-bg: #ffffff;
             --dropdown-border: rgba(0, 0, 0, 0.15);
+            --danger: #ef4444;
+            --success: #10b981;
         }
 
         [data-theme="dark"] {
@@ -43,7 +54,9 @@
             --card-border: rgba(255, 255, 255, 0.18);
             --sidebar-bg: rgba(15, 16, 26, 0.95);
             --text-color: #ffffff;
+            --muted-color: rgba(255, 255, 255, 0.65);
             --accent-color: #818cf8;
+            --accent-soft: rgba(129, 140, 248, 0.18);
             --btn-bg: rgba(255, 255, 255, 0.12);
             --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
             --input-bg: rgba(30, 31, 46, 0.85);
@@ -53,32 +66,33 @@
             --dropdown-border: rgba(255, 255, 255, 0.25);
         }
 
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
         body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            font-family: 'Segoe UI', system-ui, -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
             color: var(--text-color);
             margin: 0;
             min-height: 100vh;
             background-color: var(--bg-fallback);
             overflow-x: hidden;
-            overflow-y: auto;
         }
 
+        /* 背景圖：載入完成後才淡入 */
         body::after {
-            content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background-image: url('bg.jpg'); background-size: cover;
-            background-position: center; background-repeat: no-repeat;
+            content: ''; position: fixed; inset: 0;
+            background: url('bg.jpg') center / cover no-repeat;
             z-index: -2; opacity: 0; transition: opacity 0.6s ease-in-out;
         }
         body.bg-loaded::after { opacity: 1; }
-
         body::before {
-            content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            content: ''; position: fixed; inset: 0;
             background-color: var(--bg-overlay); z-index: -1;
+            transition: background-color 0.3s;
         }
 
-        /* --- 頂部導航列 Top Header --- */
+        button { font-family: inherit; }
+
+        /* --- 頂部導航列 --- */
         .top-navbar {
             position: sticky; top: 0; z-index: 50;
             display: flex; align-items: center; justify-content: space-between;
@@ -87,41 +101,41 @@
             border-bottom: 1px solid var(--card-border);
             padding-top: calc(12px + env(safe-area-inset-top));
         }
-
         .header-title { font-weight: bold; font-size: 1.1rem; flex-grow: 1; text-align: center; }
-
+        .header-spacer { width: 48px; }
         .menu-toggle-btn {
             background: var(--btn-bg); border: 1px solid var(--card-border);
             color: var(--text-color); font-size: 1.2rem;
             padding: 8px 14px; border-radius: 12px; cursor: pointer;
-            transition: transform 0.15s ease, background-color 0.2s ease;
+            transition: transform 0.15s ease;
         }
         .menu-toggle-btn:active { transform: scale(0.92); }
 
-        /* --- 抽屜側邊欄 Drawer Sidebar --- */
+        /* --- 抽屜側邊欄 --- */
         .drawer-overlay {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            position: fixed; inset: 0;
             background: rgba(0, 0, 0, 0.5); z-index: 99; opacity: 0;
             pointer-events: none; transition: opacity 0.3s ease;
         }
         .drawer-overlay.active { opacity: 1; pointer-events: auto; }
-
         .sidebar-drawer {
-            position: fixed; top: 0; left: -300px; width: 280px; height: 100%;
+            position: fixed; top: 0; left: 0; width: 280px; height: 100%;
+            transform: translateX(-110%);
             background: var(--sidebar-bg); backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px); border-right: 1px solid var(--card-border);
             z-index: 100; padding: 25px 20px; display: flex; flex-direction: column;
-            transition: left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             box-shadow: 5px 0 25px rgba(0,0,0,0.2);
             padding-top: calc(25px + env(safe-area-inset-top));
+            padding-bottom: calc(25px + env(safe-area-inset-bottom));
+            overflow-y: auto;
         }
-        .sidebar-drawer.active { left: 0; }
-
+        .sidebar-drawer.active { transform: translateX(0); }
         .drawer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
         .drawer-title { font-weight: bold; font-size: 1.1rem; }
         .close-drawer-btn {
             background: none; border: none; color: var(--text-color); font-size: 1.5rem;
-            cursor: pointer; padding: 4px 8px; border-radius: 8px; transition: background-color 0.2s;
+            cursor: pointer; padding: 4px 8px; border-radius: 8px;
         }
         .close-drawer-btn:hover { background: var(--btn-bg); }
 
@@ -130,7 +144,7 @@
             background: var(--card-bg); border-radius: 15px;
             border: 1px solid var(--card-border); margin-bottom: 20px;
         }
-        .user-avatar { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; background: var(--btn-bg); }
+        .user-avatar { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; background: var(--btn-bg); flex-shrink: 0; }
         .user-info { display: flex; flex-direction: column; overflow: hidden; }
         .user-name { font-weight: bold; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .user-status { font-size: 0.75rem; opacity: 0.75; }
@@ -139,26 +153,23 @@
         .drawer-nav-item {
             padding: 12px 16px; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 1rem;
             background: transparent; color: var(--text-color); border: 1px solid transparent;
-            display: flex; align-items: center; gap: 12px; transition: all 0.25s ease;
+            display: flex; align-items: center; gap: 12px; transition: all 0.25s ease; text-align: left;
         }
         .drawer-nav-item:hover { background: rgba(128, 128, 128, 0.1); }
         .drawer-nav-item.active {
-            background: var(--btn-bg); border-color: var(--accent-color);
-            color: var(--accent-color); box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            background: var(--btn-bg); border-color: var(--accent-color); color: var(--accent-color);
         }
-
         .drawer-actions { display: flex; flex-direction: column; gap: 12px; margin-top: 20px; }
 
-        /* --- 主要內容區 Main Content --- */
-        .main-wrapper { padding: 25px 15px; display: flex; justify-content: center; }
+        /* --- 主要內容 --- */
+        .main-wrapper {
+            padding: 25px 15px; display: flex; justify-content: center;
+            padding-bottom: calc(25px + env(safe-area-inset-bottom));
+        }
         .container { width: 100%; max-width: 1100px; }
-
         .tab-content { display: none; }
         .tab-content.active { display: block; animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
         .glass-card {
             background: var(--card-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
@@ -167,155 +178,112 @@
         }
 
         .target-select-wrapper { margin-bottom: 20px; text-align: center; }
-
         .target-select {
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            background-color: var(--dropdown-bg);
-            color: var(--text-color);
+            appearance: none; -webkit-appearance: none;
+            background-color: var(--dropdown-bg); color: var(--text-color);
             border: 1px solid var(--dropdown-border);
-            padding: 10px 40px 10px 18px;
-            border-radius: 30px;
-            font-size: 0.95rem;
-            font-weight: 600;
-            outline: none;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            transition: all 0.2s ease;
+            padding: 10px 40px 10px 18px; border-radius: 30px;
+            font-size: 0.95rem; font-weight: 600; outline: none; cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); transition: all 0.2s ease;
             background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23818cf8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
-            background-repeat: no-repeat;
-            background-position: right 14px center;
-            background-size: 16px;
+            background-repeat: no-repeat; background-position: right 14px center; background-size: 16px;
+            font-family: inherit;
         }
+        .target-select:hover, .target-select:focus { border-color: var(--accent-color); box-shadow: 0 0 0 3px var(--accent-soft); }
+        .target-select option { background-color: var(--dropdown-bg); color: var(--text-color); }
 
-        .target-select:hover, .target-select:focus {
-            border-color: var(--accent-color);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
-        }
-
-        .target-select option {
-            background-color: #1f202e;
-            color: #ffffff;
-            padding: 10px;
-        }
-
-        h1 { margin: 0 0 10px 0; font-size: 1.8rem; font-weight: 700; text-align: center; }
+        h1 { margin: 0 0 10px; font-size: 1.8rem; font-weight: 700; text-align: center; }
         .subtitle { font-size: 0.95rem; opacity: 0.85; margin-bottom: 20px; text-align: center; }
+        .exam-date-text { font-size: 0.85rem; color: var(--muted-color); margin: -6px 0 6px; }
         .countdown-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 20px 0; text-align: center; }
         .time-box { background: var(--btn-bg); padding: 12px 4px; border-radius: 14px; border: 1px solid var(--card-border); }
-        .time-number { font-size: 1.6rem; font-weight: bold; color: var(--accent-color); display: block; }
+        .time-number { font-size: 1.6rem; font-weight: bold; color: var(--accent-color); display: block; font-variant-numeric: tabular-nums; }
         .time-label { font-size: 0.8rem; opacity: 0.8; }
-        .next-event-badge { display: block; text-align: center; background: var(--btn-bg); border: 1px solid var(--card-border); padding: 10px 16px; border-radius: 15px; font-size: 0.85rem; margin: 15px auto; }
+        .next-event-badge {
+            display: block; text-align: center; background: var(--btn-bg); border: 1px solid var(--card-border);
+            padding: 10px 16px; border-radius: 15px; font-size: 0.85rem; margin: 15px auto;
+        }
         .next-event-badge strong { color: var(--accent-color); }
 
         .btn-group { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 15px; }
         .custom-btn {
             background: var(--btn-bg); color: var(--text-color); border: 1px solid var(--card-border);
             padding: 10px 18px; border-radius: 30px; font-size: 0.9rem; font-weight: 600; cursor: pointer;
-            backdrop-filter: blur(5px); transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-            box-sizing: border-box;
+            backdrop-filter: blur(5px); transition: all 0.2s ease;
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
         }
         .custom-btn:hover { border-color: var(--accent-color); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
         .custom-btn:active { transform: scale(0.96); }
         .custom-btn.danger { color: #ff5555; border-color: rgba(255,85,85,0.4); }
         .custom-btn.danger:hover { background: rgba(255,85,85,0.15); border-color: #ff5555; }
-        .custom-btn.success { color: #10b981; border-color: rgba(16,185,129,0.4); }
-        .custom-btn.success:hover { background: rgba(16,185,129,0.15); border-color: #10b981; }
+        .custom-btn.success { color: var(--success); border-color: rgba(16,185,129,0.4); }
+        .custom-btn.success:hover { background: rgba(16,185,129,0.15); border-color: var(--success); }
 
+        /* --- 每週進度表 --- */
         .week-nav-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-            gap: 12px;
-            background: rgba(0, 0, 0, 0.1);
-            padding: 12px 18px;
-            border-radius: 16px;
-            border: 1px solid var(--card-border);
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 14px; flex-wrap: wrap; gap: 12px;
+            background: rgba(0, 0, 0, 0.1); padding: 12px 18px;
+            border-radius: 16px; border: 1px solid var(--card-border);
         }
-
-        .week-title {
-            font-weight: 700;
-            font-size: 1.15rem;
-            color: var(--text-color);
-            letter-spacing: 0.5px;
-        }
-
-        .week-controls-right {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .weekly-wrapper { overflow-x: auto; margin-top: 10px; padding-bottom: 10px; }
-
-        .weekly-table {
-            width: 100%; min-width: 850px; border-collapse: collapse; text-align: left;
-        }
+        .week-title { font-weight: 700; font-size: 1.15rem; letter-spacing: 0.5px; }
+        .week-progress { font-size: 0.85rem; color: var(--muted-color); margin-top: 2px; }
+        .week-controls-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .weekly-wrapper { overflow-x: auto; margin-top: 10px; padding-bottom: 10px; -webkit-overflow-scrolling: touch; }
+        .weekly-table { width: 100%; min-width: 850px; border-collapse: collapse; text-align: left; table-layout: fixed; }
         .weekly-table th, .weekly-table td {
-            padding: 12px 14px; border-bottom: 1px solid var(--table-border);
-            vertical-align: middle;
+            padding: 6px 8px; border-bottom: 1px solid var(--table-border); vertical-align: top;
         }
-        .weekly-table th {
-            font-size: 1.05rem; font-weight: bold; opacity: 0.9; padding-bottom: 16px;
-        }
+        .weekly-table th { font-size: 0.98rem; font-weight: bold; opacity: 0.9; padding: 10px 8px 14px; vertical-align: bottom; }
+        .weekly-table th .th-date { display: block; font-size: 0.78rem; font-weight: 500; opacity: 0.7; }
+        .weekly-table th.today-col { color: var(--accent-color); opacity: 1; }
+        .weekly-table td.today-col { background: var(--accent-soft); }
         .weekly-table .subject-col {
-            font-weight: bold; font-size: 1.05rem; width: 140px; border-bottom: 2px solid var(--table-border);
+            font-weight: bold; font-size: 1.05rem; width: 90px; vertical-align: middle;
+            border-bottom: 2px solid var(--table-border);
+            position: sticky; left: 0; z-index: 2; background: var(--sidebar-bg);
         }
-
+        .weekly-table th.subject-col { opacity: 1; z-index: 3; }
         .exam-header-badge {
-            display: inline-block;
-            background: #ef4444;
-            color: #ffffff;
-            font-size: 0.72rem;
-            font-weight: bold;
-            padding: 2px 6px;
-            border-radius: 6px;
-            margin-left: 4px;
-            vertical-align: middle;
-            animation: pulse 2s infinite;
+            display: inline-block; background: var(--danger); color: #fff;
+            font-size: 0.7rem; font-weight: bold; padding: 2px 6px; border-radius: 6px;
+            margin-top: 4px; animation: pulse 2s infinite;
         }
-        @keyframes pulse {
-            0% { opacity: 0.9; }
-            50% { opacity: 0.6; }
-            100% { opacity: 0.9; }
-        }
+        @keyframes pulse { 0%, 100% { opacity: 0.95; } 50% { opacity: 0.6; } }
 
         .weekly-cell {
             cursor: pointer; transition: background-color 0.2s ease;
-            font-size: 0.95rem; border-radius: 6px; padding: 8px 10px !important;
-            margin: 2px 0;
+            font-size: 0.9rem; border-radius: 8px; padding: 8px 10px; min-height: 38px;
+            white-space: pre-wrap; word-break: break-word; line-height: 1.4;
+            border: 1px dashed transparent;
         }
         .weekly-cell:hover { background: rgba(128, 128, 128, 0.15); }
-
-        .weekly-cell.color-green { background: rgba(16, 185, 129, 0.2) !important; color: #10b981; }
-        .weekly-cell.color-blue { background: rgba(59, 130, 246, 0.2) !important; color: #3b82f6; }
-        .weekly-cell.color-yellow { background: rgba(245, 158, 11, 0.2) !important; color: #f59e0b; }
-        .weekly-cell.color-pink { background: rgba(236, 72, 153, 0.2) !important; color: #ec4899; }
-
-        .weekly-cell.completed { text-decoration: line-through; opacity: 0.65; }
-        .cell-content-inline { display: flex; align-items: center; gap: 6px; }
-        .cell-prefix { font-weight: 600; opacity: 0.85; }
+        .weekly-cell.empty { border-color: var(--table-border); opacity: 0.55; }
+        .weekly-cell.empty::before { content: '＋'; opacity: 0.5; }
+        .weekly-cell.color-green { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .weekly-cell.color-blue { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+        .weekly-cell.color-yellow { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .weekly-cell.color-pink { background: rgba(236, 72, 153, 0.2); color: #ec4899; }
+        .weekly-cell.completed { text-decoration: line-through; opacity: 0.6; }
+        .weekly-cell.completed::after { content: ' ✅'; text-decoration: none; display: inline-block; }
 
         .color-picker { display: flex; gap: 8px; margin-bottom: 20px; align-items: center; justify-content: center; }
-        .color-option {
-            width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform 0.2s;
-        }
+        .color-option { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform 0.2s; }
         .color-option:hover { transform: scale(1.15); }
         .color-option.selected { border-color: var(--text-color); transform: scale(1.2); }
         .color-option.default { background: var(--btn-bg); border: 1px solid var(--card-border); }
+        .color-option.default.selected { border: 2px solid var(--text-color); }
         .color-option.green { background: rgba(16, 185, 129, 0.8); }
         .color-option.blue { background: rgba(59, 130, 246, 0.8); }
         .color-option.yellow { background: rgba(245, 158, 11, 0.8); }
         .color-option.pink { background: rgba(236, 72, 153, 0.8); }
 
+        /* --- 清單 --- */
         .todo-input-group { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
         .todo-input {
             flex: 1; min-width: 200px; background: var(--input-bg); border: 1px solid var(--card-border);
             color: var(--text-color); padding: 10px 16px; border-radius: 30px;
-            font-size: 0.95rem; outline: none; transition: border-color 0.2s;
+            font-size: 1rem; outline: none; transition: border-color 0.2s; font-family: inherit;
         }
         .todo-input:focus { border-color: var(--accent-color); }
         .todo-list { list-style: none; padding: 0; margin: 0; }
@@ -323,132 +291,116 @@
             display: flex; align-items: center; background: var(--btn-bg);
             border: 1px solid var(--card-border); padding: 12px 16px; border-radius: 14px;
             margin-bottom: 10px; gap: 12px; animation: slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: opacity 0.2s, transform 0.2s;
         }
-        @keyframes slideIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
         .todo-checkbox {
-            appearance: none; width: 20px; height: 20px; border: 2px solid var(--card-border);
-            border-radius: 6px; cursor: pointer; position: relative; transition: all 0.2s; flex-shrink: 0;
+            appearance: none; -webkit-appearance: none; width: 22px; height: 22px; border: 2px solid var(--card-border);
+            border-radius: 6px; cursor: pointer; position: relative; transition: all 0.2s; flex-shrink: 0; margin: 0;
         }
         .todo-checkbox:checked { background-color: var(--accent-color); border-color: var(--accent-color); }
         .todo-checkbox:checked::after {
-            content: '✓'; position: absolute; color: white; font-size: 13px;
+            content: '✓'; position: absolute; color: #fff; font-size: 14px;
             top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold;
         }
-        .todo-text { flex: 1; word-break: break-all; }
-
+        .todo-text { flex: 1; word-break: break-word; }
+        .item-delete-btn {
+            background: none; border: none; color: var(--text-color); opacity: 0.4; font-size: 1.1rem;
+            cursor: pointer; padding: 2px 6px; border-radius: 6px; flex-shrink: 0;
+        }
+        .item-delete-btn:hover { opacity: 1; color: #ff5555; }
+        .empty-hint { text-align: center; opacity: 0.6; padding: 15px; }
         .subject-badge {
-            background: var(--accent-color);
-            color: #ffffff;
-            padding: 3px 10px;
-            border-radius: 12px;
-            font-size: 0.82rem;
-            font-weight: bold;
-            flex-shrink: 0;
+            background: var(--accent-color); color: #fff; padding: 3px 10px;
+            border-radius: 12px; font-size: 0.82rem; font-weight: bold; flex-shrink: 0;
         }
 
+        /* --- FullCalendar 外觀 --- */
         .fc {
             --fc-border-color: var(--card-border);
             --fc-page-bg-color: transparent;
             --fc-neutral-bg-color: transparent;
             --fc-list-event-hover-bg-color: var(--btn-bg);
-            --fc-today-bg-color: rgba(99, 102, 241, 0.18);
+            --fc-today-bg-color: var(--accent-soft);
             font-family: inherit;
         }
-
-        .fc .fc-toolbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 18px !important;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .fc .fc-toolbar-title {
-            font-size: 1.35rem !important;
-            font-weight: 700;
-            color: var(--text-color);
-            letter-spacing: 0.5px;
-        }
-
-        .fc .fc-button-group {
-            display: inline-flex !important;
-            gap: 8px !important;
-        }
-
-        .fc .fc-button-group > .fc-button {
-            border-radius: 12px !important;
-            margin: 0 !important;
-        }
-
+        .fc .fc-toolbar { flex-wrap: wrap; gap: 10px; margin-bottom: 18px !important; }
+        .fc .fc-toolbar-title { font-size: 1.35rem !important; font-weight: 700; }
+        .fc .fc-button-group { gap: 8px; }
+        .fc .fc-button-group > .fc-button { border-radius: 12px !important; margin: 0 !important; }
         .fc .fc-button-primary {
-            background-color: var(--btn-bg) !important;
-            border: 1px solid var(--card-border) !important;
-            color: var(--text-color) !important;
-            border-radius: 12px !important;
-            font-weight: 600;
-            padding: 8px 16px !important;
-            text-transform: capitalize;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
-            transition: all 0.2s ease !important;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
+            background-color: var(--btn-bg) !important; border: 1px solid var(--card-border) !important;
+            color: var(--text-color) !important; border-radius: 12px !important; font-weight: 600;
+            padding: 8px 16px !important; box-shadow: none !important;
         }
+        .fc .fc-button-primary:hover { border-color: var(--accent-color) !important; color: var(--accent-color) !important; }
+        .fc .fc-button-primary:disabled { opacity: 0.5; }
+        .fc .fc-col-header-cell-cushion, .fc .fc-daygrid-day-number { color: var(--text-color); text-decoration: none; }
+        .fc .fc-daygrid-day-frame { min-height: 85px; }
+        .fc .fc-daygrid-day-number { font-size: 0.9rem; font-weight: 600; padding: 6px 8px; }
+        .fc .fc-daygrid-day { cursor: pointer; }
+        .fc-event { background-color: var(--accent-color) !important; border: none !important; border-radius: 6px !important; padding: 2px 6px !important; font-size: 0.8rem !important; cursor: pointer; }
+        .fc-event .fc-event-title { white-space: normal; }
+        .fc-event.exam-event { background-color: var(--danger) !important; }
 
-        .fc .fc-button-primary:hover {
-            border-color: var(--accent-color) !important;
-            color: var(--accent-color) !important;
-            background-color: rgba(99, 102, 241, 0.15) !important;
-            transform: translateY(-1px);
-        }
-
-        .fc .fc-daygrid-day-frame { min-height: 85px !important; }
-        .fc .fc-daygrid-day-number { color: var(--text-color); font-size: 0.9rem; font-weight: 600; padding: 6px 8px; }
-        .fc-event { background-color: var(--accent-color) !important; border: none !important; border-radius: 6px !important; padding: 3px 6px !important; font-size: 0.82rem !important; cursor: pointer; }
-        .fc-event.exam-event { background-color: #ef4444 !important; }
-
+        /* --- Modal --- */
         .modal-overlay {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            position: fixed; inset: 0;
             background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
             display: flex; justify-content: center; align-items: center;
             z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.25s;
         }
         .modal-overlay.active { opacity: 1; pointer-events: auto; }
         .modal-card {
-            background: var(--sidebar-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--card-border); border-radius: 20px; padding: 25px;
-            width: 90%; max-width: 400px; box-shadow: var(--shadow);
-            transform: scale(0.9); transition: transform 0.25s;
+            background: var(--sidebar-bg); border: 1px solid var(--card-border); border-radius: 20px; padding: 25px;
+            width: 90%; max-width: 420px; box-shadow: var(--shadow);
+            transform: scale(0.92); transition: transform 0.25s;
             display: flex; flex-direction: column; align-items: center; text-align: center;
         }
         .modal-overlay.active .modal-card { transform: scale(1); }
-        .modal-card h3 { margin-top: 0; margin-bottom: 15px; font-size: 1.2rem; width: 100%; }
+        .modal-card h3 { margin: 0 0 15px; font-size: 1.15rem; width: 100%; }
         .modal-input, .modal-textarea {
             width: 100%; background: var(--input-bg); border: 1px solid var(--card-border);
-            color: var(--text-color); padding: 10px 14px; border-radius: 12px; font-size: 0.95rem;
+            color: var(--text-color); padding: 10px 14px; border-radius: 12px; font-size: 1rem;
             outline: none; margin-bottom: 20px; font-family: inherit;
         }
+        .modal-input:focus, .modal-textarea:focus { border-color: var(--accent-color); }
         .modal-textarea { resize: vertical; min-height: 90px; text-align: left; }
-        .modal-checkbox-wrapper { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px; cursor: pointer; width: 100%; }
+        .modal-checkbox-wrapper { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 18px; cursor: pointer; }
         .modal-btns { display: flex; gap: 10px; justify-content: center; width: 100%; flex-wrap: wrap; }
+        .modal-hint { font-size: 0.85rem; opacity: 0.8; margin: -6px 0 12px; }
+        .roulette-result { font-size: 2.2rem; font-weight: bold; color: var(--accent-color); margin: 20px 0; }
 
-        .roulette-result { font-size: 2.2rem; font-weight: bold; color: var(--accent-color); margin: 20px 0; text-align: center; width: 100%; }
+        /* --- 提示訊息 --- */
+        .toast {
+            position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom));
+            transform: translate(-50%, 20px); opacity: 0;
+            background: var(--sidebar-bg); color: var(--text-color); border: 1px solid var(--card-border);
+            padding: 10px 18px; border-radius: 30px; font-size: 0.9rem; box-shadow: var(--shadow);
+            z-index: 300; pointer-events: none; transition: all 0.25s; max-width: 90%; text-align: center;
+        }
+        .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
         @media (max-width: 600px) {
-            .fc .fc-daygrid-day-frame { min-height: 65px !important; }
-            .weekly-table th, .weekly-table td { padding: 8px 6px; }
+            .glass-card { padding: 18px; }
+            h1 { font-size: 1.5rem; }
+            .time-number { font-size: 1.35rem; }
+            .fc .fc-daygrid-day-frame { min-height: 65px; }
+            .fc .fc-toolbar-title { font-size: 1.1rem !important; }
             .week-nav-bar { flex-direction: column; text-align: center; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
         }
     </style>
 </head>
-<body data-theme="dark">
+<body>
 
     <!-- 頂部導航列 -->
     <header class="top-navbar">
-        <button class="menu-toggle-btn" id="openDrawerBtn">☰</button>
+        <button class="menu-toggle-btn" id="openDrawerBtn" aria-label="開啟選單">☰</button>
         <div class="header-title" id="headerTitle">⏱️ 倒數計時</div>
-        <div style="width: 40px;"></div>
+        <div class="header-spacer"></div>
     </header>
 
     <!-- 側邊抽屜選單 -->
@@ -456,38 +408,28 @@
     <aside class="sidebar-drawer" id="sidebarDrawer">
         <div class="drawer-header">
             <span class="drawer-title">📚 學習計畫</span>
-            <button class="close-drawer-btn" id="closeDrawerBtn">×</button>
+            <button class="close-drawer-btn" id="closeDrawerBtn" aria-label="關閉選單">×</button>
         </div>
 
         <div class="user-profile">
-            <img src="https://via.placeholder.com/40" alt="Avatar" class="user-avatar" id="userAvatar">
+            <img alt="頭像" class="user-avatar" id="userAvatar" referrerpolicy="no-referrer">
             <div class="user-info">
                 <span class="user-name" id="userName">未登入訪客</span>
-                <span class="user-status" id="userStatus">僅使用本機快取</span>
+                <span class="user-status" id="userStatus">僅使用本機儲存</span>
             </div>
         </div>
 
         <nav class="drawer-nav">
-            <button class="drawer-nav-item active" data-tab="tab-countdown" data-title="⏱️ 倒數計時">
-                ⏱️ 倒數計時
-            </button>
-            <button class="drawer-nav-item" data-tab="tab-weekly" data-title="📊 每周進度">
-                📊 每周進度表
-            </button>
-            <button class="drawer-nav-item" data-tab="tab-calendar" data-title="📅 行事曆">
-                📅 行事曆
-            </button>
-            <button class="drawer-nav-item" data-tab="tab-todo" data-title="📝 待辦事項">
-                📝 待辦事項
-            </button>
-            <button class="drawer-nav-item" data-tab="tab-review-plan" data-title="📌 預計複習">
-                📌 預計複習
-            </button>
+            <button class="drawer-nav-item active" data-tab="tab-countdown" data-title="⏱️ 倒數計時">⏱️ 倒數計時</button>
+            <button class="drawer-nav-item" data-tab="tab-weekly" data-title="📊 每週進度">📊 每週進度表</button>
+            <button class="drawer-nav-item" data-tab="tab-calendar" data-title="📅 行事曆">📅 行事曆</button>
+            <button class="drawer-nav-item" data-tab="tab-todo" data-title="📝 待辦事項">📝 待辦事項</button>
+            <button class="drawer-nav-item" data-tab="tab-review-plan" data-title="📌 預計複習">📌 預計複習</button>
         </nav>
 
         <div class="drawer-actions">
             <button class="custom-btn" id="loginBtn">🔐 Google 帳號登入</button>
-            <button class="custom-btn" id="themeBtn">☀️ Bright mode</button>
+            <button class="custom-btn" id="themeBtn">☀️ 淺色模式</button>
         </div>
     </aside>
 
@@ -495,18 +437,14 @@
     <main class="main-wrapper">
         <div class="container">
 
-            <!-- 1. 倒數分頁 -->
+            <!-- 1. 倒數 -->
             <section id="tab-countdown" class="tab-content active">
                 <div class="glass-card" style="text-align: center;">
                     <div class="target-select-wrapper">
-                        <select id="examSelector" class="target-select">
-                            <option value="gsat">🎓 116 學測倒數</option>
-                            <option value="mock1">📝 第一次模擬考</option>
-                            <option value="mock2">📚 第二次模擬考</option>
-                            <option value="mock3">🔥 第三次模擬考</option>
-                        </select>
+                        <select id="examSelector" class="target-select"></select>
                     </div>
-                    <h1 id="countdownTitle">🎓 116 學測倒數</h1>
+                    <h1 id="countdownTitle">🎓 116 學測</h1>
+                    <p class="exam-date-text" id="examDateText"></p>
                     <p class="subtitle" id="countdownSubtitle">穩住節奏，每一天都是進步！</p>
                     <div class="countdown-grid">
                         <div class="time-box"><span class="time-number" id="days">00</span><span class="time-label">天</span></div>
@@ -514,9 +452,7 @@
                         <div class="time-box"><span class="time-number" id="minutes">00</span><span class="time-label">分</span></div>
                         <div class="time-box"><span class="time-number" id="seconds">00</span><span class="time-label">秒</span></div>
                     </div>
-
-                    <div class="next-event-badge" id="nextEventBadge">⏳ 計算下一考試中...</div>
-
+                    <div class="next-event-badge" id="nextEventBadge">⏳ 計算下一場考試中...</div>
                     <div class="btn-group">
                         <button class="custom-btn" id="rouletteBtn">🎲 現在要幹嘛</button>
                         <button class="custom-btn" id="surpriseBtn">✨ 查看小驚喜</button>
@@ -524,55 +460,50 @@
                 </div>
             </section>
 
-            <!-- 2. 每周進度表 -->
+            <!-- 2. 每週進度表 -->
             <section id="tab-weekly" class="tab-content">
                 <div class="glass-card">
                     <div class="week-nav-bar">
-                        <div class="week-title" id="weekRangeTitle">2026/07/27 - 2026/08/02</div>
+                        <div>
+                            <div class="week-title" id="weekRangeTitle"></div>
+                            <div class="week-progress" id="weekProgress"></div>
+                        </div>
                         <div class="week-controls-right">
                             <button class="custom-btn" id="prevWeekBtn">◀ 上一週</button>
                             <button class="custom-btn" id="todayWeekBtn">本週</button>
                             <button class="custom-btn" id="nextWeekBtn">下一週 ▶</button>
                         </div>
                     </div>
-
                     <div class="weekly-wrapper">
-                        <table class="weekly-table" id="weeklyTable">
-                        </table>
+                        <table class="weekly-table" id="weeklyTable"></table>
                     </div>
                 </div>
             </section>
 
-            <!-- 3. 行事曆分頁 -->
+            <!-- 3. 行事曆 -->
             <section id="tab-calendar" class="tab-content">
                 <div class="glass-card">
                     <div id="calendar"></div>
                 </div>
             </section>
 
-            <!-- 4. 待辦事項分頁 -->
+            <!-- 4. 待辦事項 -->
             <section id="tab-todo" class="tab-content">
                 <div class="glass-card">
                     <div class="todo-input-group">
-                        <input type="text" id="todoInput" class="todo-input" placeholder="新增今日待辦事項..." />
+                        <input type="text" id="todoInput" class="todo-input" placeholder="新增今日待辦事項..." enterkeyhint="done" />
                         <button class="custom-btn" id="addTodoBtn">➕ 新增</button>
                     </div>
                     <ul class="todo-list" id="todoList"></ul>
                 </div>
             </section>
 
-            <!-- 5. 預計複習分頁 -->
+            <!-- 5. 預計複習 -->
             <section id="tab-review-plan" class="tab-content">
                 <div class="glass-card">
                     <div class="todo-input-group">
-                        <select id="reviewSubjectSelect" class="target-select">
-                            <option value="📖 國文">📖 國文</option>
-                            <option value="🔠 英文">🔠 英文</option>
-                            <option value="📐 數學">📐 數學</option>
-                            <option value="🔬 自然">🔬 自然</option>
-                            <option value="🌍 社會">🌍 社會</option>
-                        </select>
-                        <input type="text" id="reviewInput" class="todo-input" placeholder="記錄預計複習單元、重點或備忘內容..." />
+                        <select id="reviewSubjectSelect" class="target-select"></select>
+                        <input type="text" id="reviewInput" class="todo-input" placeholder="記錄預計複習單元、重點或備忘..." enterkeyhint="done" />
                         <button class="custom-btn" id="addReviewBtn">➕ 新增計畫</button>
                     </div>
                     <ul class="todo-list" id="reviewList"></ul>
@@ -588,34 +519,32 @@
             <h3>🎲 現在要讀：</h3>
             <div class="roulette-result" id="rouletteResult">❓</div>
             <div class="modal-btns">
+                <button class="custom-btn" id="spinAgainBtn" style="display: none;">🔄 再轉一次</button>
                 <button class="custom-btn success" id="closeRouletteBtn" style="display: none;">好！去讀書</button>
             </div>
         </div>
     </div>
 
-    <!-- 每周進度編輯 Modal -->
+    <!-- 每週進度編輯 Modal -->
     <div class="modal-overlay" id="weeklyModal">
         <div class="modal-card">
             <h3 id="weeklyModalTitle">編輯進度</h3>
             <textarea id="weeklyInputContent" class="modal-textarea" placeholder="請輸入讀書進度..."></textarea>
-
             <div class="color-picker" id="colorPicker">
                 <span style="font-size: 0.85rem; font-weight: bold; margin-right: 4px;">標記顏色：</span>
-                <div class="color-option default selected" data-color=""></div>
-                <div class="color-option green" data-color="green"></div>
-                <div class="color-option blue" data-color="blue"></div>
-                <div class="color-option yellow" data-color="yellow"></div>
-                <div class="color-option pink" data-color="pink"></div>
+                <div class="color-option default" data-color="" title="無"></div>
+                <div class="color-option green" data-color="green" title="綠"></div>
+                <div class="color-option blue" data-color="blue" title="藍"></div>
+                <div class="color-option yellow" data-color="yellow" title="黃"></div>
+                <div class="color-option pink" data-color="pink" title="粉"></div>
             </div>
-
             <label class="modal-checkbox-wrapper">
-                <input type="checkbox" id="weeklyCheckbox" class="todo-checkbox" style="margin:0;">
+                <input type="checkbox" id="weeklyCheckbox" class="todo-checkbox">
                 <span style="font-weight:bold;">標記為已完成 ✅</span>
             </label>
-
             <div class="modal-btns">
                 <button class="custom-btn danger" id="clearWeeklyBtn">清除內容</button>
-                <button class="custom-btn" id="cancelWeeklyBtn">取消</button>
+                <button class="custom-btn" data-close-modal>取消</button>
                 <button class="custom-btn success" id="saveWeeklyBtn">確定儲存</button>
             </div>
         </div>
@@ -624,11 +553,11 @@
     <!-- 行事曆新增 Modal -->
     <div class="modal-overlay" id="eventAddModal">
         <div class="modal-card">
-            <h3>📅 新增行程紀錄</h3>
-            <p id="eventAddDateText" style="font-size:0.85rem; opacity:0.8; margin-bottom:12px; text-align:center;"></p>
-            <input type="text" id="eventTitleInput" class="modal-input" placeholder="請輸入行程..." />
+            <h3>📅 新增行程</h3>
+            <p class="modal-hint" id="eventAddDateText"></p>
+            <input type="text" id="eventTitleInput" class="modal-input" placeholder="請輸入行程..." enterkeyhint="done" />
             <div class="modal-btns">
-                <button class="custom-btn" id="cancelAddEventBtn">取消</button>
+                <button class="custom-btn" data-close-modal>取消</button>
                 <button class="custom-btn success" id="confirmAddEventBtn">確定儲存</button>
             </div>
         </div>
@@ -637,598 +566,641 @@
     <!-- 行事曆編輯 Modal -->
     <div class="modal-overlay" id="eventEditModal">
         <div class="modal-card">
-            <h3>✏️ 編輯行程事件</h3>
-            <input type="text" id="eventEditInput" class="modal-input" />
+            <h3>✏️ 編輯行程</h3>
+            <p class="modal-hint" id="eventEditDateText"></p>
+            <input type="text" id="eventEditInput" class="modal-input" enterkeyhint="done" />
             <div class="modal-btns">
                 <button class="custom-btn danger" id="deleteEventBtn">🗑️ 刪除</button>
-                <button class="custom-btn" id="cancelEditEventBtn">取消</button>
+                <button class="custom-btn" data-close-modal>取消</button>
                 <button class="custom-btn success" id="saveEditEventBtn">儲存修改</button>
             </div>
         </div>
     </div>
 
+    <div class="toast" id="toast"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        /* =====================================================
+         * 1. 設定區（以後要改考試日期、科目，改這裡就好）
+         * ===================================================== */
+        const EXAMS = {
+            gsat:  { name: '116 學測',     icon: '🎓', date: '2027-01-22' },
+            mock1: { name: '第一次模擬考', icon: '📝', date: '2026-09-02' },
+            mock2: { name: '第二次模擬考', icon: '📚', date: '2026-10-28' },
+            mock3: { name: '第三次模擬考', icon: '🔥', date: '2026-12-08' }
+        };
+        const SUBJECTS = [
+            { name: '數學', icon: '📐' },
+            { name: '自然', icon: '🔬' },
+            { name: '英文', icon: '🔠' },
+            { name: '國文', icon: '📖' },
+            { name: '社會', icon: '🌍' }
+        ];
+        const SLOTS_PER_SUBJECT = 2;
+        const SURPRISE_URL = 'https://www.youtube.com/watch?v=BpHvY8Wt2j0';
+        const TZ_OFFSET = '+08:00'; // 以台灣時間計算倒數
 
-        const firebaseConfig = {
+        const FIREBASE_CONFIG = {
             apiKey: "AIzaSyCsoIvDKShBF1w39m9JzRNPUrkA4UDx5hk",
             authDomain: "study-countdown.firebaseapp.com",
             projectId: "study-countdown"
         };
+        const FIREBASE_VER = '10.8.0';
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const provider = new GoogleAuthProvider();
-        // 每次登入都強制顯示 Google 帳號選擇畫面，不自動帶入上次登入的帳號
-        provider.setCustomParameters({ prompt: 'select_account' });
+        const DEFAULT_AVATAR = "data:image/svg+xml;utf8," + encodeURIComponent(
+            "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><rect width='40' height='40' fill='#818cf8'/>" +
+            "<circle cx='20' cy='15' r='7' fill='white'/><path d='M6 36c2-8 8-11 14-11s12 3 14 11' fill='white'/></svg>"
+        );
 
-        let currentUser = null;
-        let calendar = null;
-        let calendarEvents = [];
-        let todos = [];
-        let reviewPlans = [];
-        let weeklyData = {};
-        let spinInterval;
-        let selectedColor = "";
-
-        const examEvents = {
-            mock1: { title: '📝 第一次模擬考', date: '2026-09-02', shortTitle: '🔥第一次模考' },
-            mock2: { title: '📚 第二次模擬考', date: '2026-10-28', shortTitle: '🔥第二次模考' },
-            mock3: { title: '🔥 第三次模擬考', date: '2026-12-08', shortTitle: '🔥第三次模考' },
-            gsat:  { title: '🎓 116學測',          date: '2027-01-22', shortTitle: '🎓 116 學測' }
+        const LS = {
+            todos: 'study_todos',
+            review: 'study_review_plans',
+            weekly: 'study_weekly',
+            events: 'study_events',
+            exam: 'selectedExamKey',
+            theme: 'study_theme'
         };
 
-        const openDrawerBtn = document.getElementById('openDrawerBtn');
-        const closeDrawerBtn = document.getElementById('closeDrawerBtn');
-        const sidebarDrawer = document.getElementById('sidebarDrawer');
-        const drawerOverlay = document.getElementById('drawerOverlay');
-        const headerTitle = document.getElementById('headerTitle');
-        const navItems = document.querySelectorAll('.drawer-nav-item');
-        const tabContents = document.querySelectorAll('.tab-content');
+        /* =====================================================
+         * 2. 小工具
+         * ===================================================== */
+        const $ = (id) => document.getElementById(id);
+        const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        const pad = (n) => String(n).padStart(2, '0');
+        const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const examTime = (dateStr) => new Date(`${dateStr}T00:00:00${TZ_OFFSET}`).getTime();
+        const examLabel = (e) => `${e.icon} ${e.name}`;
+
+        function escapeHtml(s) {
+            return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+        function lsGet(key, fallback) {
+            try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; } catch { return fallback; }
+        }
+        function lsSet(key, value) {
+            try { localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value)); } catch {}
+        }
+        let toastTimer;
+        function toast(msg) {
+            const el = $('toast');
+            el.textContent = msg;
+            el.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+        }
+
+        /* =====================================================
+         * 3. 資料（state）與儲存
+         * ===================================================== */
+        let state = { todos: [], reviewPlans: [], events: [], weekly: {} };
+        let currentUser = null;
+        let firebase = null; // 動態載入，失敗時（例如離線）App 仍可正常使用
+
+        // 把舊版資料格式轉成新格式（舊版 todo 是純文字、event 可能沒有 id）
+        function normalize(raw = {}) {
+            const todos = (raw.todos || []).map(t =>
+                typeof t === 'string' ? { id: uid(), text: t } : { id: t.id || uid(), text: t.text || '' });
+            const reviewPlans = (raw.reviewPlans || []).map(p => ({ id: p.id || uid(), subject: p.subject || '', text: p.text || '' }));
+            const events = (raw.events || []).map(e => ({ id: String(e.id || uid()), title: e.title || '', start: e.start, allDay: true }));
+            const weekly = raw.weekly && typeof raw.weekly === 'object' ? raw.weekly : {};
+            return { todos, reviewPlans, events, weekly };
+        }
+        function isEmptyState(s) {
+            return !s.todos.length && !s.reviewPlans.length && !s.events.length && !Object.keys(s.weekly).length;
+        }
+        function loadLocal() {
+            return normalize({
+                todos: lsGet(LS.todos, []),
+                reviewPlans: lsGet(LS.review, []),
+                events: lsGet(LS.events, []),
+                weekly: lsGet(LS.weekly, {})
+            });
+        }
+        function saveLocal() {
+            lsSet(LS.todos, state.todos);
+            lsSet(LS.review, state.reviewPlans);
+            lsSet(LS.events, state.events);
+            lsSet(LS.weekly, state.weekly);
+        }
+
+        let cloudSaveTimer;
+        function save() {
+            if (!currentUser || !firebase) { saveLocal(); return; }
+            // 連續操作時合併成一次上傳，省流量
+            clearTimeout(cloudSaveTimer);
+            cloudSaveTimer = setTimeout(async () => {
+                try {
+                    const { setDoc, doc } = firebase.fs;
+                    await setDoc(doc(firebase.db, 'users', currentUser.uid), {
+                        todos: state.todos,
+                        reviewPlans: state.reviewPlans,
+                        events: state.events,
+                        weekly: state.weekly,
+                        updatedAt: Date.now()
+                    });
+                } catch (e) {
+                    console.error('雲端儲存失敗：', e);
+                    toast('⚠️ 雲端儲存失敗，請檢查網路');
+                }
+            }, 400);
+        }
+
+        function renderAll() {
+            renderTodos();
+            renderReviewPlans();
+            renderWeeklyTable();
+            refreshCalendarEvents();
+        }
+
+        /* =====================================================
+         * 4. 背景、主題、抽屜、分頁
+         * ===================================================== */
+        (function loadBackground() {
+            const img = new Image();
+            img.onload = () => document.body.classList.add('bg-loaded');
+            img.src = 'bg.jpg';
+        })();
+
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            $('themeBtn').textContent = theme === 'dark' ? '☀️ 淺色模式' : '🌙 深色模式';
+            document.querySelector('meta[name="theme-color"]').setAttribute('content', theme === 'dark' ? '#0f1015' : '#f8f9fa');
+        }
+        applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+        $('themeBtn').addEventListener('click', () => {
+            const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            applyTheme(next);
+            lsSet(LS.theme, next);
+        });
 
         function toggleDrawer(open) {
-            if (open) {
-                sidebarDrawer.classList.add('active'); drawerOverlay.classList.add('active');
-            } else {
-                sidebarDrawer.classList.remove('active'); drawerOverlay.classList.remove('active');
-            }
+            $('sidebarDrawer').classList.toggle('active', open);
+            $('drawerOverlay').classList.toggle('active', open);
         }
-        openDrawerBtn.addEventListener('click', () => toggleDrawer(true));
-        closeDrawerBtn.addEventListener('click', () => toggleDrawer(false));
-        drawerOverlay.addEventListener('click', () => {
-            toggleDrawer(false);
-            if (spinInterval) clearInterval(spinInterval);
-        });
+        $('openDrawerBtn').addEventListener('click', () => toggleDrawer(true));
+        $('closeDrawerBtn').addEventListener('click', () => toggleDrawer(false));
+        $('drawerOverlay').addEventListener('click', () => toggleDrawer(false));
 
+        const navItems = document.querySelectorAll('.drawer-nav-item');
         navItems.forEach(item => {
             item.addEventListener('click', () => {
-                const targetTab = item.getAttribute('data-tab');
-                const title = item.getAttribute('data-title');
-
-                navItems.forEach(i => i.classList.remove('active'));
-                tabContents.forEach(c => c.classList.remove('active'));
-
-                item.classList.add('active');
-                document.getElementById(targetTab).classList.add('active');
-                headerTitle.innerText = title;
-
+                const target = item.dataset.tab;
+                navItems.forEach(i => i.classList.toggle('active', i === item));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === target));
+                $('headerTitle').textContent = item.dataset.title;
                 window.scrollTo({ top: 0, behavior: 'smooth' });
                 toggleDrawer(false);
-
-                if (targetTab === 'tab-calendar' && calendar) {
-                    setTimeout(() => calendar.updateSize(), 150);
-                }
+                if (target === 'tab-calendar' && calendar) setTimeout(() => calendar.updateSize(), 150);
             });
         });
 
+        /* =====================================================
+         * 5. Modal 共用
+         * ===================================================== */
+        function openModal(id) { $(id).classList.add('active'); }
+        function closeModal(id) {
+            $(id).classList.remove('active');
+            if (id === 'rouletteModal') stopRoulette();
+        }
+        function closeAllModals() {
+            document.querySelectorAll('.modal-overlay.active').forEach(m => closeModal(m.id));
+        }
         document.querySelectorAll('.modal-overlay').forEach(overlay => {
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) {
-                    overlay.classList.remove('active');
-                    if (spinInterval) clearInterval(spinInterval);
-                }
-            });
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(overlay.id); });
         });
-
-        const daysOfWeek = ['一', '二', '三', '四', '五', '六', '日'];
-        const subjects = ['數學', '自然', '英文', '國文', '社會'];
-        const slotLabels = ['·', '·'];
-        let currentEditWeeklyKey = null;
-
-        let currentMonday = getMonday(new Date());
-
-        function getMonday(d) {
-            const date = new Date(d);
-            const day = date.getDay();
-            const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-            return new Date(date.setDate(diff));
+        document.querySelectorAll('[data-close-modal]').forEach(btn => {
+            btn.addEventListener('click', () => closeModal(btn.closest('.modal-overlay').id));
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { closeAllModals(); toggleDrawer(false); }
+        });
+        // 輸入框按 Enter 直接送出
+        function onEnter(input, fn) {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); fn(); }
+            });
         }
 
-        function formatDateString(date) {
-            const yyyy = date.getFullYear();
-            const mm = String(date.getMonth() + 1).padStart(2, '0');
-            const dd = String(date.getDate()).padStart(2, '0');
-            return `${yyyy}-${mm}-${dd}`;
+        /* =====================================================
+         * 6. 倒數計時
+         * ===================================================== */
+        const examSelector = $('examSelector');
+        examSelector.innerHTML = Object.entries(EXAMS)
+            .map(([key, e]) => `<option value="${key}">${escapeHtml(examLabel(e))}</option>`).join('');
+
+        let currentExamKey = localStorage.getItem(LS.exam);
+        if (!EXAMS[currentExamKey]) currentExamKey = 'gsat';
+        examSelector.value = currentExamKey;
+        examSelector.addEventListener('change', (e) => {
+            currentExamKey = e.target.value;
+            lsSet(LS.exam, currentExamKey);
+            updateCountdown();
+        });
+
+        function updateCountdown() {
+            const now = Date.now();
+            const exam = EXAMS[currentExamKey];
+            const diff = examTime(exam.date) - now;
+
+            $('countdownTitle').textContent = examLabel(exam);
+            $('examDateText').textContent = `考試日期：${exam.date.replace(/-/g, '/')}`;
+
+            if (diff > 0) {
+                $('days').textContent = pad(Math.floor(diff / 86400000));
+                $('hours').textContent = pad(Math.floor(diff % 86400000 / 3600000));
+                $('minutes').textContent = pad(Math.floor(diff % 3600000 / 60000));
+                $('seconds').textContent = pad(Math.floor(diff % 60000 / 1000));
+                $('countdownSubtitle').textContent = '穩住節奏，每一天都是進步！';
+            } else {
+                ['days', 'hours', 'minutes', 'seconds'].forEach(id => $(id).textContent = '00');
+                $('countdownSubtitle').textContent = '這場已經考完了，辛苦了！👏';
+            }
+
+            const upcoming = Object.values(EXAMS)
+                .map(e => ({ ...e, diff: examTime(e.date) - now }))
+                .filter(e => e.diff > 0)
+                .sort((a, b) => a.diff - b.diff);
+            $('nextEventBadge').innerHTML = upcoming.length
+                ? `📍 下一場考試：<strong>${escapeHtml(upcoming[0].name)}</strong>（還剩 <strong>${Math.ceil(upcoming[0].diff / 86400000)}</strong> 天）`
+                : '🎉 所有的挑戰都已經順利完成了！';
+        }
+        updateCountdown();
+        setInterval(updateCountdown, 1000);
+
+        $('surpriseBtn').addEventListener('click', () => window.open(SURPRISE_URL, '_blank', 'noopener'));
+
+        /* --- 轉盤 --- */
+        const rouletteResult = $('rouletteResult');
+        let spinInterval = null, spinTimeout = null;
+        function stopRoulette() {
+            clearInterval(spinInterval); clearTimeout(spinTimeout);
+            spinInterval = spinTimeout = null;
+        }
+        function spin() {
+            stopRoulette();
+            $('closeRouletteBtn').style.display = 'none';
+            $('spinAgainBtn').style.display = 'none';
+            const list = SUBJECTS.map(s => `${s.icon} ${s.name}`);
+            let i = 0;
+            spinInterval = setInterval(() => { rouletteResult.textContent = list[i++ % list.length]; }, 80);
+            spinTimeout = setTimeout(() => {
+                stopRoulette();
+                rouletteResult.textContent = list[Math.floor(Math.random() * list.length)];
+                $('closeRouletteBtn').style.display = 'inline-flex';
+                $('spinAgainBtn').style.display = 'inline-flex';
+            }, 2000);
+        }
+        $('rouletteBtn').addEventListener('click', () => { openModal('rouletteModal'); spin(); });
+        $('spinAgainBtn').addEventListener('click', spin);
+        $('closeRouletteBtn').addEventListener('click', () => closeModal('rouletteModal'));
+
+        /* =====================================================
+         * 7. 每週進度表
+         * ===================================================== */
+        const DAY_NAMES = ['一', '二', '三', '四', '五', '六', '日'];
+        let currentMonday = getMonday(new Date());
+        let editingKey = null;
+        let selectedColor = '';
+
+        function getMonday(d) {
+            const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            const day = date.getDay();
+            date.setDate(date.getDate() - (day === 0 ? 6 : day - 1));
+            return date;
         }
 
         function renderWeeklyTable() {
-            const table = document.getElementById('weeklyTable');
-            const weekRangeTitle = document.getElementById('weekRangeTitle');
-
-            const datesOfWeek = [];
-            for (let i = 0; i < 7; i++) {
+            const todayStr = ymd(new Date());
+            const days = Array.from({ length: 7 }, (_, i) => {
                 const d = new Date(currentMonday);
                 d.setDate(currentMonday.getDate() + i);
-                datesOfWeek.push(d);
-            }
+                return d;
+            });
+            const fmt = (d) => `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
+            $('weekRangeTitle').textContent = `${fmt(days[0])} - ${fmt(days[6])}`;
 
-            const startStr = `${datesOfWeek[0].getFullYear()}/${String(datesOfWeek[0].getMonth() + 1).padStart(2, '0')}/${String(datesOfWeek[0].getDate()).padStart(2, '0')}`;
-            const endStr = `${datesOfWeek[6].getFullYear()}/${String(datesOfWeek[6].getMonth() + 1).padStart(2, '0')}/${String(datesOfWeek[6].getDate()).padStart(2, '0')}`;
-            weekRangeTitle.innerText = `${startStr} - ${endStr}`;
-
-            let html = '<thead><tr><th class="subject-col">星期/科目</th>';
-            datesOfWeek.forEach((dateObj, dayIdx) => {
-                const dateStr = formatDateString(dateObj);
-
-                let examBadgeHtml = '';
-                Object.values(examEvents).forEach(exam => {
-                    if (exam.date === dateStr) {
-                        examBadgeHtml += `<span class="exam-header-badge">${exam.shortTitle}</span>`;
-                    }
-                });
-
-                html += `<th>星期${daysOfWeek[dayIdx]} ${examBadgeHtml}</th>`;
+            let total = 0, done = 0;
+            let html = '<colgroup><col style="width:90px">' + '<col>'.repeat(7) + '</colgroup>';
+            html += '<thead><tr><th class="subject-col">科目</th>';
+            days.forEach((d, i) => {
+                const ds = ymd(d);
+                const badges = Object.values(EXAMS).filter(e => e.date === ds)
+                    .map(e => `<span class="exam-header-badge">${escapeHtml(e.icon + e.name)}</span>`).join('');
+                html += `<th class="${ds === todayStr ? 'today-col' : ''}">星期${DAY_NAMES[i]}<span class="th-date">${d.getMonth() + 1}/${d.getDate()}</span>${badges}</th>`;
             });
             html += '</tr></thead><tbody>';
 
-            subjects.forEach((subj, subjIdx) => {
-                for (let slot = 0; slot < 2; slot++) {
+            SUBJECTS.forEach((subj, sIdx) => {
+                for (let slot = 0; slot < SLOTS_PER_SUBJECT; slot++) {
                     html += '<tr>';
-                    if (slot === 0) {
-                        html += `<td class="subject-col" rowspan="2">${subj}</td>`;
-                    }
-
-                    datesOfWeek.forEach((dateObj) => {
-                        const dateStr = formatDateString(dateObj);
-                        const key = `${dateStr}_${subjIdx}_${slot}`;
-                        const data = weeklyData[key] || { text: '', done: false, color: '' };
-
-                        const doneClass = data.done ? 'completed' : '';
-                        const colorClass = data.color ? `color-${data.color}` : '';
-                        const textDisplay = data.text ? data.text : '    ';
-
-                        html += `<td>
-                                    <div class="weekly-cell ${doneClass} ${colorClass}" data-key="${key}" data-title="${dateStr} - ${subj} (${slotLabels[slot]})">
-                                        <div class="cell-content-inline">
-                                            <span class="cell-prefix">${slotLabels[slot]} </span>
-                                            <span>${textDisplay}</span>
-                                        </div>
-                                    </div>
-                                 </td>`;
+                    if (slot === 0) html += `<td class="subject-col" rowspan="${SLOTS_PER_SUBJECT}">${subj.icon} ${subj.name}</td>`;
+                    days.forEach(d => {
+                        const ds = ymd(d);
+                        const key = `${ds}_${sIdx}_${slot}`;
+                        const data = state.weekly[key];
+                        if (data && data.text) { total++; if (data.done) done++; }
+                        const cls = ['weekly-cell'];
+                        if (!data || (!data.text && !data.color && !data.done)) cls.push('empty');
+                        if (data?.done) cls.push('completed');
+                        if (data?.color) cls.push(`color-${data.color}`);
+                        html += `<td class="${ds === todayStr ? 'today-col' : ''}"><div class="${cls.join(' ')}" data-key="${key}" data-title="${d.getMonth() + 1}/${d.getDate()} ${subj.name}">${escapeHtml(data?.text || '')}</div></td>`;
                     });
                     html += '</tr>';
                 }
             });
             html += '</tbody>';
-
-            table.innerHTML = html;
-
-            document.querySelectorAll('.weekly-cell').forEach(cell => {
-                cell.addEventListener('click', function() {
-                    openWeeklyModal(this.getAttribute('data-key'), this.getAttribute('data-title'));
-                });
-            });
+            $('weeklyTable').innerHTML = html;
+            $('weekProgress').textContent = total ? `本週完成 ${done} / ${total} 項（${Math.round(done / total * 100)}%）` : '本週還沒有安排進度，點格子開始規劃吧！';
         }
 
-        document.getElementById('prevWeekBtn').addEventListener('click', () => {
-            currentMonday.setDate(currentMonday.getDate() - 7);
-            renderWeeklyTable();
+        // 用事件委派，不用每次重畫都重新綁定
+        $('weeklyTable').addEventListener('click', (e) => {
+            const cell = e.target.closest('.weekly-cell');
+            if (cell) openWeeklyModal(cell.dataset.key, cell.dataset.title);
         });
-        document.getElementById('nextWeekBtn').addEventListener('click', () => {
-            currentMonday.setDate(currentMonday.getDate() + 7);
-            renderWeeklyTable();
-        });
-        document.getElementById('todayWeekBtn').addEventListener('click', () => {
-            currentMonday = getMonday(new Date());
-            renderWeeklyTable();
-        });
+
+        $('prevWeekBtn').addEventListener('click', () => { currentMonday.setDate(currentMonday.getDate() - 7); renderWeeklyTable(); });
+        $('nextWeekBtn').addEventListener('click', () => { currentMonday.setDate(currentMonday.getDate() + 7); renderWeeklyTable(); });
+        $('todayWeekBtn').addEventListener('click', () => { currentMonday = getMonday(new Date()); renderWeeklyTable(); });
 
         const colorOptions = document.querySelectorAll('.color-option');
-        colorOptions.forEach(opt => {
-            opt.addEventListener('click', () => {
-                colorOptions.forEach(o => o.classList.remove('selected'));
-                opt.classList.add('selected');
-                selectedColor = opt.getAttribute('data-color');
-            });
-        });
+        function selectColor(color) {
+            selectedColor = color;
+            colorOptions.forEach(o => o.classList.toggle('selected', o.dataset.color === color));
+        }
+        colorOptions.forEach(opt => opt.addEventListener('click', () => selectColor(opt.dataset.color)));
 
         function openWeeklyModal(key, title) {
-            currentEditWeeklyKey = key;
-            document.getElementById('weeklyModalTitle').innerText = `✏️ 編輯 ${title}`;
+            editingKey = key;
+            const data = state.weekly[key] || { text: '', done: false, color: '' };
+            $('weeklyModalTitle').textContent = `✏️ ${title}`;
+            $('weeklyInputContent').value = data.text;
+            $('weeklyCheckbox').checked = !!data.done;
+            selectColor(data.color || '');
+            openModal('weeklyModal');
+        }
+        $('clearWeeklyBtn').addEventListener('click', () => {
+            if (editingKey) { delete state.weekly[editingKey]; save(); renderWeeklyTable(); }
+            closeModal('weeklyModal');
+        });
+        $('saveWeeklyBtn').addEventListener('click', () => {
+            const text = $('weeklyInputContent').value.trim();
+            const done = $('weeklyCheckbox').checked;
+            if (editingKey) {
+                if (!text && !done && !selectedColor) delete state.weekly[editingKey];
+                else state.weekly[editingKey] = { text, done, color: selectedColor };
+                save(); renderWeeklyTable();
+            }
+            closeModal('weeklyModal');
+        });
 
-            const data = weeklyData[key] || { text: '', done: false, color: '' };
-            document.getElementById('weeklyInputContent').value = data.text;
-            document.getElementById('weeklyCheckbox').checked = data.done;
+        /* =====================================================
+         * 8. 行事曆
+         * ===================================================== */
+        let calendar = null;
+        let selectedDateStr = '';
+        let editingEventId = null;
 
-            selectedColor = data.color || '';
-            colorOptions.forEach(o => {
-                if (o.getAttribute('data-color') === selectedColor) {
-                    o.classList.add('selected');
-                } else {
-                    o.classList.remove('selected');
+        if (window.FullCalendar) {
+            calendar = new FullCalendar.Calendar($('calendar'), {
+                initialView: 'dayGridMonth',
+                locale: 'zh-tw',
+                firstDay: 1,
+                height: 'auto',
+                buttonText: { today: '今天' },
+                dayMaxEvents: 3,
+                moreLinkText: (n) => `+${n} 項`,
+                dateClick(info) {
+                    selectedDateStr = info.dateStr;
+                    $('eventAddDateText').textContent = '日期：' + selectedDateStr;
+                    $('eventTitleInput').value = '';
+                    openModal('eventAddModal');
+                    setTimeout(() => $('eventTitleInput').focus(), 100);
+                },
+                eventClick(info) {
+                    if (info.event.classNames.includes('exam-event')) {
+                        toast(`📌 ${info.event.title}（${info.event.startStr}）`);
+                        return;
+                    }
+                    editingEventId = info.event.id;
+                    $('eventEditInput').value = info.event.title;
+                    $('eventEditDateText').textContent = '日期：' + info.event.startStr;
+                    openModal('eventEditModal');
                 }
             });
-
-            document.getElementById('weeklyModal').classList.add('active');
-        }
-
-        document.getElementById('cancelWeeklyBtn').addEventListener('click', () => {
-            document.getElementById('weeklyModal').classList.remove('active');
-        });
-
-        document.getElementById('clearWeeklyBtn').addEventListener('click', () => {
-            if (currentEditWeeklyKey) {
-                delete weeklyData[currentEditWeeklyKey];
-                saveUserData();
-                renderWeeklyTable();
-            }
-            document.getElementById('weeklyModal').classList.remove('active');
-        });
-
-        document.getElementById('saveWeeklyBtn').addEventListener('click', () => {
-            const text = document.getElementById('weeklyInputContent').value.trim();
-            const done = document.getElementById('weeklyCheckbox').checked;
-
-            if (currentEditWeeklyKey) {
-                if (text === '' && !done && !selectedColor) {
-                    delete weeklyData[currentEditWeeklyKey];
-                } else {
-                    weeklyData[currentEditWeeklyKey] = { text, done, color: selectedColor };
-                }
-                saveUserData();
-                renderWeeklyTable();
-            }
-            document.getElementById('weeklyModal').classList.remove('active');
-        });
-
-        async function saveUserData() {
-            if (!currentUser) {
-                localStorage.setItem('study_todos', JSON.stringify(todos));
-                localStorage.setItem('study_review_plans', JSON.stringify(reviewPlans));
-                localStorage.setItem('study_weekly', JSON.stringify(weeklyData));
-                localStorage.setItem('study_events', JSON.stringify(calendarEvents));
-                return;
-            }
-            try {
-                await setDoc(doc(db, "users", currentUser.uid), {
-                    todos: todos,
-                    reviewPlans: reviewPlans,
-                    events: calendarEvents,
-                    weekly: weeklyData
-                });
-            } catch (e) {
-                console.error("雲端儲存失敗：", e);
-            }
-        }
-
-        async function loadUserData() {
-            if (!currentUser) return;
-            try {
-                const docSnap = await getDoc(doc(db, "users", currentUser.uid));
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    todos = data.todos || [];
-                    reviewPlans = data.reviewPlans || [];
-                    calendarEvents = data.events || [];
-                    weeklyData = data.weekly || {};
-
-                    renderTodos();
-                    renderReviewPlans();
-                    renderWeeklyTable();
-                    refreshCalendarEvents();
-                }
-            } catch (e) {
-                console.error("雲端讀取失敗：", e);
-            }
+            calendar.render();
+        } else {
+            $('calendar').innerHTML = '<p class="empty-hint">行事曆載入失敗，請連上網路後重新整理。</p>';
         }
 
         function refreshCalendarEvents() {
             if (!calendar) return;
-            calendar.removeAllEvents();
-            calendar.addEventSource(calendarEvents);
-
-            const examEventsList = Object.values(examEvents).map(exam => ({
-                title: exam.title,
-                start: exam.date,
-                allDay: true,
-                className: 'exam-event',
-                editable: false
-            }));
-            calendar.addEventSource(examEventsList);
+            calendar.getEventSources().forEach(src => src.remove());
+            calendar.addEventSource(state.events.map(e => ({ ...e })));
+            calendar.addEventSource(Object.values(EXAMS).map(e => ({
+                title: examLabel(e), start: e.date, allDay: true, classNames: ['exam-event'], editable: false
+            })));
         }
 
-        const loginBtn = document.getElementById('loginBtn');
-        loginBtn.addEventListener('click', () => {
-            if (currentUser) {
-                if (confirm("確定要登出嗎？")) {
-                    signOut(auth).then(() => toggleDrawer(false));
-                }
-            } else {
-                signInWithPopup(auth, provider).catch(err => alert("登入失敗: " + err.message));
-            }
-        });
-
-        onAuthStateChanged(auth, async (user) => {
-            currentUser = user;
-            if (user) {
-                document.getElementById('userName').innerText = user.displayName;
-                document.getElementById('userStatus').innerText = "雲端同步已啟用";
-                document.getElementById('userAvatar').src = user.photoURL;
-                loginBtn.innerText = "🔒 登出帳號";
-                await loadUserData();
-            } else {
-                document.getElementById('userName').innerText = "未登入訪客";
-                document.getElementById('userStatus').innerText = "僅使用本機快取";
-                document.getElementById('userAvatar').src = "https://via.placeholder.com/40";
-                loginBtn.innerText = "🔐 Google 帳號登入";
-
-                todos = JSON.parse(localStorage.getItem('study_todos')) || [];
-                reviewPlans = JSON.parse(localStorage.getItem('study_review_plans')) || [];
-                weeklyData = JSON.parse(localStorage.getItem('study_weekly')) || {};
-                calendarEvents = JSON.parse(localStorage.getItem('study_events')) || [];
-                renderTodos();
-                renderReviewPlans();
-                renderWeeklyTable();
-                refreshCalendarEvents();
-            }
-        });
-
-        let selectedDateStr = "";
-        let selectedEventObj = null;
-
-        document.addEventListener('DOMContentLoaded', () => {
-            const calendarEl = document.getElementById('calendar');
-            calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth',
-                locale: 'zh-tw',
-                height: 'auto',
-                selectable: true,
-                dateClick: function(info) {
-                    selectedDateStr = info.dateStr;
-                    document.getElementById('eventAddDateText').innerText = '日期：' + selectedDateStr;
-                    document.getElementById('eventTitleInput').value = '';
-                    document.getElementById('eventAddModal').classList.add('active');
-                },
-                eventClick: function(info) {
-                    if (info.event.classNames.includes('exam-event')) {
-                        alert(`📌 ${info.event.title}\n日期：${info.event.startStr}`);
-                        return;
-                    }
-                    selectedEventObj = info.event;
-                    document.getElementById('eventEditInput').value = selectedEventObj.title;
-                    document.getElementById('eventEditModal').classList.add('active');
-                }
-            });
-            calendar.render();
-            refreshCalendarEvents();
-            renderWeeklyTable();
-        });
-
-        document.getElementById('cancelAddEventBtn').addEventListener('click', () => {
-            document.getElementById('eventAddModal').classList.remove('active');
-        });
-        document.getElementById('confirmAddEventBtn').addEventListener('click', () => {
-            const title = document.getElementById('eventTitleInput').value.trim();
+        function addEvent() {
+            const title = $('eventTitleInput').value.trim();
             if (title && selectedDateStr) {
-                const newEvent = { title: title, start: selectedDateStr, allDay: true, id: String(Date.now()) };
-                calendarEvents.push(newEvent);
-                calendar.addEvent(newEvent);
-                saveUserData();
+                state.events.push({ id: uid(), title, start: selectedDateStr, allDay: true });
+                save(); refreshCalendarEvents();
             }
-            document.getElementById('eventAddModal').classList.remove('active');
-        });
-
-        document.getElementById('cancelEditEventBtn').addEventListener('click', () => {
-            document.getElementById('eventEditModal').classList.remove('active');
-        });
-        document.getElementById('saveEditEventBtn').addEventListener('click', () => {
-            const newTitle = document.getElementById('eventEditInput').value.trim();
-            if (newTitle && selectedEventObj) {
-                selectedEventObj.setProp('title', newTitle);
-                const idx = calendarEvents.findIndex(e => e.start === selectedEventObj.startStr && e.title === selectedEventObj.title);
-                if (idx !== -1) calendarEvents[idx].title = newTitle;
-                saveUserData();
-            }
-            document.getElementById('eventEditModal').classList.remove('active');
-        });
-        document.getElementById('deleteEventBtn').addEventListener('click', () => {
-            if (selectedEventObj) {
-                calendarEvents = calendarEvents.filter(e => !(e.start === selectedEventObj.startStr && e.title === selectedEventObj.title));
-                selectedEventObj.remove();
-                saveUserData();
-            }
-            document.getElementById('eventEditModal').classList.remove('active');
-        });
-
-        const todoInput = document.getElementById('todoInput');
-        const todoList = document.getElementById('todoList');
-        function renderTodos() {
-            todoList.innerHTML = '';
-            if (todos.length === 0) {
-                todoList.innerHTML = '<li style="text-align:center; opacity:0.6; padding:15px;">目前沒有待辦事項，太棒了！✨</li>';
-                return;
-            }
-            todos.forEach((todo) => {
-                const li = document.createElement('li');
-                li.className = 'todo-item';
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox'; checkbox.className = 'todo-checkbox';
-                const textSpan = document.createElement('span');
-                textSpan.className = 'todo-text'; textSpan.innerText = todo;
-                checkbox.addEventListener('change', () => {
-                    if (checkbox.checked) {
-                        li.style.opacity = '0'; li.style.transform = 'translateY(-6px)';
-                        setTimeout(() => {
-                            todos = todos.filter(t => t !== todo);
-                            saveUserData(); renderTodos();
-                        }, 200);
-                    }
-                });
-                li.appendChild(checkbox); li.appendChild(textSpan);
-                todoList.appendChild(li);
-            });
+            closeModal('eventAddModal');
         }
-        document.getElementById('addTodoBtn').addEventListener('click', () => {
-            const text = todoInput.value.trim();
-            if (text !== '') {
-                todos.push(text); saveUserData(); renderTodos(); todoInput.value = '';
-            }
+        function saveEditEvent() {
+            const title = $('eventEditInput').value.trim();
+            const ev = state.events.find(e => e.id === editingEventId);
+            if (title && ev) { ev.title = title; save(); refreshCalendarEvents(); }
+            closeModal('eventEditModal');
+        }
+        $('confirmAddEventBtn').addEventListener('click', addEvent);
+        onEnter($('eventTitleInput'), addEvent);
+        $('saveEditEventBtn').addEventListener('click', saveEditEvent);
+        onEnter($('eventEditInput'), saveEditEvent);
+        $('deleteEventBtn').addEventListener('click', () => {
+            state.events = state.events.filter(e => e.id !== editingEventId);
+            save(); refreshCalendarEvents();
+            closeModal('eventEditModal');
         });
 
-        const reviewInput = document.getElementById('reviewInput');
-        const reviewSubjectSelect = document.getElementById('reviewSubjectSelect');
-        const reviewList = document.getElementById('reviewList');
-
-        function renderReviewPlans() {
-            reviewList.innerHTML = '';
-            if (reviewPlans.length === 0) {
-                reviewList.innerHTML = '<li style="text-align:center; opacity:0.6; padding:15px;">目前沒有預計複習內容，快新增一個吧！🎯</li>';
+        /* =====================================================
+         * 9. 待辦事項 & 預計複習（共用清單渲染）
+         * ===================================================== */
+        function renderList(listEl, items, emptyText, buildContent, onRemove) {
+            listEl.innerHTML = '';
+            if (!items.length) {
+                listEl.innerHTML = `<li class="empty-hint">${emptyText}</li>`;
                 return;
             }
-            reviewPlans.forEach((plan, index) => {
+            items.forEach(item => {
                 const li = document.createElement('li');
                 li.className = 'todo-item';
 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.className = 'todo-checkbox';
-
-                const badge = document.createElement('span');
-                badge.className = 'subject-badge';
-                badge.innerText = plan.subject;
-
-                const textSpan = document.createElement('span');
-                textSpan.className = 'todo-text';
-                textSpan.innerText = plan.text;
-
+                checkbox.title = '完成';
                 checkbox.addEventListener('change', () => {
-                    if (checkbox.checked) {
-                        li.style.opacity = '0';
-                        li.style.transform = 'translateY(-6px)';
-                        setTimeout(() => {
-                            reviewPlans.splice(index, 1);
-                            saveUserData();
-                            renderReviewPlans();
-                        }, 200);
-                    }
+                    if (!checkbox.checked) return;
+                    li.style.opacity = '0';
+                    li.style.transform = 'translateY(-6px)';
+                    setTimeout(() => onRemove(item.id), 200);
                 });
 
-                li.appendChild(checkbox);
-                li.appendChild(badge);
-                li.appendChild(textSpan);
-                reviewList.appendChild(li);
+                const del = document.createElement('button');
+                del.className = 'item-delete-btn';
+                del.textContent = '✕';
+                del.title = '刪除';
+                del.addEventListener('click', () => onRemove(item.id));
+
+                li.append(checkbox, ...buildContent(item), del);
+                listEl.appendChild(li);
             });
         }
 
-        document.getElementById('addReviewBtn').addEventListener('click', () => {
-            const text = reviewInput.value.trim();
-            const subject = reviewSubjectSelect.value;
-            if (text !== '') {
-                reviewPlans.push({ subject, text });
-                saveUserData();
-                renderReviewPlans();
-                reviewInput.value = '';
-            }
-        });
+        function renderTodos() {
+            renderList($('todoList'), state.todos, '目前沒有待辦事項，太棒了！✨',
+                (t) => { const s = document.createElement('span'); s.className = 'todo-text'; s.textContent = t.text; return [s]; },
+                (id) => { state.todos = state.todos.filter(t => t.id !== id); save(); renderTodos(); });
+        }
+        function addTodo() {
+            const text = $('todoInput').value.trim();
+            if (!text) return;
+            state.todos.push({ id: uid(), text });
+            $('todoInput').value = '';
+            save(); renderTodos();
+        }
+        $('addTodoBtn').addEventListener('click', addTodo);
+        onEnter($('todoInput'), addTodo);
 
-        document.getElementById('themeBtn').addEventListener('click', () => {
-            const isDark = document.body.getAttribute('data-theme') === 'dark';
-            document.body.setAttribute('data-theme', isDark ? 'light' : 'dark');
-            document.getElementById('themeBtn').innerText = isDark ? '🌙 Dark mode' : '☀️ Bright mode';
-        });
+        $('reviewSubjectSelect').innerHTML = SUBJECTS
+            .map(s => `<option value="${s.icon} ${s.name}">${s.icon} ${s.name}</option>`).join('');
 
-        const examSelector = document.getElementById('examSelector');
-        let currentExamKey = localStorage.getItem('selectedExamKey') || 'gsat';
-        if (!examEvents[currentExamKey]) currentExamKey = 'gsat';
-        examSelector.value = currentExamKey;
+        function renderReviewPlans() {
+            renderList($('reviewList'), state.reviewPlans, '目前沒有預計複習內容，快新增一個吧！🎯',
+                (p) => {
+                    const b = document.createElement('span'); b.className = 'subject-badge'; b.textContent = p.subject;
+                    const s = document.createElement('span'); s.className = 'todo-text'; s.textContent = p.text;
+                    return [b, s];
+                },
+                (id) => { state.reviewPlans = state.reviewPlans.filter(p => p.id !== id); save(); renderReviewPlans(); });
+        }
+        function addReview() {
+            const text = $('reviewInput').value.trim();
+            if (!text) return;
+            state.reviewPlans.push({ id: uid(), subject: $('reviewSubjectSelect').value, text });
+            $('reviewInput').value = '';
+            save(); renderReviewPlans();
+        }
+        $('addReviewBtn').addEventListener('click', addReview);
+        onEnter($('reviewInput'), addReview);
 
-        examSelector.addEventListener('change', (e) => {
-            currentExamKey = e.target.value;
-            localStorage.setItem('selectedExamKey', currentExamKey);
-            updateCountdown();
-        });
+        /* =====================================================
+         * 10. 先用本機資料畫出畫面
+         * ===================================================== */
+        state = loadLocal();
+        renderAll();
+        setGuestUI();
 
-        function updateCountdown() {
-            const now = new Date().getTime();
-            const currentExam = examEvents[currentExamKey];
-            const targetDate = new Date(currentExam.date + 'T00:00:00').getTime();
-            const difference = targetDate - now;
-
-            document.getElementById('countdownTitle').innerText = currentExam.title;
-
-            if (difference > 0) {
-                document.getElementById('days').innerText = String(Math.floor(difference / (1000 * 60 * 60 * 24))).padStart(2, '0');
-                document.getElementById('hours').innerText = String(Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))).padStart(2, '0');
-                document.getElementById('minutes').innerText = String(Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60))).padStart(2, '0');
-                document.getElementById('seconds').innerText = String(Math.floor((difference % (1000 * 60)) / 1000)).padStart(2, '0');
-            } else {
-                ['days','hours','minutes','seconds'].forEach(id => document.getElementById(id).innerText = '00');
-            }
-            updateNextEventHint(now);
+        function setGuestUI() {
+            $('userName').textContent = '未登入訪客';
+            $('userStatus').textContent = '僅使用本機儲存';
+            $('userAvatar').src = DEFAULT_AVATAR;
+            $('loginBtn').textContent = '🔐 Google 帳號登入';
         }
 
-        function updateNextEventHint(now) {
-            const upcoming = Object.values(examEvents)
-                .map(event => ({ ...event, diff: new Date(event.date + 'T00:00:00').getTime() - now }))
-                .filter(event => event.diff > 0)
-                .sort((a, b) => a.diff - b.diff);
+        /* =====================================================
+         * 11. Firebase 登入與雲端同步
+         * ===================================================== */
+        async function initFirebase() {
+            try {
+                const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VER}`;
+                const [appMod, authMod, fsMod] = await Promise.all([
+                    import(`${base}/firebase-app.js`),
+                    import(`${base}/firebase-auth.js`),
+                    import(`${base}/firebase-firestore.js`)
+                ]);
+                const app = appMod.initializeApp(FIREBASE_CONFIG);
+                const auth = authMod.getAuth(app);
+                const provider = new authMod.GoogleAuthProvider();
+                provider.setCustomParameters({ prompt: 'select_account' });
+                firebase = { auth, provider, authMod, db: fsMod.getFirestore(app), fs: fsMod };
 
-            if (upcoming.length > 0) {
-                const next = upcoming[0];
-                const daysLeft = Math.ceil(next.diff / (1000 * 60 * 60 * 24));
-                document.getElementById('nextEventBadge').innerHTML = `📍 下一個最近考試：<strong>${next.title.split(' ')[1] || next.title}</strong>（還剩 <strong>${daysLeft}</strong> 天）`;
-            } else {
-                document.getElementById('nextEventBadge').innerHTML = `🎉 所有的挑戰都已經順利完成了！`;
+                authMod.getRedirectResult(auth).catch(err => console.warn('redirect 登入結果：', err));
+                authMod.onAuthStateChanged(auth, onAuthChanged);
+            } catch (e) {
+                console.warn('Firebase 載入失敗（可能離線），只使用本機儲存：', e);
+                $('userStatus').textContent = '離線中，僅使用本機儲存';
             }
         }
 
-        setInterval(updateCountdown, 1000);
-        updateCountdown();
+        async function onAuthChanged(user) {
+            currentUser = user;
+            if (!user) {
+                setGuestUI();
+                state = loadLocal();
+                renderAll();
+                return;
+            }
+            $('userName').textContent = user.displayName || user.email || '已登入';
+            $('userStatus').textContent = '☁️ 同步中...';
+            $('userAvatar').src = user.photoURL || DEFAULT_AVATAR;
+            $('loginBtn').textContent = '🔒 登出帳號';
 
-        document.getElementById('surpriseBtn').addEventListener('click', () => {
-            window.location.href = 'https://www.youtube.com/watch?v=BpHvY8Wt2j0';
+            try {
+                const { doc, getDoc } = firebase.fs;
+                const snap = await getDoc(doc(firebase.db, 'users', user.uid));
+                const cloud = snap.exists() ? normalize(snap.data()) : null;
+                const local = loadLocal();
+
+                if (cloud && !isEmptyState(cloud)) {
+                    state = cloud;
+                } else if (!isEmptyState(local)) {
+                    // 雲端是空的：把登入前在本機建立的資料上傳，避免遺失
+                    state = local;
+                    save();
+                    toast('已將本機資料上傳到雲端 ☁️');
+                } else {
+                    state = normalize({});
+                }
+                renderAll();
+                $('userStatus').textContent = '☁️ 雲端同步已啟用';
+            } catch (e) {
+                console.error('雲端讀取失敗：', e);
+                $('userStatus').textContent = '⚠️ 雲端讀取失敗';
+                toast('⚠️ 雲端讀取失敗，請檢查網路');
+            }
+        }
+
+        $('loginBtn').addEventListener('click', async () => {
+            if (!firebase) { toast('目前無法連線，請連上網路後重試'); return; }
+            const { auth, provider, authMod } = firebase;
+            if (currentUser) {
+                if (confirm('確定要登出嗎？')) {
+                    await authMod.signOut(auth);
+                    toggleDrawer(false);
+                }
+                return;
+            }
+            try {
+                await authMod.signInWithPopup(auth, provider);
+            } catch (err) {
+                // 手機「加到主畫面」的模式常會擋掉彈出視窗，改用整頁跳轉登入
+                const fallback = ['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'];
+                if (fallback.includes(err.code)) {
+                    authMod.signInWithRedirect(auth, provider);
+                } else if (err.code !== 'auth/popup-closed-by-user') {
+                    alert('登入失敗：' + err.message);
+                }
+            }
         });
 
-        const rouletteBtn = document.getElementById('rouletteBtn');
-        const rouletteModal = document.getElementById('rouletteModal');
-        const rouletteResult = document.getElementById('rouletteResult');
-        const closeRouletteBtn = document.getElementById('closeRouletteBtn');
-        const subjectsList = ['📖 國文', '🔠 英文', '📐 數學', '🔬 自然', '🌍 社會'];
-
-        rouletteBtn.addEventListener('click', () => {
-            rouletteModal.classList.add('active');
-            closeRouletteBtn.style.display = 'none';
-            let counter = 0;
-            spinInterval = setInterval(() => {
-                rouletteResult.innerText = subjectsList[counter % subjectsList.length];
-                counter++;
-            }, 80);
-            setTimeout(() => {
-                if (spinInterval) clearInterval(spinInterval);
-                rouletteResult.innerText = subjectsList[Math.floor(Math.random() * subjectsList.length)];
-                closeRouletteBtn.style.display = 'inline-flex';
-            }, 2000);
-        });
-
-        closeRouletteBtn.addEventListener('click', () => {
-            rouletteModal.classList.remove('active');
-        });
-
+        initFirebase();
     </script>
 
     <!-- ===== PWA：註冊 Service Worker ===== -->
@@ -1236,7 +1208,6 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('service-worker.js')
-                    .then(reg => console.log('Service Worker 註冊成功：', reg.scope))
                     .catch(err => console.log('Service Worker 註冊失敗：', err));
             });
         }
