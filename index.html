@@ -47,9 +47,12 @@
             --on-accent: #16140F;
             --accent-text: #8F560A;
             --accent-soft: rgba(233, 177, 84, 0.22);
-            --important: #D93636;
-            --important-text: #B42323;
-            --important-soft: rgba(217, 54, 54, 0.12);
+            --important: #D9932B;
+            --important-text: #8F560A;
+            --important-soft: rgba(233, 177, 84, 0.2);
+            --exam: #D92D2D;
+            --exam-text: #B91C1C;
+            --exam-soft: rgba(217, 45, 45, 0.1);
             --nav-bg: rgba(247, 246, 242, 0.92);
             --modal-bg: #FFFFFF;
             --shadow: 0 20px 50px rgba(22, 20, 15, 0.18);
@@ -71,9 +74,12 @@
             --on-accent: #050608;
             --accent-text: #E9B154;
             --accent-soft: rgba(233, 177, 84, 0.16);
-            --important: #FF6B6B;
-            --important-text: #FF8A8A;
-            --important-soft: rgba(255, 107, 107, 0.16);
+            --important: #E9B154;
+            --important-text: #F0C277;
+            --important-soft: rgba(233, 177, 84, 0.16);
+            --exam: #FF5A5F;
+            --exam-text: #FF7A7E;
+            --exam-soft: rgba(255, 90, 95, 0.16);
             --nav-bg: rgba(5, 6, 8, 0.92);
             --modal-bg: #12131A;
             --shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
@@ -107,10 +113,13 @@
             background: transparent; border-bottom: 1px solid transparent;
             transition: background-color 0.2s, border-color 0.2s;
         }
-        .topbar.scrolled {
-            background: var(--nav-bg); border-bottom-color: var(--line);
-            backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+        .topbar.scrolled { background: var(--bg); }
+        .topbar::after {
+            content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 24px;
+            background: linear-gradient(var(--bg), transparent);
+            opacity: 0; transition: opacity 0.2s; pointer-events: none;
         }
+        .topbar.scrolled::after { opacity: 1; }
         .topbar-title { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.28em; }
         .topbar-actions { display: flex; gap: 8px; }
         .icon-btn {
@@ -266,7 +275,7 @@
         .week-table .subject-col { width: 72px; font-weight: 700; vertical-align: middle; font-family: 'Noto Sans TC', sans-serif; }
         .exam-tag {
             display: inline-block; margin-top: 4px; font-size: 11px; font-weight: 700; padding: 2px 7px;
-            border-radius: 6px; background: var(--accent); color: var(--on-accent); font-family: 'Noto Sans TC', sans-serif;
+            border-radius: 6px; background: var(--exam); color: #FFFFFF; font-family: 'Noto Sans TC', sans-serif;
         }
         .important-tag {
             display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
@@ -300,7 +309,7 @@
             font-size: 15px; font-weight: 600; border: 1.5px solid transparent;
         }
         .cal-cell.past .cal-num { color: var(--faint); }
-        .cal-cell.exam .cal-num { border-color: var(--accent); color: var(--accent-text); }
+        .cal-cell.exam .cal-num { border-color: var(--exam); color: var(--exam-text); }
         .cal-cell.selected .cal-num { background: var(--surface-2); }
         .cal-cell.today .cal-num { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
         .cal-dots { display: flex; gap: 3px; height: 6px; align-items: center; }
@@ -312,7 +321,7 @@
         .legend span { display: inline-flex; align-items: center; gap: 6px; }
         .legend i { width: 6px; height: 6px; border-radius: 3px; background: var(--text); }
         .legend i.imp { background: var(--important); }
-        .legend i.ring { width: 10px; height: 10px; border-radius: 5px; background: transparent; border: 1.5px solid var(--accent); }
+        .legend i.ring { width: 10px; height: 10px; border-radius: 5px; background: transparent; border: 1.5px solid var(--exam); }
 
         .event-list { list-style: none; margin: 0; padding: 0; }
         .event-row {
@@ -325,7 +334,7 @@
         .event-date .w { font-size: 11px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
         .event-bar { width: 3px; height: 30px; border-radius: 2px; background: var(--faint); flex-shrink: 0; }
         .event-bar.imp { background: var(--important); }
-        .event-bar.exam { background: var(--accent); }
+        .event-bar.exam { background: var(--exam); }
         .event-title { flex: 1; font-size: 15px; min-width: 0; word-break: break-word; font-family: 'Noto Sans TC', sans-serif; }
         .event-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
         .event-rel { font-size: 12px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
@@ -354,7 +363,7 @@
                 font-family: 'Noto Sans TC', sans-serif;
             }
             .cal-titles span.imp { background: var(--important-soft); color: var(--important-text); }
-            .cal-titles span.exam { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+            .cal-titles span.exam { background: var(--exam); color: #FFFFFF; font-weight: 700; }
             .cal-cell:hover { background: var(--surface); }
             .cal-cell.selected { border-color: var(--accent); background: var(--accent-soft); }
             .cal-cell.selected .cal-num { background: transparent; }
@@ -434,7 +443,7 @@
         .modal.open { opacity: 1; pointer-events: auto; }
         .sheet {
             width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
-            background: var(--modal-bg); border: 1px solid var(--line); border-radius: 24px;
+            background: var(--modal-bg); border: 1px solid var(--line); border-radius: 24px; overflow-x: hidden;
             padding: 24px; box-shadow: var(--shadow);
             transform: translateY(12px) scale(0.98); transition: transform 0.2s;
         }
@@ -445,12 +454,20 @@
             width: 100%; border: 1px solid var(--line); background: var(--surface);
             border-radius: 14px; padding: 11px 14px; font-size: 16px; outline: none; margin-bottom: 16px;
             font-family: 'Noto Sans TC', sans-serif; color-scheme: light dark;
+            display: block; min-width: 0; max-width: 100%; height: 48px;
         }
+        input[type="date"].field {
+            -webkit-appearance: none; appearance: none; text-align: left; line-height: 24px;
+        }
+        input[type="date"].field::-webkit-date-and-time-value { text-align: left; margin: 0; }
+        input[type="date"].field::-webkit-calendar-picker-indicator { opacity: 0.6; }
+        [data-theme="dark"] input[type="date"].field { color-scheme: dark; }
+        [data-theme="light"] input[type="date"].field { color-scheme: light; }
         .field:focus { border-color: var(--accent); }
-        textarea.field { min-height: 96px; resize: vertical; line-height: 1.5; }
+        textarea.field { height: auto; min-height: 96px; resize: vertical; line-height: 1.5; }
         .toggle-row { display: flex; align-items: center; gap: 12px; min-height: 44px; margin-bottom: 14px; font-size: 15px; cursor: pointer; font-family: 'Noto Sans TC', sans-serif; }
         .toggle-row.imp .checkbox:checked { background: var(--important); border-color: var(--important); }
-        .toggle-row.imp .checkbox:checked::after { border-color: #fff; }
+        .toggle-row.imp .checkbox:checked::after { border-color: var(--on-accent); }
         .colors { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
         .color-dot { width: 30px; height: 30px; border-radius: 15px; border: 2px solid transparent; padding: 0; }
         .color-dot.selected { border-color: var(--text); }
@@ -719,7 +736,7 @@
             mock1: { name: '第一次模擬考', short: '模考一', date: '2026-09-02' },
             mock2: { name: '第二次模擬考', short: '模考二', date: '2026-10-28' },
             mock3: { name: '第三次模擬考', short: '模考三', date: '2026-12-08' },
-            gsat:  { name: '116 學測',     short: '學測',   date: '2027-01-22' }
+            gsat:  { name: '116 學測',     short: '學測',   date: '2027-01-22', end: '2027-01-24' } // 多天的考試加上 end
         };
         // 科目順序不要改，舊的進度資料是靠順序對應的
         const SUBJECTS = ['數學', '自然', '英文', '國文', '社會'];
@@ -872,6 +889,9 @@
          * 1. 倒數
          * ===================================================== */
         const examEntries = Object.entries(EXAMS).sort((a, b) => a[1].date.localeCompare(b[1].date));
+        const examsOn = (ds) => examEntries.filter(([, e]) => e.date <= ds && ds <= (e.end || e.date)).map(([, e]) => e);
+        const shortDate = (s) => { const d = parseYmd(s); return `${d.getMonth() + 1}/${d.getDate()}`; };
+        const examTitle = (e) => e.end ? `${e.name}（${shortDate(e.date)}–${shortDate(e.end)}）` : e.name;
         let examKey = localStorage.getItem(LS.exam);
         if (!EXAMS[examKey]) examKey = 'gsat';
 
@@ -897,7 +917,12 @@
             const diff = examTime(exam.date) - now;
             $('cdEyebrow').textContent = `${exam.date.slice(0, 4)} · ${exam.name}`;
             const ed = parseYmd(exam.date);
-            $('cdDate').innerHTML = `考試日期 <strong>${ed.getFullYear()}/${pad(ed.getMonth() + 1)}/${pad(ed.getDate())}</strong>（${WEEK_ZH[ed.getDay()]}）`;
+            let dateHtml = `考試日期 <strong>${ed.getFullYear()}/${pad(ed.getMonth() + 1)}/${pad(ed.getDate())}</strong>（${WEEK_ZH[ed.getDay()]}）`;
+            if (exam.end) {
+                const ee = parseYmd(exam.end);
+                dateHtml += ` – <strong>${pad(ee.getMonth() + 1)}/${pad(ee.getDate())}</strong>（${WEEK_ZH[ee.getDay()]}）`;
+            }
+            $('cdDate').innerHTML = dateHtml;
             if (diff > 0) {
                 $('days').textContent = pad(Math.floor(diff / 86400000));
                 $('hours').textContent = pad(Math.floor(diff % 86400000 / 3600000));
@@ -1015,7 +1040,7 @@
                 return `<button class="${cls}" data-idx="${i}" aria-label="${fmt(d)} 星期${WEEK_ZH[d.getDay()]}"><span class="w">${WEEK_ZH[d.getDay()]}</span><span class="n num">${d.getDate()}</span><span class="dot"></span></button>`;
             }).join('');
             const sd = days[sel], sds = ymd(sd);
-            const exams = examEntries.filter(([, e]) => e.date === sds).map(([, e]) => e.name);
+            const exams = examsOn(sds).map(e => e.name);
             $('dayLabel').textContent = `${sd.getMonth() + 1} 月 ${sd.getDate()} 日 · 星期${WEEK_ZH[sd.getDay()]}${exams.length ? ' · ' + exams.join('、') : ''}`;
             $('dayPlan').innerHTML = SUBJECTS.map((subj, s) => `
                 <div class="subject-row">
@@ -1027,7 +1052,7 @@
             let html = '<thead><tr><th class="subject-col">科目</th>';
             days.forEach(d => {
                 const ds = ymd(d);
-                const tags = examEntries.filter(([, e]) => e.date === ds).map(([, e]) => `<span class="exam-tag">${esc(e.short)}</span>`).join(' ');
+                const tags = examsOn(ds).map(e => `<span class="exam-tag">${esc(e.short)}</span>`).join(' ');
                 html += `<th class="${ds === t ? 'today' : ''}">星期${WEEK_ZH[d.getDay()]}<span class="d">${fmt(d)}</span>${tags}</th>`;
             });
             html += '</tr></thead><tbody>';
@@ -1090,7 +1115,6 @@
         let selDate = todayStr();
         let editingEventId = null;
 
-        const examsOn = (ds) => examEntries.filter(([, e]) => e.date === ds).map(([, e]) => e);
         const eventsOn = (ds) => state.events.filter(e => e.start === ds).sort((a, b) => (b.important - a.important));
 
         function renderCalendar() {
@@ -1140,7 +1164,7 @@
             const d = parseYmd(selDate);
             $('selDayTitle').textContent = `${d.getMonth() + 1} 月 ${d.getDate()} 日 · 星期${WEEK_ZH[d.getDay()]}${selDate === t ? '（今天）' : ''}`;
             const items = [
-                ...examsOn(selDate).map(e => ({ date: e.date, title: e.name, exam: true })),
+                ...examsOn(selDate).map(e => ({ date: selDate, title: examTitle(e), exam: true })),
                 ...eventsOn(selDate).map(e => ({ id: e.id, date: e.start, title: e.title, important: e.important }))
             ];
             $('selDayList').innerHTML = items.length ? items.map(i => eventRowHtml(i, false)).join('') : '<li class="empty">這天沒有行程</li>';
@@ -1149,7 +1173,7 @@
         function renderUpcoming() {
             const t = todayStr();
             const items = [
-                ...examEntries.map(([, e]) => ({ date: e.date, title: e.name, exam: true })),
+                ...examEntries.map(([, e]) => ({ date: e.date, title: examTitle(e), exam: true })),
                 ...state.events.map(e => ({ id: e.id, date: e.start, title: e.title, important: e.important }))
             ].filter(i => i.date > t).sort((a, b) => a.date.localeCompare(b.date) || (b.exam ? 1 : 0) - (a.exam ? 1 : 0)).slice(0, 8);
             $('upcomingList').innerHTML = items.length ? items.map(i => eventRowHtml(i, true)).join('') : '<li class="empty">接下來沒有安排</li>';
