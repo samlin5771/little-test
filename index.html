@@ -2,7 +2,7 @@
 <html lang="zh-TW" data-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
     <title>學測倒數 & 讀書計畫</title>
 
     <!-- ===== PWA 設定 ===== -->
@@ -84,7 +84,7 @@
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        html { background: var(--bg); }
+        html { background: var(--bg); touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
         body {
             margin: 0; min-height: 100vh; min-height: 100dvh;
             background: radial-gradient(circle at 50% 18%, var(--glow), transparent 60%) fixed, var(--bg);
@@ -174,6 +174,11 @@
         .hms > div { display: flex; flex-direction: column; gap: 4px; min-width: 32px; }
         .hms small { font-size: 11px; font-weight: 500; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
         .hms .colon { color: var(--faint); }
+        .hero-date {
+            margin: 18px 0 0; padding: 7px 16px; border-radius: 18px; border: 1px solid var(--line);
+            font-size: 13px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif;
+        }
+        .hero-date strong { color: var(--text); font-family: 'Manrope', sans-serif; font-weight: 700; letter-spacing: 0.02em; }
         .hero-note { margin: 14px 0 0; font-size: 13px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; min-height: 1em; }
 
         .chips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 22px 0 18px; }
@@ -334,6 +339,7 @@
         }
         .fab svg { width: 24px; height: 24px; }
         body[data-tab="tab-calendar"] .fab { display: flex; }
+        #tab-calendar { padding-bottom: 72px; }
 
         @media (min-width: 768px) {
             .cal-grid { gap: 4px; }
@@ -349,7 +355,18 @@
             }
             .cal-titles span.imp { background: var(--important-soft); color: var(--important-text); }
             .cal-titles span.exam { background: var(--accent); color: var(--on-accent); font-weight: 700; }
-            .cal-lists { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+            .cal-cell:hover { background: var(--surface); }
+            .cal-cell.selected { border-color: var(--accent); background: var(--accent-soft); }
+            .cal-cell.selected .cal-num { background: transparent; }
+            .cal-cell.today .cal-num { background: var(--accent); }
+            .fab { display: none !important; }  /* 電腦版用「＋ 新增」按鈕，不需要浮動按鈕 */
+        }
+        @media (min-width: 1000px) {
+            .cal-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 40px; align-items: start; }
+            .cal-lists { position: sticky; top: 84px; padding-top: 14px; }
+            .cal-lists .block:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+            .cal-cell { min-height: 84px; }
+            .main { max-width: 1160px; }
         }
 
         /* =====================================================
@@ -391,6 +408,23 @@
         /* =====================================================
          * 彈出視窗
          * ===================================================== */
+        @media (min-width: 900px) {
+            .tabbar {
+                top: calc(10px + env(safe-area-inset-top)); bottom: auto; left: 50%; right: auto;
+                transform: translateX(-50%); display: flex; gap: 4px; padding: 4px;
+                border: 1px solid var(--line); border-radius: 26px; z-index: 45;
+            }
+            .tab-btn { flex-direction: row; gap: 8px; min-height: 40px; padding: 0 18px; border-radius: 21px; font-size: 14px; }
+            .tab-btn svg { width: 18px; height: 18px; }
+            .tab-btn:hover { background: var(--surface); }
+            .tab-btn.active { background: var(--accent-soft); }
+            .topbar { min-height: 66px; }
+            .topbar-title { visibility: hidden; }
+            .main { padding-bottom: 48px; }
+            .toast { bottom: 32px; }
+            #tab-calendar { padding-bottom: 0; }
+        }
+
         .modal {
             position: fixed; inset: 0; z-index: 100;
             background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
@@ -481,6 +515,7 @@
                         <span class="colon">:</span>
                         <div><span id="seconds">00</span><small>秒</small></div>
                     </div>
+                    <p class="hero-date" id="cdDate"></p>
                     <p class="hero-note" id="cdNote"></p>
                 </div>
 
@@ -533,6 +568,8 @@
 
         <!-- ========== 3. 行事曆 ========== -->
         <section id="tab-calendar" class="tab">
+          <div class="cal-layout">
+            <div class="cal-main">
             <div class="cal-head">
                 <div>
                     <div class="cal-year num" id="calYear"></div>
@@ -555,7 +592,8 @@
                 <span><i class="imp"></i>重要</span>
                 <span><i class="ring"></i>考試</span>
             </div>
-            <div class="cal-lists">
+            </div>
+            <aside class="cal-lists">
                 <section class="block">
                     <div class="block-head">
                         <strong class="zh" id="selDayTitle" style="font-size:15px"></strong>
@@ -567,7 +605,8 @@
                     <div class="block-head"><p class="label">接下來</p></div>
                     <ul class="event-list" id="upcomingList"></ul>
                 </section>
-            </div>
+            </aside>
+          </div>
             <button class="fab" id="calFab" aria-label="新增行程">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
             </button>
@@ -857,6 +896,8 @@
             const exam = EXAMS[examKey];
             const diff = examTime(exam.date) - now;
             $('cdEyebrow').textContent = `${exam.date.slice(0, 4)} · ${exam.name}`;
+            const ed = parseYmd(exam.date);
+            $('cdDate').innerHTML = `考試日期 <strong>${ed.getFullYear()}/${pad(ed.getMonth() + 1)}/${pad(ed.getDate())}</strong>（${WEEK_ZH[ed.getDay()]}）`;
             if (diff > 0) {
                 $('days').textContent = pad(Math.floor(diff / 86400000));
                 $('hours').textContent = pad(Math.floor(diff % 86400000 / 3600000));
@@ -1229,6 +1270,16 @@
             $('loginBtn').classList.toggle('btn-danger', !!u);
         }
         $('accountBtn').addEventListener('click', () => openModal('accountModal'));
+
+        // 禁止雙指縮放（iOS Safari 不吃 viewport 設定，要另外擋）
+        ['gesturestart', 'gesturechange', 'gestureend'].forEach(t =>
+            document.addEventListener(t, (e) => e.preventDefault(), { passive: false }));
+        document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+        // 電腦上擋掉 Ctrl/⌘ + 滾輪、觸控板縮放
+        document.addEventListener('wheel', (e) => { if (e.ctrlKey || e.metaKey) e.preventDefault(); }, { passive: false });
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && ['+', '-', '=', '0'].includes(e.key)) e.preventDefault();
+        });
 
         // 往下捲動時頂部列才出現底色
         const topbar = document.querySelector('.topbar');
