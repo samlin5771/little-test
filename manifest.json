@@ -2,13 +2,13 @@
   "id": "./index.html",
   "name": "學測倒數 & 讀書計畫",
   "short_name": "學測倒數",
-  "description": "倒數計時、每週進度表、行事曆、待辦事項與複習規劃",
+  "description": "倒數計時、每週進度、行事曆與待辦事項",
   "start_url": "./index.html",
   "scope": "./",
   "display": "fullscreen",
   "orientation": "portrait",
-  "background_color": "#0f1015",
-  "theme_color": "#0f1015",
+  "background_color": "#050608",
+  "theme_color": "#050608",
   "lang": "zh-TW",
   "icons": [
     {
