@@ -243,7 +243,7 @@
         .day-chip.today { border-color: var(--accent); }
         .day-chip.selected { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
         .day-chip.selected .w { color: var(--on-accent); opacity: 0.75; }
-        .day-chip.selected .dot { background: var(--on-accent); }
+        .day-chip.selected.has .dot { background: var(--on-accent); }
 
         .subject-row { display: flex; gap: 14px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--line); }
         .subject-name { width: 40px; flex-shrink: 0; font-size: 15px; font-weight: 700; padding-top: 8px; font-family: 'Noto Sans TC', sans-serif; }
@@ -336,6 +336,8 @@
         .event-bar.imp { background: var(--important); }
         .event-bar.exam { background: var(--exam); }
         .event-title { flex: 1; font-size: 15px; min-width: 0; word-break: break-word; font-family: 'Noto Sans TC', sans-serif; }
+        .event-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+        #selDayList .event-row { padding-left: 4px; }
         .event-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
         .event-rel { font-size: 12px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
 
@@ -429,6 +431,10 @@
             .tab-btn.active { background: var(--accent-soft); }
             .topbar { min-height: 66px; }
             .topbar-title { visibility: hidden; }
+            .hero { padding-top: 48px; }
+            .days { font-size: 156px; }
+            .hms { font-size: 28px; gap: 28px; }
+            .hms small { font-size: 12px; }
             .main { padding-bottom: 48px; }
             .toast { bottom: 32px; }
             #tab-calendar { padding-bottom: 0; }
@@ -441,6 +447,8 @@
             opacity: 0; pointer-events: none; transition: opacity 0.2s;
         }
         .modal.open { opacity: 1; pointer-events: auto; }
+        body.modal-open { overflow: hidden; }
+        .modal { overscroll-behavior: contain; }
         .sheet {
             width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
             background: var(--modal-bg); border: 1px solid var(--line); border-radius: 24px; overflow-x: hidden;
@@ -494,6 +502,9 @@
             font-family: 'Noto Sans TC', sans-serif;
         }
         .toast.show { opacity: 1; transform: translate(-50%, 0); }
+        .toast { display: flex; align-items: center; gap: 14px; }
+        .toast.has-action.show { pointer-events: auto; }
+        .toast-btn { border: none; background: none; padding: 4px 2px; font-weight: 700; font-size: 14px; color: var(--accent-text); font-family: 'Noto Sans TC', sans-serif; }
 
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -733,9 +744,9 @@
          * 設定區（考試日期、科目都改這裡）
          * ===================================================== */
         const EXAMS = {
-            mock1: { name: '第一次模擬考', short: '模考一', date: '2026-09-02' },
-            mock2: { name: '第二次模擬考', short: '模考二', date: '2026-10-28' },
-            mock3: { name: '第三次模擬考', short: '模考三', date: '2026-12-08' },
+            mock1: { name: '第一次模擬考', short: '模考一', date: '2026-09-02', end: '2026-09-03' },
+            mock2: { name: '第二次模擬考', short: '模考二', date: '2026-10-28', end: '2026-10-29' },
+            mock3: { name: '第三次模擬考', short: '模考三', date: '2026-12-08', end: '2026-12-09' },
             gsat:  { name: '116 學測',     short: '學測',   date: '2027-01-22', end: '2027-01-24' } // 多天的考試加上 end
         };
         // 科目順序不要改，舊的進度資料是靠順序對應的
@@ -776,12 +787,14 @@
         function lsSet(k, v) { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch {} }
 
         let toastTimer;
-        function toast(msg) {
+        function toast(msg, action) {
             const el = $('toast');
-            el.textContent = msg;
+            el.innerHTML = `<span>${esc(msg)}</span>` + (action ? `<button class="toast-btn">${esc(action.label)}</button>` : '');
+            el.classList.toggle('has-action', !!action);
+            if (action) el.querySelector('.toast-btn').onclick = () => { el.classList.remove('show'); action.fn(); };
             el.classList.add('show');
             clearTimeout(toastTimer);
-            toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+            toastTimer = setTimeout(() => el.classList.remove('show'), action ? 4500 : 2200);
         }
 
         /* =====================================================
@@ -792,14 +805,27 @@
         let fb = null; // Firebase（動態載入，離線時 App 照常可用）
 
         // 相容舊版資料：舊的待辦是純文字、舊的行程可能沒有 id
+        // 自己加過、和內建考試同一天又同名的行程（例如 1/22「學測」）視為重複，自動移除
+        const squash = (t) => String(t || '').replace(/\s/g, '');
+        function isExamDuplicate(ev) {
+            const t = squash(ev.title);
+            if (!t) return false;
+            return Object.values(EXAMS).some(x => {
+                if (ev.start < x.date || ev.start > (x.end || x.date)) return false;
+                const name = squash(x.name);
+                return name.includes(t) || t.includes(name) || t.includes(x.short);
+            });
+        }
+        let removedDupes = 0;
         function normalize(raw = {}) {
+            removedDupes = 0;
             return {
                 todos: (raw.todos || []).map(t => typeof t === 'string'
                     ? { id: uid(), text: t }
                     : { id: t.id || uid(), text: t.text || '' }),
                 events: (raw.events || []).filter(e => e && e.start).map(e => ({
                     id: String(e.id || uid()), title: e.title || '', start: String(e.start).slice(0, 10), important: !!e.important
-                })),
+                })).filter(e => { if (isExamDuplicate(e)) { removedDupes++; return false; } return true; }),
                 weekly: raw.weekly && typeof raw.weekly === 'object' ? raw.weekly : {}
             };
         }
@@ -810,8 +836,11 @@
         }
 
         let cloudTimer;
+        let cloudReady = false;   // 讀到雲端資料後才允許寫回，避免空資料蓋掉雲端
+        let unsubscribe = null;
         function save() {
             if (!currentUser || !fb) { saveLocal(); return; }
+            if (!cloudReady) { toast('還在連線雲端，這次修改可能不會同步'); return; }
             clearTimeout(cloudTimer);
             cloudTimer = setTimeout(async () => {
                 try {
@@ -870,9 +899,12 @@
         /* =====================================================
          * 彈出視窗
          * ===================================================== */
-        function openModal(id) { $(id).classList.add('open'); }
+        // 彈窗開著時，後面的頁面不跟著捲動
+        const syncScrollLock = () => document.body.classList.toggle('modal-open', !!document.querySelector('.modal.open'));
+        function openModal(id) { $(id).classList.add('open'); syncScrollLock(); }
         function closeModal(id) {
             $(id).classList.remove('open');
+            syncScrollLock();
             if (id === 'rouletteModal') stopSpin();
         }
         document.querySelectorAll('.modal').forEach(m => {
@@ -889,6 +921,7 @@
          * 1. 倒數
          * ===================================================== */
         const examEntries = Object.entries(EXAMS).sort((a, b) => a[1].date.localeCompare(b[1].date));
+        const examEndTime = (e) => examTime(e.end || e.date) + 86400000;
         const examsOn = (ds) => examEntries.filter(([, e]) => e.date <= ds && ds <= (e.end || e.date)).map(([, e]) => e);
         const shortDate = (s) => { const d = parseYmd(s); return `${d.getMonth() + 1}/${d.getDate()}`; };
         const examTitle = (e) => e.end ? `${e.name}（${shortDate(e.date)}–${shortDate(e.end)}）` : e.name;
@@ -898,7 +931,7 @@
         function renderExamChips() {
             const now = Date.now();
             $('examChips').innerHTML = examEntries.map(([k, e]) => {
-                const cls = ['chip', k === examKey ? 'active' : '', examTime(e.date) <= now ? 'past' : ''].join(' ');
+                const cls = ['chip', k === examKey ? 'active' : '', examEndTime(e) <= now ? 'past' : ''].join(' ');
                 return `<button class="${cls}" role="tab" aria-selected="${k === examKey}" data-exam="${k}">${esc(e.short)}</button>`;
             }).join('');
         }
@@ -931,7 +964,7 @@
                 $('cdNote').textContent = '';
             } else {
                 ['days', 'hours', 'minutes', 'seconds'].forEach(id => $(id).textContent = '00');
-                $('cdNote').textContent = '這場已經考完了，辛苦了！';
+                $('cdNote').textContent = now < examEndTime(exam) ? '考試進行中，加油！' : '這場已經考完了，辛苦了！';
             }
             const next = examEntries.map(([, e]) => ({ ...e, diff: examTime(e.date) - now }))
                 .filter(e => e.diff > 0).sort((a, b) => a.diff - b.diff)[0];
@@ -1030,6 +1063,7 @@
             $('weekSub').textContent = total ? `本週完成 ${done} / ${total} · ${pct}%` : '本週還沒有安排進度';
 
             const todayIdx = days.findIndex(d => ymd(d) === t);
+            $('thisWeekBtn').parentElement.style.display = todayIdx >= 0 ? 'none' : '';
             const sel = selectedDayIdx ?? (todayIdx >= 0 ? todayIdx : 0);
 
             // 手機：日期選擇＋當天各科
@@ -1045,7 +1079,9 @@
             $('dayPlan').innerHTML = SUBJECTS.map((subj, s) => `
                 <div class="subject-row">
                     <div class="subject-name">${subj}</div>
-                    <div class="slots">${[...Array(SLOTS).keys()].map(k => slotHtml(`${sds}_${s}_${k}`, `${fmt(sd)} ${subj}`)).join('')}</div>
+                    <div class="slots">${[...Array(SLOTS).keys()]
+                        .filter(k => k === 0 || state.weekly[`${sds}_${s}_${k - 1}`]?.text || state.weekly[`${sds}_${s}_${k}`])
+                        .map(k => slotHtml(`${sds}_${s}_${k}`, `${fmt(sd)} ${subj}`)).join('')}</div>
                 </div>`).join('');
 
             // 電腦：整週表格
@@ -1094,6 +1130,9 @@
             openModal('weeklyModal');
             setTimeout(() => $('weeklyText').focus(), 120);
         }
+        $('weeklyText').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('saveWeeklyBtn').click(); }
+        });
         $('saveWeeklyBtn').addEventListener('click', () => {
             const text = $('weeklyText').value.trim();
             const done = $('weeklyDone').checked;
@@ -1103,9 +1142,11 @@
             closeModal('weeklyModal');
         });
         $('clearWeeklyBtn').addEventListener('click', () => {
-            delete state.weekly[editingKey];
+            const key = editingKey, old = state.weekly[key];
+            delete state.weekly[key];
             save(); renderWeek(); renderToday();
             closeModal('weeklyModal');
+            if (old) toast('已清除', { label: '復原', fn: () => { state.weekly[key] = old; save(); renderWeek(); renderToday(); } });
         });
 
         /* =====================================================
@@ -1149,12 +1190,13 @@
             const d = parseYmd(item.date);
             const t = todayStr();
             const rel = showRel ? daysBetween(t, item.date) : null;
+            const dateBlock = showRel ? `<div class="event-date"><div class="d num">${d.getMonth() + 1}/${d.getDate()}</div><div class="w">週${WEEK_ZH[d.getDay()]}</div></div>` : '';
             const tags = (item.exam ? '<span class="exam-tag" style="margin:0">考試</span>' : '') +
                 (item.important ? '<span class="important-tag">重要</span>' : '');
             return `<li><button class="event-row" ${item.id ? `data-id="${item.id}"` : 'data-exam="1"'} data-title="${esc(item.title)}">
-                <div class="event-date"><div class="d num">${d.getMonth() + 1}/${d.getDate()}</div><div class="w">週${WEEK_ZH[d.getDay()]}</div></div>
+                ${dateBlock}
                 <div class="event-bar ${item.exam ? 'exam' : item.important ? 'imp' : ''}"></div>
-                <div class="event-title">${esc(item.title)}</div>
+                <div class="event-title">${esc(item.title)}${item.sub ? `<div class="event-sub">${esc(item.sub)}</div>` : ''}</div>
                 <div class="event-meta">${tags}${rel !== null ? `<span class="event-rel">${rel === 1 ? '明天' : rel + ' 天後'}</span>` : ''}</div>
             </button></li>`;
         }
@@ -1164,7 +1206,10 @@
             const d = parseYmd(selDate);
             $('selDayTitle').textContent = `${d.getMonth() + 1} 月 ${d.getDate()} 日 · 星期${WEEK_ZH[d.getDay()]}${selDate === t ? '（今天）' : ''}`;
             const items = [
-                ...examsOn(selDate).map(e => ({ date: selDate, title: examTitle(e), exam: true })),
+                ...examsOn(selDate).map(e => ({
+                    date: selDate, title: e.name, exam: true,
+                    sub: e.end ? `第 ${daysBetween(e.date, selDate) + 1} 天，共 ${daysBetween(e.date, e.end) + 1} 天` : ''
+                })),
                 ...eventsOn(selDate).map(e => ({ id: e.id, date: e.start, title: e.title, important: e.important }))
             ];
             $('selDayList').innerHTML = items.length ? items.map(i => eventRowHtml(i, false)).join('') : '<li class="empty">這天沒有行程</li>';
@@ -1173,7 +1218,7 @@
         function renderUpcoming() {
             const t = todayStr();
             const items = [
-                ...examEntries.map(([, e]) => ({ date: e.date, title: examTitle(e), exam: true })),
+                ...examEntries.map(([, e]) => ({ date: e.date, title: e.name, exam: true, sub: e.end ? `${shortDate(e.date)} – ${shortDate(e.end)}，共 ${daysBetween(e.date, e.end) + 1} 天` : '' })),
                 ...state.events.map(e => ({ id: e.id, date: e.start, title: e.title, important: e.important }))
             ].filter(i => i.date > t).sort((a, b) => a.date.localeCompare(b.date) || (b.exam ? 1 : 0) - (a.exam ? 1 : 0)).slice(0, 8);
             $('upcomingList').innerHTML = items.length ? items.map(i => eventRowHtml(i, true)).join('') : '<li class="empty">接下來沒有安排</li>';
@@ -1240,10 +1285,12 @@
         onEnter($('eventName'), saveEvent);
         $('deleteEventBtn').addEventListener('click', () => {
             if (!editingEventId) return;
-            if (!confirm('確定要刪除這個行程嗎？')) return;
-            state.events = state.events.filter(e => e.id !== editingEventId);
+            const idx = state.events.findIndex(e => e.id === editingEventId);
+            if (idx < 0) return;
+            const [item] = state.events.splice(idx, 1);
             save(); renderCalendar();
             closeModal('eventModal');
+            toast('已刪除行程', { label: '復原', fn: () => { state.events.splice(idx, 0, item); save(); renderCalendar(); } });
         });
 
         /* =====================================================
@@ -1259,16 +1306,19 @@
                     </li>`).join('')
                 : '<li class="empty">目前沒有待辦事項，太棒了！</li>';
         }
-        function removeTodo(li) {
+        function removeTodo(li, doneText) {
             li.style.opacity = '0';
             li.style.transform = 'translateX(8px)';
             setTimeout(() => {
-                state.todos = state.todos.filter(t => t.id !== li.dataset.id);
+                const idx = state.todos.findIndex(t => t.id === li.dataset.id);
+                if (idx < 0) return;
+                const [item] = state.todos.splice(idx, 1);
                 save(); renderTodos();
+                toast(doneText, { label: '復原', fn: () => { state.todos.splice(idx, 0, item); save(); renderTodos(); } });
             }, 200);
         }
-        $('todoList').addEventListener('change', (e) => { if (e.target.checked) removeTodo(e.target.closest('li')); });
-        $('todoList').addEventListener('click', (e) => { if (e.target.closest('.del-btn')) removeTodo(e.target.closest('li')); });
+        $('todoList').addEventListener('change', (e) => { if (e.target.checked) removeTodo(e.target.closest('li'), '完成一項，讚！'); });
+        $('todoList').addEventListener('click', (e) => { if (e.target.closest('.del-btn')) removeTodo(e.target.closest('li'), '已刪除'); });
         function addTodo() {
             const text = $('todoInput').value.trim();
             if (!text) return;
@@ -1315,6 +1365,7 @@
          * 啟動：先用本機資料畫出畫面
          * ===================================================== */
         state = loadLocal();
+        if (removedDupes) saveLocal();
         renderExamChips();
         tick();
         setInterval(tick, 1000);
@@ -1343,7 +1394,14 @@
                 const auth = authM.getAuth(app);
                 const provider = new authM.GoogleAuthProvider();
                 provider.setCustomParameters({ prompt: 'select_account' });
-                fb = { auth, provider, authM, db: fsM.getFirestore(app), fs: fsM };
+                let db;
+                try {
+                    // 開啟離線快取：沒網路也能讀寫，連線後自動同步
+                    db = fsM.initializeFirestore(app, { localCache: fsM.persistentLocalCache({ tabManager: fsM.persistentMultipleTabManager() }) });
+                } catch (e) {
+                    db = fsM.getFirestore(app);
+                }
+                fb = { auth, provider, authM, db, fs: fsM };
                 renderAccount();
                 authM.getRedirectResult(auth).catch(err => console.warn('跳轉登入結果：', err));
                 authM.onAuthStateChanged(auth, onAuthChanged);
@@ -1353,33 +1411,47 @@
             }
         }
 
-        async function onAuthChanged(user) {
+        function onAuthChanged(user) {
             currentUser = user;
+            cloudReady = false;
+            if (unsubscribe) { unsubscribe(); unsubscribe = null; }
             if (!user) {
                 state = loadLocal();
                 renderAll(); renderAccount();
                 return;
             }
             renderAccount('同步中…');
-            try {
-                const snap = await fb.fs.getDoc(fb.fs.doc(fb.db, 'users', user.uid));
+            let first = true;
+            const ref = fb.fs.doc(fb.db, 'users', user.uid);
+            // 即時監聽：手機改了，電腦畫面也會自動更新
+            unsubscribe = fb.fs.onSnapshot(ref, (snap) => {
+                if (snap.metadata.hasPendingWrites) return;          // 自己剛寫入的，不用重畫
+                if (first && snap.metadata.fromCache && !snap.exists()) return; // 本機沒快取，等雲端回應
                 const cloud = snap.exists() ? normalize(snap.data()) : null;
-                const local = loadLocal();
-                if (cloud && !isEmpty(cloud)) {
+                const dupes = removedDupes;
+                if (first) {
+                    first = false;
+                    cloudReady = true;
+                    const local = loadLocal();
+                    if (cloud && !isEmpty(cloud)) {
+                        state = cloud;
+                    } else if (!isEmpty(local)) {
+                        state = local;   // 雲端是空的：把登入前的本機資料上傳，避免遺失
+                        save();
+                        toast('已把這台裝置的資料上傳到雲端');
+                    } else {
+                        state = normalize({});
+                    }
+                } else if (cloud) {
                     state = cloud;
-                } else if (!isEmpty(local)) {
-                    // 雲端是空的：把登入前的本機資料上傳，避免遺失
-                    state = local;
-                    save();
-                    toast('已把這台裝置的資料上傳到雲端');
-                } else {
-                    state = normalize({});
                 }
-                renderAll(); renderAccount();
-            } catch (e) {
-                console.error('雲端讀取失敗：', e);
+                if (dupes && cloud) { save(); toast(`已移除 ${dupes} 個和考試重複的行程`); }
+                renderAll();
+                renderAccount(snap.metadata.fromCache ? '離線中，連上網路後會自動同步' : '');
+            }, (err) => {
+                console.error('雲端讀取失敗：', err);
                 renderAccount('雲端讀取失敗，請檢查網路');
-            }
+            });
         }
 
         $('loginBtn').addEventListener('click', async () => {
