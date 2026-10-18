@@ -1,6 +1,6 @@
 // 快取版本號：以後更新 index.html、style.css、app.js 任何一個時，把這個數字改一下（例如 v11, v12...）
 // 才能讓使用者的手機抓到新版本並清掉舊快取
-const CACHE_NAME = 'study-countdown-v13';
+const CACHE_NAME = 'study-countdown-v14';
 
 // 開啟時要預先快取的本機檔案
 const PRECACHE_URLS = [
@@ -62,5 +62,18 @@ self.addEventListener('fetch', (event) => {
           (cached) => cached || (req.mode === 'navigate' ? caches.match('./index.html') : Response.error())
         )
       )
+  );
+});
+
+// 點系統通知：打開（或切回）App，並進入那個房間的聊天室
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const room = event.notification.data && event.notification.data.room;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const c = list.find((x) => 'focus' in x);
+      if (c) { c.postMessage({ openRoom: room }); return c.focus(); }
+      return self.clients.openWindow('./');
+    })
   );
 });

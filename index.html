@@ -480,17 +480,37 @@
         </div>
     </div>
 
-    <!-- 聊天：長按訊息 -->
-    <div class="modal bottom" id="msgModal" role="dialog" aria-modal="true" aria-label="訊息選項">
-        <div class="sheet">
-            <div class="grabber" data-close></div>
-            <div class="menu-list">
-                <button data-mm="copy" id="mmCopy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>複製文字</button>
-                <button data-mm="recall" id="mmRecall" class="danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>收回訊息</button>
-                <button data-mm="delete" id="mmDelete" class="danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>刪除這則訊息（房主）</button>
+    <!-- 聊天室（全螢幕：上方標題、中間訊息可以滑、下方輸入框固定） -->
+    <section class="chat-screen" id="chatScreen" role="dialog" aria-modal="true" aria-labelledby="chatTitle">
+        <header class="chat-head">
+            <button class="icon-btn ghost" id="chatBack" aria-label="返回房間"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <div class="chat-head-tx"><h2 class="zh" id="chatTitle">聊天室</h2><span id="chatSub"></span></div>
+            <button class="icon-btn" id="chatMore" aria-label="房間選項"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+        </header>
+        <div class="notify-bar" id="notifyBar" hidden>
+            <span>開啟通知，App 在背景時有新訊息會提醒你</span>
+            <button class="btn btn-small btn-accent" id="notifyBtn">開啟</button>
+            <button class="icon-btn ghost" id="notifyClose" aria-label="不用了"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+        <div class="chat-list" id="chatList" aria-live="polite"></div>
+        <form class="chat-bar" id="chatForm" autocomplete="off">
+            <label class="icon-btn ghost chat-photo" aria-label="傳照片"><input type="file" accept="image/*" id="chatFile" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg></label>
+            <textarea id="chatInput" rows="1" maxlength="1000" placeholder="輸入訊息…" aria-label="輸入訊息"></textarea>
+            <button class="chat-send" type="submit" aria-label="傳送"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg></button>
+        </form>
+    </section>
+
+    <!-- 聊天：長按訊息（訊息卡片浮起來＋選單） -->
+    <div class="msg-pop" id="msgPop" role="dialog" aria-modal="true" aria-label="訊息選項">
+        <div class="pop-inner">
+            <div class="pop-msg" id="popMsg"></div>
+            <div class="pop-menu">
+                <button data-pop="copy" id="popCopy"><span>複製文字</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button>
+                <button data-pop="save" id="popSave"><span>儲存照片</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
+                <button data-pop="recall" id="popRecall" class="danger"><span>收回訊息</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+                <button data-pop="delete" id="popDelete" class="danger"><span>刪除（房主）</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
             </div>
-            <p class="hint" id="mmNote" style="margin:0 0 12px"></p>
-            <div class="sheet-btns"><button class="btn" data-close style="flex:1">取消</button></div>
+            <p class="pop-note" id="popNote"></p>
         </div>
     </div>
 
