@@ -11,6 +11,7 @@
  *   4. 待辦
  *   5. 讀書計時
  *   6. 統計
+ *   質感效果（背景光、數字滾動、按鈕回饋、開啟畫面、滑動、指令面板、分享卡片）
  *   底部分頁列（手機在下方，電腦在上方）
  *   彈出視窗、提示訊息
  * ===================================================== */
@@ -20,7 +21,7 @@
  * ===================================================== */
 :root {
     --bg: #F7F6F2;
-    --glow: rgba(233, 177, 84, 0.18);
+    --glow: rgba(var(--accent-rgb), 0.2);
     --text: #16140F;
     --muted: rgba(22, 20, 15, 0.64);
     --faint: rgba(22, 20, 15, 0.34);
@@ -28,9 +29,10 @@
     --surface: rgba(22, 20, 15, 0.05);
     --surface-2: rgba(22, 20, 15, 0.08);
     --accent: #E9B154;
+    --accent-rgb: 233, 177, 84;
     --on-accent: #16140F;
     --accent-text: #8F560A;
-    --accent-soft: rgba(233, 177, 84, 0.22);
+    --accent-soft: rgba(var(--accent-rgb), 0.22);
     --important: #D9932B;
     --important-text: #8F560A;
     --important-soft: rgba(233, 177, 84, 0.2);
@@ -48,7 +50,7 @@
 }
 [data-theme="dark"] {
     --bg: #050608;
-    --glow: rgba(233, 177, 84, 0.11);
+    --glow: rgba(var(--accent-rgb), 0.12);
     --text: #F2F0E9;
     --muted: rgba(242, 240, 233, 0.64);
     --faint: rgba(242, 240, 233, 0.34);
@@ -56,9 +58,10 @@
     --surface: rgba(242, 240, 233, 0.06);
     --surface-2: rgba(242, 240, 233, 0.1);
     --accent: #E9B154;
+    --accent-rgb: 233, 177, 84;
     --on-accent: #050608;
     --accent-text: #E9B154;
-    --accent-soft: rgba(233, 177, 84, 0.16);
+    --accent-soft: rgba(var(--accent-rgb), 0.16);
     --important: #E9B154;
     --important-text: #F0C277;
     --important-soft: rgba(233, 177, 84, 0.16);
@@ -75,11 +78,19 @@
     --s0: #3987E5; --s1: #D95926; --s2: #199E70; --s3: #C98500; --s4: #D55181;
 }
 
+/* 主題色（在帳號視窗裡切換）：淺色模式的文字用比較深的同色，確保看得清楚 */
+[data-accent="mint"]   { --accent: #5ED3A8; --accent-rgb: 94, 211, 168;  --accent-text: #0B7A55; }
+[data-accent="violet"] { --accent: #A99BF0; --accent-rgb: 169, 155, 240; --accent-text: #5A48C8; }
+[data-accent="sakura"] { --accent: #F4A3BE; --accent-rgb: 244, 163, 190; --accent-text: #B23A68; }
+[data-theme="dark"][data-accent="mint"]   { --accent-text: #5ED3A8; }
+[data-theme="dark"][data-accent="violet"] { --accent-text: #A99BF0; }
+[data-theme="dark"][data-accent="sakura"] { --accent-text: #F4A3BE; }
+
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html { background: var(--bg); touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
     margin: 0; min-height: 100vh; min-height: 100dvh;
-    background: radial-gradient(circle at 50% 18%, var(--glow), transparent 60%) fixed, var(--bg);
+    background: transparent;   /* 底色在 html，背景光在 .bg-fx */
     color: var(--text);
     font-family: 'Manrope', 'Noto Sans TC', -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -126,8 +137,52 @@ button { cursor: pointer; }
 }
 .narrow { max-width: 520px; margin: 0 auto; }
 .tab { display: none; }
-.tab.active { display: block; animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+/* ① 頁面切換：淡入＋輕微往上滑 */
+.tab.active { display: block; animation: pageIn 0.38s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes pageIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ③ 會呼吸的背景光＋顆粒 */
+.bg-fx { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.bg-glow {
+    position: absolute; left: -25%; top: -45%; width: 150%; height: 120%;
+    background: radial-gradient(closest-side, var(--glow), transparent);
+    animation: breathe 14s ease-in-out infinite alternate; will-change: transform, opacity;
+}
+@keyframes breathe {
+    0% { transform: translate(-7%, -3%) scale(1); opacity: 0.75; }
+    50% { opacity: 1; }
+    100% { transform: translate(8%, 6%) scale(1.16); opacity: 0.85; }
+}
+.bg-grain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.08; mix-blend-mode: overlay; }
+[data-theme="light"] .bg-grain { opacity: 0.05; mix-blend-mode: multiply; }
+
+/* ② 數字滾動 */
+.roll { display: inline-flex; }
+.rd { display: inline-block; height: 1em; line-height: 1; overflow: hidden; vertical-align: top; }
+.rd-col { display: block; transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.rd-col span { display: block; height: 1em; line-height: 1; text-align: center; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ⑤ 按鈕回饋：按下縮小、放開彈回 */
+.btn, .icon-btn, .tab-btn, .chip, .subj-btn, .day-chip, .seg button, .color-dot, .accent-opt, .cal-cell, .bar-col, .fab {
+    transition: transform 0.16s cubic-bezier(0.3, 1.6, 0.5, 1), background-color 0.2s, border-color 0.2s, color 0.2s, opacity 0.2s;
+}
+.icon-btn:active, .tab-btn:active, .chip:active, .subj-btn:active, .day-chip:active, .seg button:active,
+.color-dot:active, .accent-opt:active, .cal-cell:active, .fab:active { transform: scale(0.93); }
+.btn:active { transform: scale(0.96); }
+.slot:active, .event-row:active { transform: scale(0.985); }
+
+/* ⑩ App 開啟畫面 */
+#splash {
+    position: fixed; inset: 0; z-index: 500; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+    background: #050608; color: rgba(242, 240, 233, 0.8); font: 700 13px 'Noto Sans TC', sans-serif; letter-spacing: 0.4em; text-indent: 0.4em;
+    transition: opacity 0.5s ease, visibility 0.5s;
+}
+#splash svg { animation: splashIn 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes splashIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: none; } }
+@media (display-mode: standalone), (display-mode: fullscreen) { #splash { display: flex; } }
+#splash.hide { opacity: 0; visibility: hidden; }
 
 .label { margin: 0; font-size: 11.5px; letter-spacing: 0.24em; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
 .block { border-top: 1px solid var(--line); padding-top: 18px; margin-top: 22px; }
@@ -332,7 +387,7 @@ button { cursor: pointer; }
     width: 56px; height: 56px; border-radius: 28px; border: none; z-index: 35;
     background: var(--accent); color: var(--on-accent);
     display: none; align-items: center; justify-content: center;
-    box-shadow: 0 10px 30px rgba(233, 177, 84, 0.3);
+    box-shadow: 0 10px 30px rgba(var(--accent-rgb), 0.3);
 }
 .fab svg { width: 24px; height: 24px; }
 body[data-tab="tab-calendar"] .fab { display: flex; }
@@ -383,6 +438,34 @@ body[data-tab="tab-calendar"] .fab { display: flex; }
 .del-btn:hover { color: var(--important-text); background: var(--important-soft); }
 .del-btn svg { width: 16px; height: 16px; }
 .todo-list .check-item { border-bottom: 1px solid var(--line); transition: opacity 0.2s, transform 0.2s; }
+
+/* ⑥ 待辦左右滑 */
+.todo-list .swipe-row { display: block; position: relative; overflow: hidden; padding: 0; }
+.swipe-fg {
+    position: relative; display: flex; align-items: center; gap: 12px; min-height: 46px;
+    touch-action: pan-y; background: transparent; z-index: 1;
+}
+.swipe-fg.anim { transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.swipe-row.swiping .swipe-fg { background: var(--bg); }
+.swipe-bg {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: space-between;
+    padding: 0 18px; color: #FFFFFF; font-size: 14px; font-weight: 700;
+}
+.swipe-row.swiping .swipe-bg { display: flex; }
+.swipe-row.to-right .swipe-bg { background: #199E70; }
+.swipe-row.to-left .swipe-bg { background: #E5484D; }
+.swipe-row.to-right .sw-del, .swipe-row.to-left .sw-done { visibility: hidden; }
+.swipe-bg span { display: inline-flex; align-items: center; gap: 6px; }
+.swipe-bg svg { width: 18px; height: 18px; }
+.swipe-hint { font-size: 12px; color: var(--faint); margin: 10px 0 0; font-family: 'Noto Sans TC', sans-serif; }
+@media (hover: hover) { .swipe-hint { display: none; } }
+
+/* ⑥ 行事曆滑動換月 */
+#calGrid { touch-action: pan-y; }
+#calGrid.slide-next { animation: slideNext 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); }
+#calGrid.slide-prev { animation: slidePrev 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes slideNext { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes slidePrev { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
 
 /* =====================================================
  * 5. 讀書計時
@@ -628,6 +711,47 @@ textarea.field { height: auto; min-height: 96px; resize: vertical; line-height: 
     font-family: 'Noto Sans TC', sans-serif;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ④ 帳號視窗裡的主題色 */
+.accent-block { margin: 4px 0 18px; }
+.accent-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.accent-opt {
+    min-height: 44px; border-radius: 14px; border: 1px solid var(--line); background: transparent;
+    display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 500;
+    font-family: 'Noto Sans TC', sans-serif; padding: 0 4px;
+}
+.accent-opt i { width: 14px; height: 14px; border-radius: 7px; flex-shrink: 0; }
+.accent-opt.active { border: 1.5px solid var(--accent); background: var(--accent-soft); font-weight: 700; }
+
+/* ⑧ 分享卡片 */
+.share-sheet { max-width: 380px; text-align: center; }
+.share-sheet img { width: 100%; max-width: 270px; aspect-ratio: 9 / 16; border-radius: 16px; display: block; margin: 0 auto 12px; background: #050608; box-shadow: var(--shadow); }
+.share-sheet .sheet-btns { justify-content: center; }
+.share-sheet a.btn { text-decoration: none; color: inherit; }
+
+/* ⑦ 指令面板、快捷鍵 */
+.kbd {
+    display: inline-block; min-width: 22px; text-align: center; padding: 2px 7px; border-radius: 6px;
+    border: 1px solid var(--line); font: 600 12px 'Manrope', sans-serif; color: var(--muted);
+}
+.palette-modal { align-items: flex-start; padding-top: max(12vh, 60px); }
+.palette { max-width: 580px; padding: 0; overflow: hidden; }
+.palette-input { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.palette-input svg { width: 18px; height: 18px; color: var(--muted); flex-shrink: 0; }
+.palette-input input {
+    flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-size: 17px;
+    font-family: 'Noto Sans TC', sans-serif; color: var(--text);
+}
+.palette-list { max-height: 56vh; overflow-y: auto; padding: 8px; }
+.palette-group { margin: 8px 12px 6px; font-size: 11.5px; letter-spacing: 0.2em; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
+.palette-item {
+    width: 100%; display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border: none;
+    background: transparent; border-radius: 10px; text-align: left; font-size: 15px; font-family: 'Noto Sans TC', sans-serif;
+}
+.palette-item .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-item.sel { background: var(--accent-soft); }
+.keys-list { display: flex; flex-direction: column; margin-bottom: 14px; }
+.keys-list > div { display: flex; align-items: center; justify-content: space-between; min-height: 38px; font-size: 14px; border-bottom: 1px solid var(--line); font-family: 'Noto Sans TC', sans-serif; }
 .toast { display: flex; align-items: center; gap: 14px; }
 .toast.has-action.show { pointer-events: auto; }
 .toast-btn { border: none; background: none; padding: 4px 2px; font-weight: 700; font-size: 14px; color: var(--accent-text); font-family: 'Noto Sans TC', sans-serif; }

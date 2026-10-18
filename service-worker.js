@@ -1,6 +1,6 @@
-// 快取版本號：以後更新 index.html、style.css、app.js 任何一個時，把這個數字改一下（例如 v10, v11...）
+// 快取版本號：以後更新 index.html、style.css、app.js 任何一個時，把這個數字改一下（例如 v11, v12...）
 // 才能讓使用者的手機抓到新版本並清掉舊快取
-const CACHE_NAME = 'study-countdown-v9';
+const CACHE_NAME = 'study-countdown-v10';
 
 // 開啟時要預先快取的本機檔案
 const PRECACHE_URLS = [
@@ -10,7 +10,9 @@ const PRECACHE_URLS = [
   './app.js',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './apple-touch-icon.png',
+  './favicon-32.png'
 ];
 
 // 可以存進快取、讓 App 離線也能開的外部資源（Firebase 程式庫、字型）

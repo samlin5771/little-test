@@ -12,7 +12,32 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="學測倒數">
-    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <!-- iPhone 從主畫面打開時的啟動畫面（黑底，不再閃白） -->
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="splash-750x1334.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="splash-828x1792.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1125x2436.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1242x2688.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1170x2532.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1284x2778.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1179x2556.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1290x2796.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1206x2622.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1320x2868.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1260x2736.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 360px) and (device-height: 780px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1080x2340.png">
+
+    <!-- 分享連結預覽（LINE、IG、Messenger、Discord） -->
+    <meta name="description" content="倒數學測和模考、安排每週進度、記錄讀書時間，手機電腦同步。">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="學測倒數 & 讀書計畫">
+    <meta property="og:description" content="倒數學測和模考、安排每週進度、記錄讀書時間，手機電腦同步。">
+    <meta property="og:url" content="https://samlin5771.github.io/little-test/">
+    <meta property="og:image" content="https://samlin5771.github.io/little-test/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
 
     <!-- 畫面出現前先套用主題：有手動選過就用選過的，否則跟著手機設定 -->
     <script>
@@ -23,6 +48,9 @@
                 t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
             }
             document.documentElement.setAttribute('data-theme', t);
+            var a = null;
+            try { a = localStorage.getItem('study_accent'); } catch (e) {}
+            if (a === 'mint' || a === 'violet' || a === 'sakura') document.documentElement.setAttribute('data-accent', a);
         })();
     </script>
 
@@ -33,6 +61,21 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body data-tab="tab-countdown">
+
+    <!-- 會呼吸的背景光＋顆粒質感 -->
+    <div class="bg-fx" aria-hidden="true">
+        <div class="bg-glow"></div>
+        <svg class="bg-grain" xmlns="http://www.w3.org/2000/svg">
+            <filter id="grainFilter"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/></filter>
+            <rect width="100%" height="100%" filter="url(#grainFilter)"/>
+        </svg>
+    </div>
+
+    <!-- App 開啟畫面（只在加到主畫面的 App 出現） -->
+    <div id="splash" aria-hidden="true">
+        <svg viewBox="0 0 150 150" width="76" height="76"><circle cx="75" cy="75" r="56" fill="none" stroke="rgba(242,240,233,0.12)" stroke-width="12"/><circle cx="75" cy="75" r="56" fill="none" stroke="#E9B154" stroke-width="12" stroke-linecap="round" stroke-dasharray="351.9" stroke-dashoffset="88" transform="rotate(-90 75 75)"/><circle cx="75" cy="75" r="9" fill="#E9B154"/></svg>
+        <span>學測倒數</span>
+    </div>
 
     <!-- 頂部列 -->
     <header class="topbar">
@@ -259,6 +302,15 @@
                 </div>
             </div>
             <p class="empty" id="accountHint" style="padding-top:0">登入 Google 帳號後，資料會自動同步到雲端，換手機或電腦也看得到。</p>
+            <div class="accent-block">
+                <span class="field-label">主題色</span>
+                <div class="accent-grid" id="accentGrid">
+                    <button class="accent-opt" data-accent="amber"><i style="background:#E9B154"></i>琥珀</button>
+                    <button class="accent-opt" data-accent="mint"><i style="background:#5ED3A8"></i>薄荷</button>
+                    <button class="accent-opt" data-accent="violet"><i style="background:#A99BF0"></i>霧紫</button>
+                    <button class="accent-opt" data-accent="sakura"><i style="background:#F4A3BE"></i>櫻花</button>
+                </div>
+            </div>
             <div class="sheet-btns">
                 <button class="btn" data-close>關閉</button>
                 <button class="btn btn-accent" id="loginBtn">使用 Google 登入</button>
@@ -282,6 +334,50 @@
                 <button class="btn" data-close>取消</button>
                 <button class="btn btn-accent" id="saveLogBtn">儲存</button>
             </div>
+        </div>
+    </div>
+
+    <!-- 分享卡片 -->
+    <div class="modal" id="shareModal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+        <div class="sheet share-sheet">
+            <h2 id="shareTitle">分享卡片</h2>
+            <img id="shareImg" alt="今天的讀書卡片">
+            <p class="note" id="shareNote">手機上也可以長按圖片儲存</p>
+            <div class="sheet-btns">
+                <button class="btn" data-close>關閉</button>
+                <a class="btn" id="shareDownload" download="study-card.png">儲存圖片</a>
+                <button class="btn btn-accent" id="shareNativeBtn">分享</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 指令面板（⌘K） -->
+    <div class="modal palette-modal" id="paletteModal" role="dialog" aria-modal="true" aria-label="指令面板">
+        <div class="sheet palette">
+            <div class="palette-input">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+                <input type="text" id="paletteInput" placeholder="輸入文字新增待辦或行程，或搜尋功能…" autocomplete="off" enterkeyhint="go">
+                <span class="kbd">esc</span>
+            </div>
+            <div class="palette-list" id="paletteList" role="listbox"></div>
+        </div>
+    </div>
+
+    <!-- 快捷鍵一覽 -->
+    <div class="modal" id="keysModal" role="dialog" aria-modal="true" aria-labelledby="keysTitle">
+        <div class="sheet">
+            <h2 id="keysTitle">鍵盤快捷鍵</h2>
+            <div class="keys-list">
+                <div><span>切換分頁</span><span class="kbd">1 – 5</span></div>
+                <div><span>開始／暫停計時</span><span class="kbd">Space</span></div>
+                <div><span>新增（待辦、行程）</span><span class="kbd">N</span></div>
+                <div><span>上一個／下一個（週、月）</span><span class="kbd">← →</span></div>
+                <div><span>切換深淺色</span><span class="kbd">T</span></div>
+                <div><span>指令面板</span><span class="kbd">⌘K</span></div>
+                <div><span>這張快捷鍵表</span><span class="kbd">?</span></div>
+                <div><span>關閉視窗</span><span class="kbd">Esc</span></div>
+            </div>
+            <div class="sheet-btns"><button class="btn" data-close>關閉</button></div>
         </div>
     </div>
 
