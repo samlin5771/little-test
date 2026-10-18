@@ -838,6 +838,85 @@ body.sub #themeBtn, body.sub #accountBtn { display: none; }
 .rank-row .track i { display: block; height: 100%; border-radius: 3px; transition: width 0.4s; }
 .rank-row .t { width: 76px; text-align: right; font-size: 13px; font-weight: 600; }
 
+/* --- 讀書房間：大家／聊天 切換 --- */
+.room-seg { display: grid; width: 100%; margin: 2px 0 16px; }
+.room-seg button { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; }
+.seg-n { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--exam); color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; font-family: 'Manrope', sans-serif; }
+.seg-n.ok { background: var(--mark-green-bg); color: var(--mark-green); }
+.seg-n[hidden] { display: none; }
+
+/* --- 聊天室 --- */
+.chat-wrap { display: flex; flex-direction: column; min-height: calc(100dvh - 210px); }
+.chat-list { flex: 1; padding-bottom: 8px; }
+.chat-empty { text-align: center; padding: 60px 10px; font-family: 'Noto Sans TC', sans-serif; }
+.chat-empty p { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
+.chat-empty span { font-size: 13px; color: var(--muted); }
+.chat-sys { text-align: center; margin: 16px 0 6px; font-size: 12px; color: var(--faint); font-family: 'Noto Sans TC', sans-serif; }
+.msg { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
+.msg.grouped { margin-top: 3px; }
+.msg.mine { justify-content: flex-end; }
+.msg-col { min-width: 0; max-width: 78%; }
+.msg-line { display: flex; align-items: flex-end; gap: 6px; }
+.chat-av, .chat-av-sp { width: 30px; height: 30px; border-radius: 15px; flex-shrink: 0; }
+.chat-av { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 700; font-family: 'Noto Sans TC', sans-serif; }
+.chat-who { margin: 0 0 3px 4px; font-size: 11.5px; font-weight: 600; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
+.bubble {
+    padding: 9px 13px; border-radius: 18px; font-size: 15px; line-height: 1.5; font-family: 'Noto Sans TC', sans-serif;
+    white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+.msg.them .bubble { background: var(--surface-2); border-top-left-radius: 6px; }
+.msg.them.grouped .bubble { border-top-left-radius: 18px; border-bottom-left-radius: 6px; }
+.msg.mine .bubble { background: var(--accent); color: var(--on-accent); border-top-right-radius: 6px; max-width: 78%; }
+.msg.mine.grouped .bubble { border-top-right-radius: 18px; border-bottom-right-radius: 6px; }
+.msg.mine .bubble a { color: inherit; text-decoration: underline; }
+.bubble a { color: var(--accent-text); }
+.chat-img { display: block; max-width: min(240px, 66vw); max-height: 300px; border-radius: 16px; border: 1px solid var(--line); object-fit: cover; cursor: zoom-in; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.chat-meta { display: flex; flex-direction: column; gap: 1px; font-size: 10.5px; color: var(--faint); white-space: nowrap; font-family: 'Noto Sans TC', sans-serif; flex-shrink: 0; }
+.msg.mine .chat-meta { align-items: flex-end; }
+.chat-bar {
+    position: sticky; bottom: calc(66px + env(safe-area-inset-bottom)); z-index: 5;
+    display: flex; align-items: flex-end; gap: 8px; margin: 8px -20px 0; padding: 10px 14px 12px;
+    background: var(--bg); border-top: 1px solid var(--line);
+}
+.chat-bar .icon-btn { width: 42px; height: 42px; cursor: pointer; }
+#chatInput {
+    flex: 1; min-width: 0; min-height: 42px; max-height: 120px; resize: none; padding: 10px 16px; border-radius: 21px;
+    border: 1px solid var(--line); background: var(--surface); font-size: 16px; line-height: 1.35; outline: none;
+    font-family: 'Noto Sans TC', sans-serif;
+}
+#chatInput:focus { border-color: var(--accent); }
+.chat-send { width: 42px; height: 42px; border-radius: 21px; border: none; flex-shrink: 0; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center; }
+.chat-send svg { width: 18px; height: 18px; }
+.chat-send:active { transform: scale(0.92); }
+@media (min-width: 900px) { .chat-bar { bottom: 0; border-radius: 0; } .chat-wrap { min-height: calc(100dvh - 160px); } }
+.img-modal { padding: 16px; background: rgba(0, 0, 0, 0.88); }
+.img-modal img { max-width: 100%; max-height: 86vh; border-radius: 12px; object-fit: contain; }
+.img-close { position: absolute; top: calc(16px + env(safe-area-inset-top)); right: 16px; background: rgba(0, 0, 0, 0.5); color: #fff; border-color: rgba(255, 255, 255, 0.2); }
+
+/* --- 加到主畫面教學（置中圖卡） --- */
+.install-card { max-width: 380px; padding: 26px 22px 22px; border-radius: 28px; }
+.install-head { text-align: center; margin-bottom: 18px; }
+.install-icon { border-radius: 16px; background: #050608; display: block; margin: 0 auto 14px; box-shadow: 0 10px 30px rgba(var(--accent-rgb), 0.25); }
+.install-head h2 { margin: 0 0 6px; font-size: 19px; }
+.install-head p { margin: 0; font-size: 13.5px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
+.install-card .seg { display: grid; margin-bottom: 6px; }
+.install-steps { list-style: none; margin: 0 0 16px; padding: 0; }
+.install-steps[hidden] { display: none; }
+.install-steps li { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); font-family: 'Noto Sans TC', sans-serif; }
+.install-steps li:last-child { border-bottom: none; }
+.st-n { width: 26px; height: 26px; border-radius: 13px; background: var(--accent-soft); color: var(--accent-text); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex-shrink: 0; }
+.install-steps li > div { flex: 1; min-width: 0; }
+.install-steps b { display: block; font-size: 15px; }
+.install-steps li > div > span { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.st-ic { width: 40px; height: 40px; border-radius: 12px; background: var(--surface-2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.st-ic svg { width: 22px; height: 22px; }
+.mini-app { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); display: block; }
+
+/* 有固定按鈕的頁面，提示訊息往上移，不要蓋住按鈕 */
+body:has(.tab.active .sticky-cta) .toast, body:has(.tab.active .chat-bar) .toast { bottom: calc(160px + env(safe-area-inset-bottom)); }
+@media (min-width: 900px) { body:has(.tab.active .sticky-cta) .toast, body:has(.tab.active .chat-bar) .toast { bottom: 110px; } }
+
 /* 電腦子母畫面（內容會複製到小視窗） */
 .pip-body { margin: 0; height: 100vh; display: flex; align-items: center; background: var(--bg); color: var(--text); font-family: 'Manrope', 'Noto Sans TC', sans-serif; overflow: hidden; }
 .pip { display: flex; align-items: center; gap: 18px; padding: 0 18px; width: 100%; }
@@ -1000,3 +1079,5 @@ textarea.field { height: auto; min-height: 96px; resize: vertical; line-height: 
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+[hidden] { display: none !important; }
+.chat-wrap .room-seg { position: sticky; top: calc(74px + env(safe-area-inset-top)); z-index: 6; background: var(--bg); box-shadow: 0 -14px 0 var(--bg); }

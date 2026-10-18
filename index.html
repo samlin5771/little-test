@@ -73,7 +73,7 @@
 
     <!-- App 開啟畫面（只在加到主畫面的 App 出現） -->
     <div id="splash" aria-hidden="true">
-        <svg viewBox="0 0 150 150" width="76" height="76"><circle cx="75" cy="75" r="56" fill="none" stroke="rgba(242,240,233,0.12)" stroke-width="12"/><circle cx="75" cy="75" r="56" fill="none" stroke="#E9B154" stroke-width="12" stroke-linecap="round" stroke-dasharray="351.9" stroke-dashoffset="88" transform="rotate(-90 75 75)"/><circle cx="75" cy="75" r="9" fill="#E9B154"/></svg>
+        <svg viewBox="0 0 150 150" width="76" height="76"><circle cx="75" cy="75" r="56" fill="none" stroke="rgba(242,240,233,0.12)" stroke-width="12"/><circle cx="75" cy="75" r="56" fill="none" style="stroke:var(--accent)" stroke-width="12" stroke-linecap="round" stroke-dasharray="351.9" stroke-dashoffset="88" transform="rotate(-90 75 75)"/><circle cx="75" cy="75" r="9" style="fill:var(--accent)"/></svg>
         <span>學測倒數</span>
     </div>
 
@@ -333,6 +333,7 @@
                     <button class="accent-opt" data-accent="sakura"><i style="background:#F4A3BE"></i>櫻花</button>
                 </div>
             </div>
+            <button class="text-link" id="installGuideBtn" style="margin:-6px 0 10px">把學測倒數加到主畫面（教學）</button>
             <div class="sheet-btns">
                 <button class="btn" data-close>關閉</button>
                 <button class="btn btn-accent" id="loginBtn">使用 Google 登入</button>
@@ -457,6 +458,46 @@
             </div>
             <div class="sheet-btns"><button class="btn" data-close style="flex:1">取消</button></div>
         </div>
+    </div>
+
+    <!-- 第一次打開：加到主畫面教學 -->
+    <div class="modal" id="installModal" role="dialog" aria-modal="true" aria-labelledby="installTitle">
+        <div class="sheet install-card">
+            <div class="install-head"><svg viewBox="0 0 150 150" width="56" height="56" aria-hidden="true" class="install-icon"><circle cx="75" cy="75" r="50" fill="none" stroke="rgba(242,240,233,.14)" stroke-width="12"/><circle cx="75" cy="75" r="50" fill="none" style="stroke:var(--accent)" stroke-width="12" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="80" transform="rotate(-90 75 75)"/><circle cx="75" cy="75" r="9" style="fill:var(--accent)"/></svg>
+                <h2 id="installTitle">把學測倒數加到主畫面</h2>
+                <p>像 App 一樣全螢幕開啟、打開更快</p>
+            </div>
+            <div class="seg two" role="tablist" aria-label="手機類型">
+                <button role="tab" data-os="ios">iPhone · iPad</button>
+                <button role="tab" data-os="android">Android</button>
+            </div>
+            <ol class="install-steps" id="installIOS"><li><span class="st-n num">1</span><div><b>點「分享」按鈕</b><span>Safari 在畫面最下面；iPhone 的 Chrome 在網址列右邊</span></div><span class="st-ic"><svg viewBox="0 0 24 24" fill="none" stroke="#3B9BFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8"/></svg></span></li><li><span class="st-n num">2</span><div><b>往下滑，選「加入主畫面」</b><span>找不到的話，點最下面的「編輯動作」把它加進來</span></div><span class="st-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg></span></li><li><span class="st-n num">3</span><div><b>按右上角「新增」</b><span>桌面會出現學測倒數的圖示，之後從圖示打開</span></div><span class="st-ic"><span class="mini-app"></span></span></li></ol>
+            <ol class="install-steps" id="installAndroid" hidden><li><span class="st-n num">1</span><div><b>點右上角「⋮」選單</b><span>用 Chrome 開啟這個網頁</span></div><span class="st-ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></span></li><li><span class="st-n num">2</span><div><b>選「加到主畫面」或「安裝應用程式」</b><span>有些手機會直接跳出「安裝」提示，按它也可以</span></div><span class="st-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg></span></li><li><span class="st-n num">3</span><div><b>按「安裝」</b><span>桌面會出現學測倒數的圖示，之後從圖示打開</span></div><span class="st-ic"><span class="mini-app"></span></span></li></ol>
+            <div class="sheet-btns">
+                <button class="btn" data-install-done>以後再說</button>
+                <button class="btn btn-accent" data-install-done style="flex:1">我知道了</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 聊天：長按訊息 -->
+    <div class="modal bottom" id="msgModal" role="dialog" aria-modal="true" aria-label="訊息選項">
+        <div class="sheet">
+            <div class="grabber" data-close></div>
+            <div class="menu-list">
+                <button data-mm="copy" id="mmCopy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>複製文字</button>
+                <button data-mm="recall" id="mmRecall" class="danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>收回訊息</button>
+                <button data-mm="delete" id="mmDelete" class="danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>刪除這則訊息（房主）</button>
+            </div>
+            <p class="hint" id="mmNote" style="margin:0 0 12px"></p>
+            <div class="sheet-btns"><button class="btn" data-close style="flex:1">取消</button></div>
+        </div>
+    </div>
+
+    <!-- 聊天：看大圖 -->
+    <div class="modal img-modal" id="imgModal" role="dialog" aria-modal="true" aria-label="照片">
+        <img id="imgView" alt="照片" data-close>
+        <button class="icon-btn img-close" data-close aria-label="關閉"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

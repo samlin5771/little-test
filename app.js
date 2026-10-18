@@ -53,11 +53,16 @@ const LS = {
     todos: 'study_todos', weekly: 'study_weekly', events: 'study_events',
     exam: 'selectedExamKey', theme: 'study_theme', tab: 'study_tab', accent: 'study_accent',
     sessions: 'study_sessions', timer: 'study_timer', tpref: 'study_timer_pref',
-    aiPref: 'study_ai_pref', aiCount: 'study_ai_count', room: 'study_room'
+    aiPref: 'study_ai_pref', aiCount: 'study_ai_count', room: 'study_room',
+    install: 'study_install_seen', chatSeen: 'study_chat_seen', photoCount: 'study_photo_count'
 };
-const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(
-    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><rect width='40' height='40' fill='#E9B154'/>" +
-    "<circle cx='20' cy='15' r='7' fill='#16140F'/><path d='M6 37c2-8 8-11 14-11s12 3 14 11' fill='#16140F'/></svg>");
+// 沒有頭像時的預設圖（顏色跟著主題色）
+function defaultAvatar() {
+    const c = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#E9B154';
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(
+        `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><rect width='40' height='40' fill='${c}'/>` +
+        "<circle cx='20' cy='15' r='7' fill='#16140F'/><path d='M6 37c2-8 8-11 14-11s12 3 14 11' fill='#16140F'/></svg>");
+}
 
 /* =====================================================
  * 小工具
@@ -190,6 +195,7 @@ $('accentGrid').addEventListener('click', (e) => {
     if (!b) return;
     applyAccent(b.dataset.accent);
     lsSet(LS.accent, b.dataset.accent);
+    renderAccount();   // 預設頭像換色
 });
 
 $('themeBtn').addEventListener('click', () => {
@@ -260,7 +266,10 @@ document.querySelectorAll('.modal').forEach(m => {
     m.addEventListener('click', (e) => { if (e.target === m || e.target.closest('[data-close]')) closeModal(m.id); });
 });
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') document.querySelectorAll('.modal.open').forEach(m => closeModal(m.id));
+    if (e.key !== 'Escape') return;
+    const open = document.querySelectorAll('.modal.open');
+    if (open.length) open.forEach(m => closeModal(m.id));
+    else if (document.body.classList.contains('sub') && !isTyping(document.activeElement)) goBack();   // 子頁面按 Esc 返回
 });
 function onEnter(el, fn) {
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); fn(); } });
@@ -2025,6 +2034,7 @@ function roomStop() {
     if (roomUnsub) { roomUnsub(); roomUnsub = null; }
     profUnsubs.forEach(u => u()); profUnsubs = []; profKey = '';
     myRooms = []; profiles = {}; roomsLoaded = false; roomView = pendingRoom = null;
+    chatStop();
 }
 
 function enableRoom() {
@@ -2080,6 +2090,7 @@ async function leaveRoom(code) {
     try {
         if ((r.members || []).length <= 1) await fs.deleteDoc(ref);   // 最後一個人離開就刪掉房間
         else await fs.updateDoc(ref, { members: fs.arrayRemove(currentUser.uid) });
+        if (chatRoom === code) chatStop();
         roomView = null; renderRoom();
         toast('已離開房間');
     } catch (e) { console.error(e); toast('離開失敗，請檢查網路'); }
@@ -2111,9 +2122,12 @@ function seatFrac(s) {
     if (s.phase !== 'focus') return 0;
     return s.left != null && s.left + s.el > 0 ? Math.min(1, s.el / (s.el + Math.max(0, s.left))) : Math.min(1, s.el / 3600000);
 }
+// 成員名字（自己的狀態還沒上傳時，用自己的暱稱）
+const memberName = (m) => m.p?.name || (m.u === currentUser?.uid ? myName() : '同學');
 const ticketAvs = (ms) => `<span class="avatars">${ms.slice(0, 4).map(u => avHtml(profiles[u], u)).join('')}${ms.length > 4 ? `<span class="av more num">+${ms.length - 4}</span>` : ''}</span>`;
 const codeBoxes = (v) => Array.from({ length: 6 }, (_, i) => `<span class="cb ${i === Math.min(v.length, 5) ? 'cur' : ''}">${esc(v[i] || '')}</span>`).join('');
 let codeDraft = '';
+let roomPane = 'people';   // 房間內：people 大家、chat 聊天
 
 function renderRoom(errMsg) {
     const el = $('tab-room');
@@ -2121,6 +2135,7 @@ function renderRoom(errMsg) {
     $('pageTitle').textContent = '讀書房間';
     if (!currentUser) {
         setTopExtra('tab-room', '');
+        el.dataset.view = '';
         el.innerHTML = `<div class="sub-wrap">
             <div class="room-empty"><p class="zh" style="font-size:18px;font-weight:700;margin:0">和朋友一起讀書</p>
             <p class="empty">建立房間、分享邀請碼，就能看到大家正在讀什麼、今天讀了多久。<br>需要先登入 Google 帳號。</p>
@@ -2128,6 +2143,7 @@ function renderRoom(errMsg) {
         return;
     }
     if (!roomsLoaded) {
+        el.dataset.view = '';
         el.innerHTML = `<div class="sub-wrap"><p class="ai-loading" style="margin-top:30px">${errMsg ? esc(errMsg) : '<span class="ai-spin"></span>載入房間中…'}</p></div>`;
         return;
     }
@@ -2136,7 +2152,7 @@ function renderRoom(errMsg) {
     if (roomView) {
         const r = myRooms.find(x => x.id === roomView);
         if (!r) {
-            if (roomView === pendingRoom) { el.innerHTML = `<div class="sub-wrap"><p class="ai-loading" style="margin-top:30px"><span class="ai-spin"></span>進入房間中…</p></div>`; return; }
+            if (roomView === pendingRoom) { el.dataset.view = ''; el.innerHTML = `<div class="sub-wrap"><p class="ai-loading" style="margin-top:30px"><span class="ai-spin"></span>進入房間中…</p></div>`; return; }
             roomView = null; return renderRoom();
         }
         $('pageTitle').textContent = r.name;
@@ -2148,7 +2164,33 @@ function renderRoom(errMsg) {
         const rank = ms.slice().sort((a, b) => total(b) - total(a));
         const maxMin = Math.max(1, ...rank.map(total));
         const studying = ms.filter(m => m.s.phase === 'focus').length;
+        chatStart(r.id);
+        const unread = chatUnread();
+        const seg = `<div class="seg two room-seg" role="tablist" aria-label="房間">
+                <button role="tab" aria-selected="${roomPane === 'people'}" class="${roomPane === 'people' ? 'active' : ''}" data-pane="people">大家${studying ? `<span class="seg-n ok">${studying}</span>` : ''}</button>
+                <button role="tab" aria-selected="${roomPane === 'chat'}" class="${roomPane === 'chat' ? 'active' : ''}" data-pane="chat">聊天<span class="seg-n" id="chatBadge" ${unread ? '' : 'hidden'}>${unread}</span></button>
+            </div>`;
+        if (roomPane === 'chat') {
+            const viewKey = 'chat:' + r.id;
+            if (el.dataset.view !== viewKey || !$('chatList')) {
+                el.dataset.view = viewKey;
+                el.innerHTML = `<div class="sub-wrap chat-wrap">${seg}
+                    <div class="chat-list" id="chatList" aria-live="polite"></div>
+                    <form class="chat-bar" id="chatForm" autocomplete="off">
+                        <label class="icon-btn ghost chat-photo" aria-label="傳照片"><input type="file" accept="image/*" id="chatFile" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg></label>
+                        <textarea id="chatInput" rows="1" maxlength="1000" placeholder="輸入訊息…" enterkeyhint="send" aria-label="輸入訊息"></textarea>
+                        <button class="chat-send" type="submit" aria-label="傳送"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg></button>
+                    </form>
+                </div>`;
+                renderChatList(true);
+            } else {
+                const b = $('chatBadge'); if (b) { b.hidden = !unread; b.textContent = unread; }
+            }
+            return;
+        }
+        el.dataset.view = 'people:' + r.id;
         el.innerHTML = `<div class="sub-wrap">
+            ${seg}
             <div class="room-status">
                 ${studying ? `<span class="tag ok"><span class="live-dot"></span>${studying} 人在讀</span>` : '<span class="tag mute">目前沒人在讀</span>'}
                 <span class="muted">${ms.length} 位成員</span>
@@ -2159,8 +2201,8 @@ function renderRoom(errMsg) {
                 const fr = seatFrac(m.s);
                 return `<div class="seat ${m.s.phase}" data-seat="${m.u}">
                     <div class="seat-av"><svg viewBox="0 0 68 68" aria-hidden="true"><circle class="st-track" cx="34" cy="34" r="31"/><circle class="st-bar" cx="34" cy="34" r="31" stroke-dasharray="${SEAT_C.toFixed(1)}" stroke-dashoffset="${(SEAT_C * (1 - fr)).toFixed(1)}"/></svg>
-                        <span class="seat-face" style="background:${avColor(m.u)}">${esc((m.p?.name || '?').slice(0, 1))}</span></div>
-                    <b class="sn">${esc(m.p?.name || '同學')}${m.u === meUid ? '<small>（你）</small>' : ''}</b>
+                        <span class="seat-face" style="background:${avColor(m.u)}">${esc(memberName(m).slice(0, 1))}</span></div>
+                    <b class="sn">${esc(memberName(m))}${m.u === meUid ? '<small>（你）</small>' : ''}</b>
                     ${seatSub(m.s)}
                     <span class="sc num" data-clock="${m.u}">${memberClock(m.s)}</span>
                 </div>`;
@@ -2169,7 +2211,7 @@ function renderRoom(errMsg) {
                 <div class="sec-head"><h3>今天排行</h3><span>正在讀的那一輪也算</span></div>
                 ${rank.map((m, i) => `<div class="rank-row ${m.u === meUid ? 'me' : ''}">
                     <span class="rk num" ${i < 3 && total(m) ? `style="background:${MEDAL[i]};color:#050608"` : ''}>${i + 1}</span>
-                    <span class="nm">${esc(m.p?.name || '同學')}</span>
+                    <span class="nm">${esc(memberName(m))}</span>
                     <span class="track"><i style="width:${(total(m) / maxMin * 100).toFixed(1)}%;background:${avColor(m.u)}"></i></span>
                     <span class="t num">${fmtHM(total(m))}</span>
                 </div>`).join('')}
@@ -2180,8 +2222,7 @@ function renderRoom(errMsg) {
         return;
     }
     setTopExtra('tab-room', `<button class="me-chip" data-top="me" aria-label="我的暱稱與隱身設定"><span class="av" style="background:${avColor(meUid)}">${esc(myName().slice(0, 1))}</span><span class="zh">${esc(myName())}</span></button>`);
-    el.innerHTML = `<div class="sub-wrap">
-        <div class="sec-head" style="margin:6px 0 14px"><h3>我的房間</h3><span>${myRooms.length ? myRooms.length + ' 間' : ''}</span></div>
+    const tickets = `<div class="sec-head" style="margin:6px 0 14px"><h3>我的房間</h3><span>${myRooms.length ? myRooms.length + ' 間' : ''}</span></div>
         ${myRooms.length ? myRooms.map(r => {
             const ms = (r.members || []);
             const n = ms.filter(u => liveStatus(profiles[u], now).phase === 'focus').length;
@@ -2192,7 +2233,11 @@ function renderRoom(errMsg) {
                 </span>
                 <span class="tk-stub"><small>邀請碼</small><b class="num">${r.id}</b></span>
             </button>`;
-        }).join('') : '<p class="empty">還沒有房間，建立一個或用邀請碼加入</p>'}
+        }).join('') : '<p class="empty">還沒有房間，建立一個或用邀請碼加入</p>'}`;
+    if (el.dataset.view === 'lobby' && $('ticketList')) { $('ticketList').innerHTML = tickets; return; }
+    el.dataset.view = 'lobby';
+    el.innerHTML = `<div class="sub-wrap">
+        <div id="ticketList">${tickets}</div>
         <section class="stats-sec">
             <div class="sec-head"><h3>輸入邀請碼加入</h3></div>
             <label class="code-wrap" aria-label="邀請碼">
@@ -2206,9 +2251,244 @@ function renderRoom(errMsg) {
         </section>
     </div>`;
 }
+/* --- 聊天室：rooms/{邀請碼}/messages、rooms/{邀請碼}/reads/{uid} --- */
+const CHAT_LIMIT = 80;               // 只載入最近 80 則
+const RECALL_MS = 24 * 3600000;      // 24 小時內可以收回
+const PHOTO_DAILY = 20;              // 每人每天最多傳 20 張照片
+let chatRoom = null, chatUnsub = null, readsUnsub = null;
+let chatMsgs = [], chatReads = {}, chatFirst = true, chatSending = false;
+let chatSeen = lsGet(LS.chatSeen, {});
+let lastReadSent = 0;
+
+function chatStart(code) {
+    if (!fb || !currentUser || chatRoom === code) return;
+    chatStop();
+    chatRoom = code; chatMsgs = []; chatReads = {}; chatFirst = true; lastReadSent = 0;
+    const { fs, db } = fb;
+    const q = fs.query(fs.collection(db, 'rooms', code, 'messages'), fs.orderBy('at', 'desc'), fs.limit(CHAT_LIMIT));
+    chatUnsub = fs.onSnapshot(q, (snap) => {
+        const prevIds = new Set(chatMsgs.map(m => m.id));
+        chatMsgs = snap.docs.map(d => ({ id: d.id, ...d.data() })).reverse();
+        const fresh = chatFirst ? [] : chatMsgs.filter(m => !prevIds.has(m.id) && m.uid !== currentUser?.uid && !m.recalled);
+        chatFirst = false;
+        onChatUpdate(fresh);
+    }, (err) => { console.warn('聊天室讀取失敗：', err); if (err.code === 'permission-denied') toast('聊天室讀取被拒絕：請確認 Firestore 規則已更新'); });
+    readsUnsub = fs.onSnapshot(fs.collection(db, 'rooms', code, 'reads'), (snap) => {
+        snap.docs.forEach(d => { chatReads[d.id] = d.data().at || 0; });
+        if (chatVisible()) renderChatList(false);
+    }, () => {});
+}
+function chatStop() {
+    if (chatUnsub) chatUnsub();
+    if (readsUnsub) readsUnsub();
+    chatUnsub = readsUnsub = null; chatRoom = null; chatMsgs = []; chatReads = {};
+}
+const chatVisible = () => document.body.dataset.tab === 'tab-room' && roomView === chatRoom && roomPane === 'chat' && document.visibilityState === 'visible';
+function chatUnread() {
+    const seen = chatSeen[chatRoom] || 0;
+    return chatMsgs.filter(m => m.at > seen && m.uid !== currentUser?.uid && !m.recalled).length;
+}
+// 看到最新訊息：記錄已讀
+function markChatSeen() {
+    if (!chatVisible() || !chatMsgs.length) return;
+    const latest = chatMsgs[chatMsgs.length - 1].at || 0;
+    if ((chatSeen[chatRoom] || 0) < latest) { chatSeen[chatRoom] = latest; lsSet(LS.chatSeen, chatSeen); }
+    if (latest > lastReadSent) {
+        lastReadSent = latest;
+        fb.fs.setDoc(fb.fs.doc(fb.db, 'rooms', chatRoom, 'reads', currentUser.uid), { at: latest }).catch(() => { lastReadSent = 0; });
+    }
+}
+function onChatUpdate(fresh) {
+    if (chatVisible()) { renderChatList(false); markChatSeen(); }
+    else {
+        const b = $('chatBadge'); const n = chatUnread();
+        if (b) { b.hidden = !n; b.textContent = n; }
+        // 不在聊天畫面時，用提示告訴你有新訊息
+        const m = fresh[fresh.length - 1];
+        if (m) {
+            const room = myRooms.find(x => x.id === chatRoom);
+            toast(`${m.name || '同學'}：${m.img ? '傳了一張照片' : m.text}`.slice(0, 40), { label: '查看', fn: () => { roomView = chatRoom; roomPane = 'chat'; showTab('tab-room'); } });
+            try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
+            if (room && document.visibilityState !== 'visible') document.title = `(${chatUnread()}) ${room.name}`;
+        }
+    }
+}
+const chatDayLabel = (t) => {
+    const d = new Date(t), ds = ymd(d), td = todayStr();
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    if (ds === td) return '今天 ' + hm;
+    if (ds === ymd(y)) return '昨天 ' + hm;
+    return `${d.getMonth() + 1}/${d.getDate()} 星期${WEEK_ZH[d.getDay()]} ${hm}`;
+};
+// 網址變成可以點的連結
+const linkify = (t) => esc(t).replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`);
+function renderChatList(scrollBottom) {
+    const box = $('chatList');
+    if (!box) return;
+    const me = currentUser?.uid;
+    const nearBottom = scrollBottom || (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 140);
+    if (!chatMsgs.length) {
+        box.innerHTML = `<div class="chat-empty"><p>還沒有訊息</p><span>跟大家打聲招呼，或約好一起開始下一輪 ✏️</span></div>`;
+    } else {
+        let html = '', prev = null;
+        chatMsgs.forEach(m => {
+            if (!prev || m.at - prev.at > 30 * 60000 || ymd(new Date(m.at)) !== ymd(new Date(prev.at))) html += `<p class="chat-sys">${chatDayLabel(m.at)}</p>`;
+            if (m.recalled) {
+                html += `<p class="chat-sys">${m.uid === me ? '你' : esc(m.name || '同學')} 收回了一則訊息</p>`;
+                prev = m; return;
+            }
+            const mine = m.uid === me;
+            const grouped = prev && !prev.recalled && prev.uid === m.uid && m.at - prev.at < 5 * 60000;
+            const d = new Date(m.at);
+            const tm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            let readN = 0;
+            if (mine) Object.entries(chatReads).forEach(([u, at]) => { if (u !== me && at >= m.at) readN++; });
+            const body = m.img
+                ? `<img class="chat-img" src="${esc(m.img)}" alt="照片" data-mid="${m.id}" loading="lazy">`
+                : `<div class="bubble" data-mid="${m.id}">${linkify(m.text || '')}</div>`;
+            const meta = `<span class="chat-meta">${mine && readN ? `<span>已讀 ${readN}</span>` : ''}<span class="num">${tm}</span></span>`;
+            html += mine
+                ? `<div class="msg mine ${grouped ? 'grouped' : ''}">${meta}${body}</div>`
+                : `<div class="msg them ${grouped ? 'grouped' : ''}">
+                    ${grouped ? '<span class="chat-av-sp"></span>' : `<span class="chat-av" style="background:${avColor(m.uid)}">${esc((m.name || '?').slice(0, 1))}</span>`}
+                    <div class="msg-col">${grouped ? '' : `<p class="chat-who">${esc(m.name || '同學')}</p>`}<div class="msg-line">${body}${meta}</div></div>
+                </div>`;
+            prev = m;
+        });
+        box.innerHTML = html;
+    }
+    if (nearBottom) requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight }));
+}
+
+async function sendChat(text, img) {
+    if (!chatRoom || chatSending) return false;
+    text = (text || '').trim().slice(0, 1000);
+    if (!text && !img) return false;
+    chatSending = true;
+    try {
+        const data = { uid: currentUser.uid, name: myName(), text: img ? '' : text, at: Date.now(), recalled: false };
+        if (img) { data.img = img; data.expireAt = new Date(Date.now() + 30 * 86400000); }   // 照片 30 天後自動刪除（要在 Google Cloud 開啟 TTL）
+        await fb.fs.addDoc(fb.fs.collection(fb.db, 'rooms', chatRoom, 'messages'), data);
+        enableRoom();
+        return true;
+    } catch (e) {
+        console.error('傳送失敗：', e);
+        toast(e.code === 'permission-denied' ? '傳送被拒絕：請確認 Firestore 規則已更新' : '傳送失敗，請檢查網路');
+        return false;
+    } finally { chatSending = false; }
+}
+// 照片先在手機上壓縮（最長邊 1280px、約 250KB 以內）
+function compressImage(file) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const im = new Image();
+        im.onload = () => {
+            URL.revokeObjectURL(url);
+            let max = 1280, q = 0.72, out = '';
+            for (let i = 0; i < 6; i++) {
+                const k = Math.min(1, max / Math.max(im.width, im.height));
+                const c = document.createElement('canvas');
+                c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+                const ctx = c.getContext('2d');
+                ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+                ctx.drawImage(im, 0, 0, c.width, c.height);
+                out = c.toDataURL('image/jpeg', q);
+                if (out.length <= 340000) break;
+                max = Math.round(max * 0.8); q = Math.max(0.5, q - 0.06);
+            }
+            out.length <= 380000 ? resolve(out) : reject(new Error('too-big'));
+        };
+        im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad-image')); };
+        im.src = url;
+    });
+}
+const photosToday = () => { const c = lsGet(LS.photoCount, {}); return c.date === todayStr() ? c.n : 0; };
+
+// 長按（或電腦按右鍵）訊息：複製、收回、房主刪除
+let menuMsg = null;
+function openMsgMenu(id) {
+    const m = chatMsgs.find(x => x.id === id);
+    if (!m || m.recalled) return;
+    menuMsg = m;
+    const mine = m.uid === currentUser?.uid;
+    const r = myRooms.find(x => x.id === chatRoom);
+    $('mmCopy').style.display = m.text ? '' : 'none';
+    $('mmRecall').style.display = mine && Date.now() - m.at < RECALL_MS ? '' : 'none';
+    $('mmDelete').style.display = !mine && r?.owner === currentUser?.uid ? '' : 'none';
+    $('mmNote').textContent = mine ? (Date.now() - m.at < RECALL_MS ? '收回後，大家會看到「你收回了一則訊息」' : '超過 24 小時的訊息不能收回') : '';
+    try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
+    openModal('msgModal');
+}
+$('msgModal').addEventListener('click', async (e) => {
+    const a = e.target.closest('[data-mm]')?.dataset.mm;
+    if (!a || !menuMsg) return;
+    const m = menuMsg; closeModal('msgModal');
+    const ref = fb.fs.doc(fb.db, 'rooms', chatRoom, 'messages', m.id);
+    try {
+        if (a === 'copy') { await navigator.clipboard.writeText(m.text); toast('已複製'); }
+        else if (a === 'recall') { await fb.fs.updateDoc(ref, { recalled: true, text: '', img: '' }); toast('已收回'); }
+        else if (a === 'delete') { if (confirm('確定要刪除這則訊息嗎？')) { await fb.fs.deleteDoc(ref); toast('已刪除'); } }
+    } catch (err) { console.error(err); toast(a === 'copy' ? '無法複製' : '操作失敗，請檢查網路'); }
+});
+
+// 聊天輸入、傳照片、長按
+let pressT = null, pressXY = null, pressed = false;
+$('tab-room').addEventListener('submit', async (e) => {
+    if (e.target.id !== 'chatForm') return;
+    e.preventDefault();
+    const inp = $('chatInput');
+    const text = inp.value;
+    if (!text.trim()) return;
+    inp.value = ''; autoGrow(inp);
+    const ok = await sendChat(text);
+    if (!ok && !inp.value) { inp.value = text; autoGrow(inp); }
+    inp.focus();
+});
+const autoGrow = (t) => { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; };
+$('tab-room').addEventListener('input', (e) => { if (e.target.id === 'chatInput') autoGrow(e.target); });
+$('tab-room').addEventListener('keydown', (e) => {
+    // 電腦：Enter 傳送、Shift+Enter 換行；手機用鍵盤上的「傳送」換行
+    if (e.target.id === 'chatInput' && e.key === 'Enter' && !e.shiftKey && !e.isComposing && matchMedia('(pointer: fine)').matches) {
+        e.preventDefault(); $('chatForm').requestSubmit();
+    }
+});
+$('tab-room').addEventListener('change', async (e) => {
+    if (e.target.id !== 'chatFile') return;
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast('只能傳圖片'); return; }
+    if (photosToday() >= PHOTO_DAILY) { toast(`今天已經傳了 ${PHOTO_DAILY} 張照片，明天再傳`); return; }
+    toast('照片處理中…');
+    try {
+        const img = await compressImage(file);
+        if (await sendChat('', img)) lsSet(LS.photoCount, { date: todayStr(), n: photosToday() + 1 });
+    } catch (err) { toast(err.message === 'too-big' ? '照片太大了，換一張試試' : '這張照片打不開'); }
+});
+$('tab-room').addEventListener('pointerdown', (e) => {
+    const t = e.target.closest('[data-mid]');
+    if (!t) return;
+    pressed = false; pressXY = [e.clientX, e.clientY];
+    clearTimeout(pressT);
+    pressT = setTimeout(() => { pressed = true; openMsgMenu(t.dataset.mid); }, 480);
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach(n => $('tab-room').addEventListener(n, () => clearTimeout(pressT)));
+$('tab-room').addEventListener('pointermove', (e) => {
+    if (pressXY && Math.hypot(e.clientX - pressXY[0], e.clientY - pressXY[1]) > 10) clearTimeout(pressT);
+});
+$('tab-room').addEventListener('contextmenu', (e) => {
+    const t = e.target.closest('[data-mid]');
+    if (!t) return;
+    e.preventDefault(); clearTimeout(pressT); openMsgMenu(t.dataset.mid);
+});
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { document.title = BASE_TITLE; if (chatVisible()) { renderChatList(false); markChatSeen(); } }
+});
+
 // 每秒更新房間裡的時鐘（不重畫整頁）
 function roomTick() {
-    if (document.body.dataset.tab !== 'tab-room' || !roomView) return;
+    if (document.body.dataset.tab !== 'tab-room' || !roomView || roomPane !== 'people') return;
     const now = Date.now();
     document.querySelectorAll('#tab-room [data-clock]').forEach(n => {
         const st = liveStatus(profiles[n.dataset.clock], now);
@@ -2250,8 +2530,18 @@ $('saveRoomBtn').addEventListener('click', async () => {
 onEnter($('roomNameInput'), () => $('saveRoomBtn').click());
 
 $('tab-room').addEventListener('click', (e) => {
+    if (pressed) { pressed = false; e.preventDefault(); return; }   // 長按後放開，不要觸發點擊
+    const pane = e.target.closest('[data-pane]');
+    if (pane) {
+        roomPane = pane.dataset.pane; renderRoom();
+        if (roomPane === 'chat') { markChatSeen(); const b = $('chatBadge'); if (b) b.hidden = true; }
+        else window.scrollTo({ top: 0 });
+        return;
+    }
+    const im = e.target.closest('.chat-img');
+    if (im) { $('imgView').src = im.src; openModal('imgModal'); return; }
     const open = e.target.closest('[data-open]');
-    if (open) { roomView = open.dataset.open; renderRoom(); window.scrollTo({ top: 0 }); return; }
+    if (open) { roomView = open.dataset.open; roomPane = 'people'; renderRoom(); window.scrollTo({ top: 0 }); return; }
     const act = e.target.closest('[data-room]')?.dataset.room;
     if (act === 'back') showTab('tab-timer');
     else if (act === 'lobby') { roomView = null; renderRoom(); }
@@ -2317,16 +2607,48 @@ async function loadRoomProfile(user) {
         }
     } catch (e) { /* 離線或規則還沒設定 */ }
     publishProfile(true);
-    if (document.body.dataset.tab === 'tab-room') { roomStart(); renderRoom(); }
+    // 用過讀書房間的話，登入後就開始監聽（計時頁可以顯示幾個人在讀）
+    if (roomPref.enabled || document.body.dataset.tab === 'tab-room') roomStart();
+    if (document.body.dataset.tab === 'tab-room') renderRoom();
 }
+
+/* =====================================================
+ * 10. 加到主畫面教學（第一次打開時）
+ * ===================================================== */
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isMobile = () => isIOS() || /Android/i.test(navigator.userAgent);
+let installOS = isIOS() ? 'ios' : 'android';
+function renderInstall() {
+    document.querySelectorAll('#installModal [data-os]').forEach(b => {
+        const on = b.dataset.os === installOS;
+        b.classList.toggle('active', on); b.setAttribute('aria-selected', on);
+    });
+    $('installIOS').hidden = installOS !== 'ios';
+    $('installAndroid').hidden = installOS !== 'android';
+}
+function openInstall() { renderInstall(); openModal('installModal'); }
+$('installModal').addEventListener('click', (e) => {
+    const os = e.target.closest('[data-os]');
+    if (os) { installOS = os.dataset.os; renderInstall(); return; }
+    if (e.target.closest('[data-install-done]')) { lsSet(LS.install, '1'); closeModal('installModal'); }
+});
+$('installGuideBtn').addEventListener('click', () => { closeModal('accountModal'); openInstall(); });
+// 第一次用手機瀏覽器打開時自動出現（已經從主畫面打開就不出現）
+setTimeout(() => {
+    if (localStorage.getItem(LS.install) || isStandalone() || !isMobile()) return;
+    if (document.querySelector('.modal.open')) return;
+    lsSet(LS.install, '1');
+    openInstall();
+}, 1200);
 
 /* =====================================================
  * 帳號畫面
  * ===================================================== */
 function renderAccount(statusText) {
     const u = currentUser;
-    $('avatarImg').src = u?.photoURL || DEFAULT_AVATAR;
-    $('accountAvatar').src = u?.photoURL || DEFAULT_AVATAR;
+    $('avatarImg').src = u?.photoURL || defaultAvatar();
+    $('accountAvatar').src = u?.photoURL || defaultAvatar();
     $('accountName').textContent = u ? (u.displayName || u.email || '已登入') : '未登入';
     $('accountStatus').textContent = statusText || (u ? '雲端同步已開啟' : (fb ? '資料只存在這台裝置' : '離線中，資料只存在這台裝置'));
     $('accountHint').style.display = u ? 'none' : '';
@@ -2334,7 +2656,7 @@ function renderAccount(statusText) {
     $('loginBtn').classList.toggle('btn-accent', !u);
     $('loginBtn').classList.toggle('btn-danger', !!u);
 }
-$('accountBtn').addEventListener('click', () => openModal('accountModal'));
+$('accountBtn').addEventListener('click', () => { $('installGuideBtn').hidden = isStandalone(); openModal('accountModal'); });
 
 // 禁止雙指縮放（iOS Safari 不吃 viewport 設定，要另外擋）
 ['gesturestart', 'gesturechange', 'gestureend'].forEach(t =>
