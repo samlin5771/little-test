@@ -927,15 +927,21 @@ body:has(.tab.active .sticky-cta) .toast, body:has(.tab.active .chat-bar) .toast
 
 /* --- 全螢幕聊天室 --- */
 .chat-screen {
-    position: fixed; left: 0; right: 0; top: 0; height: 100dvh; z-index: 90;
+    /* 永遠蓋滿整個畫面；鍵盤打開時改用上下留白把內容擠進看得到的範圍，後面的頁面不會露出來 */
+    position: fixed; inset: 0; z-index: 90;
     display: none; flex-direction: column; background: var(--bg);
+    overscroll-behavior: none;
 }
 .chat-screen.open { display: flex; animation: chatIn 0.22s ease-out; }
 @keyframes chatIn { from { opacity: 0; } to { opacity: 1; } }
 body.chat-open .bg-fx { display: none; }   /* 聊天時關掉會動的背景，鍵盤動畫比較順 */
 .chat-screen .chat-list { contain: content; }
 body.chat-open { overflow: hidden; }
-body.chat-open .tabbar, body.chat-open .topbar { visibility: hidden; }
+@media (max-width: 899px) {
+    /* 手機：聊天時把後面的頁面整個關掉，不會被滑到，也比較不卡 */
+    body.chat-open .tabbar, body.chat-open .topbar, body.chat-open .main { display: none; }
+    html:has(body.chat-open) { overflow: hidden; overscroll-behavior: none; }
+}
 .chat-head {
     display: flex; align-items: center; gap: 6px; flex-shrink: 0;
     padding: calc(10px + env(safe-area-inset-top)) 14px 10px; border-bottom: 1px solid var(--line); background: var(--bg);
@@ -957,8 +963,7 @@ body.chat-open .tabbar, body.chat-open .topbar { visibility: hidden; }
 .chat-screen.kb-open .chat-bar { padding-bottom: 8px; }   /* 鍵盤打開時不需要留 Home 鍵的空間 */
 .chat-bar .icon-btn { width: 42px; height: 42px; cursor: pointer; }
 @media (min-width: 900px) {
-    .chat-screen { left: 50%; width: 640px; transform: translateX(-50%) !important; border-left: 1px solid var(--line); border-right: 1px solid var(--line); height: 100vh !important; }
-    body.chat-open .tabbar, body.chat-open .topbar { visibility: visible; }
+    .chat-screen { left: 50%; right: auto; width: 640px; transform: translateX(-50%); border-left: 1px solid var(--line); border-right: 1px solid var(--line); padding: 0 !important; }
     body.chat-open::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 89; }
 }
 .bubble.expired { font-style: italic; color: var(--muted); }

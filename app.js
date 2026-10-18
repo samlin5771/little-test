@@ -2346,7 +2346,7 @@ function closeChat() {
     $('chatInput').blur();
     const el = $('chatScreen');
     el.classList.remove('open', 'kb-open');
-    el.style.height = ''; el.style.transform = '';
+    el.style.paddingTop = ''; el.style.paddingBottom = '';
     document.body.classList.remove('chat-open');
     window.scrollTo(0, chatSavedScroll);
     document.title = BASE_TITLE;
@@ -2360,22 +2360,25 @@ function renderChatHead() {
     if ($('chatSub').dataset.h !== html) { $('chatSub').dataset.h = html; $('chatSub').innerHTML = html; }
 }
 // iPhone 鍵盤跳出來時，聊天室跟著可見範圍縮小，輸入框不會被蓋住
+// 鍵盤打開時：聊天室仍然蓋滿整個畫面，只用上下留白把標題和輸入框放進「看得到的範圍」
 // 每一格動畫最多算一次，數值沒變就不動畫面（避免卡頓）
 let fitRaf = 0, lastFit = '', chatSavedScroll = 0;
 function fitChat() {
     cancelAnimationFrame(fitRaf);
     fitRaf = requestAnimationFrame(() => {
         const vv = window.visualViewport, el = $('chatScreen');
-        if (!vv || !el.classList.contains('open')) return;
-        const h = Math.round(Math.min(vv.height, window.innerHeight)), top = Math.max(0, Math.round(vv.offsetTop));
-        const kb = window.innerHeight - vv.height > 120;   // 鍵盤是否打開
-        const key = `${h},${top},${kb}`;
+        if (!vv || !el.classList.contains('open') || matchMedia('(min-width: 900px)').matches) return;
+        const H = window.innerHeight;
+        const top = Math.max(0, Math.round(vv.offsetTop));
+        const bottom = Math.max(0, Math.round(H - vv.height - vv.offsetTop));   // 鍵盤（含上方工具列）的高度
+        const kb = bottom > 80 || H - vv.height > 120;
+        const key = `${top},${bottom},${kb}`;
         if (key === lastFit) return;
         lastFit = key;
         const box = $('chatList');
         const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
-        el.style.height = h + 'px';
-        el.style.transform = top ? `translate3d(0, ${top}px, 0)` : '';
+        el.style.paddingTop = top ? top + 'px' : '';
+        el.style.paddingBottom = bottom ? bottom + 'px' : '';
         el.classList.toggle('kb-open', kb);
         // 鍵盤收起後，iPhone 有時會讓整頁停在往上捲的位置，把它拉回來
         if (!kb && (window.scrollY || document.documentElement.scrollTop)) window.scrollTo(0, 0);
