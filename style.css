@@ -11,6 +11,8 @@
  *   4. 待辦
  *   5. 讀書計時
  *   6. 統計
+ *   8. AI 讀書計畫
+ *   9. 讀書房間
  *   質感效果（背景光、數字滾動、按鈕回饋、開啟畫面、滑動、指令面板、分享卡片）
  *   底部分頁列（手機在下方，電腦在上方）
  *   彈出視窗、提示訊息
@@ -269,7 +271,8 @@ button { cursor: pointer; }
 .week-sub { font-size: 12px; color: var(--muted); margin-top: 3px; font-family: 'Noto Sans TC', sans-serif; }
 .progress { height: 4px; border-radius: 2px; background: var(--surface-2); margin: 14px 0; overflow: hidden; }
 .progress > div { height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width 0.3s; }
-.week-tools { display: flex; justify-content: center; margin-bottom: 14px; }
+.week-tools { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.week-tools svg { width: 15px; height: 15px; }
 
 .day-chips { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-bottom: 18px; }
 .day-chip {
@@ -596,6 +599,99 @@ body.focus-mode .main { padding-top: calc(24px + env(safe-area-inset-top)); }
 .log-row .at { width: 46px; font-size: 13px; font-weight: 600; color: var(--muted); font-family: 'Manrope', sans-serif; }
 .log-row .nm { flex: 1; font-size: 14px; }
 .log-row .mn { font-size: 13px; font-weight: 600; font-family: 'Manrope', sans-serif; }
+
+/* =====================================================
+ * 8. AI 讀書計畫
+ * ===================================================== */
+.sub-wrap { max-width: 560px; margin: 0 auto; }
+.pill { font-size: 11.5px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 12px; padding: 4px 10px; font-family: 'Noto Sans TC', sans-serif; white-space: nowrap; }
+.rate-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.rate-btn {
+    min-height: 52px; border-radius: 14px; border: 1px solid var(--line); background: transparent;
+    font-size: 13px; font-weight: 600; font-family: 'Noto Sans TC', sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 0;
+}
+.rate-btn span { font-size: 11px; font-weight: 500; color: var(--muted); }
+.rate-btn.r0 { border-color: var(--exam); background: var(--exam-soft); }
+.rate-btn.r0 span { color: var(--exam-text); }
+.rate-btn.r2 { border-color: var(--mark-green); background: var(--mark-green-bg); }
+.rate-btn.r2 span { color: var(--mark-green); }
+.ai-note { margin: 4px 0 0; padding: 12px 14px; border-radius: 14px; background: var(--surface); font-size: 12.5px; line-height: 1.7; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
+.ai-loading, .ai-error { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; padding: 18px 0; font-size: 14px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; text-align: center; }
+.ai-error { color: var(--exam-text); }
+.ai-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--surface-2); border-top-color: var(--accent); animation: aiSpin 0.8s linear infinite; flex-shrink: 0; }
+@keyframes aiSpin { to { transform: rotate(360deg); } }
+.ai-bullets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ai-bullets li { position: relative; padding-left: 16px; font-size: 14px; line-height: 1.6; font-family: 'Noto Sans TC', sans-serif; }
+.ai-bullets li::before { content: ''; position: absolute; left: 0; top: 9px; width: 6px; height: 6px; border-radius: 3px; background: var(--accent); }
+.plan-day { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.plan-w { width: 34px; flex-shrink: 0; font-size: 14px; font-weight: 700; font-family: 'Noto Sans TC', sans-serif; display: flex; flex-direction: column; padding-top: 4px; }
+.plan-w small { font-size: 11px; font-weight: 500; color: var(--muted); }
+.plan-items { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.plan-chip {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 4px 10px; border-radius: 10px;
+    border: 1px solid transparent; background: var(--surface); font-size: 12.5px; font-family: 'Noto Sans TC', sans-serif; text-align: left;
+    transition: opacity 0.2s, background-color 0.2s;
+}
+.plan-chip .m { font-size: 11px; color: var(--muted); }
+.plan-chip.off { opacity: 0.4; background: transparent; border-color: var(--line); text-decoration: line-through; }
+.plan-chip:disabled { cursor: not-allowed; }
+.ai-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.ai-actions .btn[disabled] { opacity: 0.5; }
+
+/* =====================================================
+ * 9. 讀書房間
+ * ===================================================== */
+.room-empty { text-align: center; padding: 40px 10px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.room-empty .empty { line-height: 1.7; }
+.room-card {
+    width: 100%; display: flex; flex-direction: column; gap: 12px; padding: 16px; margin-bottom: 10px;
+    border-radius: 18px; border: 1px solid var(--line); background: transparent; text-align: left; transition: background-color 0.2s;
+}
+.room-card:hover { background: var(--surface); }
+.room-card.hot { border-color: rgba(var(--accent-rgb), 0.5); background: var(--accent-soft); }
+.rc-top, .rc-bot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rc-top b { font-size: 16px; }
+.code { font-size: 12px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted); }
+.rc-live { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; font-family: 'Noto Sans TC', sans-serif; }
+.avatars { display: flex; }
+.avatars .av + .av { margin-left: -8px; }
+.av {
+    width: 32px; height: 32px; border-radius: 16px; flex-shrink: 0; border: 2px solid var(--bg); box-sizing: border-box;
+    display: inline-flex; align-items: center; justify-content: center; color: #fff;
+    font-size: 13px; font-weight: 700; font-family: 'Noto Sans TC', sans-serif;
+}
+.av.more { background: var(--surface-2); color: var(--text); font-size: 11px; }
+.live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 4px; background: var(--mark-green); margin-right: 2px; animation: livePulse 2s ease-in-out infinite; }
+@keyframes livePulse { 50% { opacity: 0.4; } }
+.code-input { letter-spacing: 0.16em; font-weight: 600; text-transform: uppercase; }
+.room-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-top: 16px; }
+.room-title h2 { margin: 0 0 4px; font-size: 20px; font-weight: 700; }
+.room-title .hint { display: flex; align-items: center; gap: 4px; }
+.code-chip {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 18px; flex-shrink: 0;
+    border: 1px solid var(--line); background: var(--surface); font-size: 13px; font-weight: 700; letter-spacing: 0.12em;
+}
+.code-chip svg { width: 14px; height: 14px; }
+.member-list { list-style: none; margin: 0; padding: 0; }
+.member-row { display: flex; align-items: center; gap: 12px; min-height: 58px; border-bottom: 1px solid var(--line); }
+.member-row .av { width: 38px; height: 38px; border-radius: 19px; border: none; font-size: 15px; }
+.member-row.focus .av { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--mark-green); }
+.member-row.idle .av { opacity: 0.55; }
+.member-row .mn { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-family: 'Noto Sans TC', sans-serif; }
+.member-row .mn b { font-size: 14.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-row .mn small { font-weight: 500; color: var(--muted); font-size: 12px; }
+.member-row .st { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.member-row .st.on { color: var(--mark-green); font-weight: 600; }
+.member-row .clk { font-size: 15px; font-weight: 600; min-width: 56px; text-align: right; }
+.member-row.break .clk { color: var(--muted); }
+.rank-row { display: flex; align-items: center; gap: 10px; min-height: 36px; }
+.rank-row .rk { width: 22px; height: 22px; border-radius: 11px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--muted); }
+.rank-row .rk.top { background: var(--accent-soft); color: var(--accent-text); }
+.rank-row .nm { width: 72px; flex-shrink: 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Noto Sans TC', sans-serif; }
+.rank-row .track { flex: 1; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.rank-row .track i { display: block; height: 100%; border-radius: 4px; background: var(--accent); transition: width 0.4s; }
+.rank-row .t { width: 76px; text-align: right; font-size: 13px; font-weight: 600; }
 
 /* 電腦子母畫面（內容會複製到小視窗） */
 .pip-body { margin: 0; height: 100vh; display: flex; align-items: center; background: var(--bg); color: var(--text); font-family: 'Manrope', 'Noto Sans TC', sans-serif; overflow: hidden; }

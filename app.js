@@ -13,6 +13,8 @@
  *   5. 讀書計時（含子母畫面）
  *   6. 統計（含補登）
  *   7. 質感與操作（滑動、快捷鍵、指令面板、分享卡片）
+ *   8. AI 讀書計畫
+ *   9. 讀書房間
  *   帳號畫面
  *   啟動
  *   Firebase 登入與雲端同步
@@ -37,12 +39,17 @@ const FIREBASE_CONFIG = {
     authDomain: "study-countdown.firebaseapp.com",
     projectId: "study-countdown"
 };
-const FIREBASE_VER = '10.8.0';
+const FIREBASE_VER = '12.19.0';
+// AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
+const AI_MODEL = 'gemini-3.5-flash';
+// App Check（reCAPTCHA v3）網站金鑰：到 Firebase 主控台 → App Check 註冊後貼在這裡；留空就不啟用
+const RECAPTCHA_SITE_KEY = '';
 
 const LS = {
     todos: 'study_todos', weekly: 'study_weekly', events: 'study_events',
     exam: 'selectedExamKey', theme: 'study_theme', tab: 'study_tab', accent: 'study_accent',
-    sessions: 'study_sessions', timer: 'study_timer', tpref: 'study_timer_pref'
+    sessions: 'study_sessions', timer: 'study_timer', tpref: 'study_timer_pref',
+    aiPref: 'study_ai_pref', aiCount: 'study_ai_count', room: 'study_room'
 };
 const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(
     "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><rect width='40' height='40' fill='#E9B154'/>" +
@@ -198,12 +205,15 @@ window.matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change'
 const tabBtns = document.querySelectorAll('.tab-btn');
 function showTab(id) {
     if (!document.getElementById(id)) id = 'tab-countdown';
-    const navId = id === 'tab-stats' ? 'tab-timer' : id;   // 統計頁屬於「計時」分頁
+    const SUB = { 'tab-stats': 'tab-timer', 'tab-room': 'tab-timer', 'tab-ai': 'tab-weekly' };   // 子頁面屬於哪個分頁
+    const navId = SUB[id] || id;
     const btn = [...tabBtns].find(b => b.dataset.tab === navId) || tabBtns[0];
     tabBtns.forEach(b => b.classList.toggle('active', b === btn));
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === id));
     document.body.dataset.tab = id;
-    $('pageTitle').textContent = id === 'tab-stats' ? '讀書統計' : btn.dataset.title;
+    $('pageTitle').textContent = { 'tab-stats': '讀書統計', 'tab-room': '讀書房間', 'tab-ai': 'AI 讀書計畫' }[id] || btn.dataset.title;
+    if (id === 'tab-room') { roomStart(); renderRoom(); }
+    if (id === 'tab-ai') renderAI();
     lsSet(LS.tab, id);
     applyFocusMode();
     window.scrollTo({ top: 0 });
@@ -398,7 +408,7 @@ function renderWeek() {
     $('weekSub').textContent = total ? `本週完成 ${done} / ${total} · ${pct}%` : '本週還沒有安排進度';
 
     const todayIdx = days.findIndex(d => ymd(d) === t);
-    $('thisWeekBtn').parentElement.style.display = todayIdx >= 0 ? 'none' : '';
+    $('thisWeekBtn').style.display = todayIdx >= 0 ? 'none' : '';
     const sel = selectedDayIdx ?? (todayIdx >= 0 ? todayIdx : 0);
 
     // 手機：日期選擇＋當天各科
@@ -705,7 +715,7 @@ const BASE_TITLE = document.title;
 // 計時狀態只存在這台裝置；記錄下來的讀書時間（sessions）會同步到雲端
 let timer = lsGet(LS.timer, null) || { phase: 'idle' };
 let tpref = Object.assign({ subject: 0, mode: 0, goal: 180 }, lsGet(LS.tpref, {}));
-const saveTimer = () => lsSet(LS.timer, timer);
+const saveTimer = () => { lsSet(LS.timer, timer); publishProfile(); };   // 同時更新讀書房間裡的狀態
 const saveTpref = () => lsSet(LS.tpref, tpref);
 
 const fmtClock = (ms) => {
@@ -757,13 +767,14 @@ function recordSession(subject, start, minutes, pomo) {
     state.sessions.push(rec);
     if (!cloudReady) earlySessions.push(rec);   // 雲端還沒連上前記錄的，連上後補上傳
     save();
+    publishProfile();
     return rec;
 }
 function removeSession(id, msg) {
     const idx = state.sessions.findIndex(x => x.id === id);
     if (idx < 0) return;
     const [item] = state.sessions.splice(idx, 1);
-    save(); renderTimer(); renderStats();
+    save(); renderTimer(); renderStats(); publishProfile();
     toast(msg || '已刪除紀錄', { label: '復原', fn: () => { state.sessions.splice(idx, 0, item); save(); renderTimer(); renderStats(); } });
 }
 
@@ -849,6 +860,7 @@ function endBreak(startNext) {
 /* --- 畫面 --- */
 const ICON_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 const ICON_CHART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>';
+const ICON_ROOM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:16px;height:16px"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.5.2 4 1.9 4.5 4.9"/></svg>';
 const ringSvg = (cls) => `<svg viewBox="0 0 290 290" aria-hidden="true"><circle class="ring-track" cx="145" cy="145" r="134"/><circle class="ring-bar ${cls || ''}" cx="145" cy="145" r="134" stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="${RING_C.toFixed(2)}"/></svg>`;
 const subjButtons = (sel, attr) => SUBJECTS.map((n, i) =>
     `<button class="subj-btn ${i === sel ? 'active' : ''}" ${attr}="${i}" aria-pressed="${i === sel}"><i class="sdot s${i}"></i>${n}</button>`).join('');
@@ -910,7 +922,10 @@ function renderTimer() {
         el.innerHTML = `<div class="timer-wrap">
             <div class="timer-head">
                 <p class="label">讀哪一科</p>
-                <button class="btn btn-small" data-act="stats">${ICON_CHART.replace('<svg', '<svg style="width:16px;height:16px"')}統計</button>
+                <span style="display:flex;gap:8px">
+                    <button class="btn btn-small" data-act="room">${ICON_ROOM}房間</button>
+                    <button class="btn btn-small" data-act="stats">${ICON_CHART.replace('<svg', '<svg style="width:16px;height:16px"')}統計</button>
+                </span>
             </div>
             <div class="subj-grid">${subjButtons(tpref.subject, 'data-subj')}</div>
             <div class="seg" role="tablist" aria-label="計時模式" style="margin-top:12px">${MODES.map((x, i) =>
@@ -1052,6 +1067,7 @@ $('tab-timer').addEventListener('click', (e) => {
     else if (act === 'stop') endBreak(false);
     else if (act === 'stats') { statOffset = 0; statSel = null; renderStats(); showTab('tab-stats'); }
     else if (act === 'pip') openPip();
+    else if (act === 'room') { roomView = null; showTab('tab-room'); }
 });
 $('tab-timer').addEventListener('change', (e) => {
     const key = e.target.dataset.task;
@@ -1383,6 +1399,8 @@ function buildPalette(q) {
     }
     const go = [['倒數', 'countdown'], ['進度', 'weekly'], ['計時', 'timer'], ['行事曆', 'calendar'], ['待辦', 'todo']];
     go.forEach(([n, id], i) => { if (match(n, id, '前往')) items.push({ group: '前往', label: n, key: String(i + 1), run: () => showTab('tab-' + id) }); });
+    if (match('AI', '讀書計畫', '計畫', 'plan')) items.push({ group: '前往', label: 'AI 讀書計畫', run: () => showTab('tab-ai') });
+    if (match('房間', '讀書房間', '朋友', 'room')) items.push({ group: '前往', label: '讀書房間', run: () => { roomView = null; showTab('tab-room'); } });
     if (match('統計', 'stats')) items.push({ group: '前往', label: '讀書統計', run: () => { statOffset = 0; statSel = null; renderStats(); showTab('tab-stats'); } });
     if (match('深色', '淺色', '主題', 'theme', 'dark', 'light')) items.push({ group: '設定', label: '切換深淺色', key: 'T', run: () => $('themeBtn').click() });
     if (match('主題色', '顏色', '帳號', '登入', 'account')) items.push({ group: '設定', label: '帳號與主題色', run: () => openModal('accountModal') });
@@ -1555,6 +1573,648 @@ $('shareNativeBtn').addEventListener('click', async () => {
 });
 
 /* =====================================================
+ * 8. AI 讀書計畫（從「進度」分頁進入）
+ *    使用 Firebase AI Logic（Gemini Developer API，免費方案可用）
+ * ===================================================== */
+const AI_DAILY_LIMIT = 5;
+const RATE_TEXT = ['弱', '普通', '強'];
+let aiPref = Object.assign({ weekday: 3, weekend: 6, rate: [1, 1, 1, 1, 1], range: 'next', scope: {} }, lsGet(LS.aiPref, {}));
+if (!Array.isArray(aiPref.rate) || aiPref.rate.length !== SUBJECTS.length) aiPref.rate = [1, 1, 1, 1, 1];
+const saveAiPref = () => lsSet(LS.aiPref, aiPref);
+let aiBusy = false;
+let aiResult = null;   // { analysis: [], days: [{ date, items: [{ subject, task, minutes, on, full }] }] }
+let aiError = '';
+let aiModel = null;
+
+function aiUsedToday() {
+    const c = lsGet(LS.aiCount, {});
+    return c.date === todayStr() ? c.n : 0;
+}
+function aiCountUp() { lsSet(LS.aiCount, { date: todayStr(), n: aiUsedToday() + 1 }); }
+
+// 要排的日期：本週（今天起）或下週一到週日
+function aiDates() {
+    const now = new Date();
+    const start = aiPref.range === 'next' ? getMonday(now) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (aiPref.range === 'next') start.setDate(start.getDate() + 7);
+    const end = getMonday(start); end.setDate(end.getDate() + 6);
+    const out = [];
+    for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) out.push(ymd(d));
+    return out;
+}
+const isWeekend = (ds) => [0, 6].includes(parseYmd(ds).getDay());
+function nextExam() {
+    const now = Date.now();
+    return examEntries.map(([k, e]) => ({ key: k, ...e })).find(e => examEndTime(e) > now) || null;
+}
+// 這一天這一科還有空格嗎
+const freeSlot = (ds, s, taken) => {
+    for (let k = 0; k < SLOTS; k++) {
+        const key = `${ds}_${s}_${k}`;
+        if (!state.weekly[key]?.text && !taken.has(key)) return key;
+    }
+    return null;
+};
+
+// 只傳統計數字給 AI：不傳姓名、待辦內容、進度表裡寫的文字
+function buildAiPrompt() {
+    const dates = aiDates();
+    const t = todayStr();
+    const back = [];
+    for (let i = 14; i >= 1; i--) { const d = new Date(); d.setDate(d.getDate() - i); back.push(ymd(d)); }
+    const bySubj = [0, 0, 0, 0, 0];
+    const byWeekday = [0, 0, 0, 0, 0, 0, 0];
+    state.sessions.forEach(x => {
+        const k = sessionDay(x);
+        if (!back.includes(k)) return;
+        bySubj[x.subject] += x.minutes;
+        byWeekday[parseYmd(k).getDay()] += x.minutes;
+    });
+    const planned = [0, 0, 0, 0, 0], done = [0, 0, 0, 0, 0];
+    Object.entries(state.weekly).forEach(([key, v]) => {
+        const [ds, s] = key.split('_');
+        if (!back.includes(ds) || !v?.text) return;
+        planned[s]++; if (v.done) done[s]++;
+    });
+    const ex = nextExam();
+    const lines = [
+        '你是台灣高中生的讀書教練，要幫一位準備學測的學生排讀書計畫。請用繁體中文、台灣用語。',
+        `今天是 ${t}（星期${WEEK_ZH[new Date().getDay()]}）。`,
+        `要排的日期：${dates.map(d => `${d}（${WEEK_ZH[parseYmd(d).getDay()]}${examsOn(d).length ? '，當天考試' : ''}）`).join('、')}`,
+        `可讀書時間：平日每天約 ${aiPref.weekday} 小時，週六日每天約 ${aiPref.weekend} 小時。`,
+        `科目代號：${SUBJECTS.map((n, i) => `${i}=${n}`).join('、')}`,
+        `學生自評：${SUBJECTS.map((n, i) => `${n}${RATE_TEXT[aiPref.rate[i]]}`).join('、')}`,
+        `最近 14 天各科讀書分鐘數：${SUBJECTS.map((n, i) => `${n} ${bySubj[i]}`).join('、')}`,
+        `最近 14 天依星期幾的總分鐘數：${WEEK_ZH.map((w, i) => `${w} ${byWeekday[i]}`).join('、')}`,
+        `最近 14 天進度表完成率（完成格數/安排格數）：${SUBJECTS.map((n, i) => `${n} ${done[i]}/${planned[i]}`).join('、')}`
+    ];
+    if (ex) {
+        const left = Math.max(0, Math.floor((examTime(ex.date) - Date.now()) / 86400000));
+        lines.push(`下一場考試：${ex.name}，${ex.date}${ex.end ? ' 到 ' + ex.end : ''}，還有 ${left} 天。`);
+        const scope = (aiPref.scope[ex.key] || '').trim();
+        if (scope) lines.push(`這場考試的範圍：${scope.slice(0, 300)}`);
+    }
+    lines.push(
+        '規則：',
+        '1. analysis 寫 2 到 4 點觀察和建議，每點一句話，要具體引用上面的數字。',
+        '2. plan 要涵蓋每一個要排的日期，每天 1 到 5 項，每項 minutes 介於 20 到 120，每天總分鐘數接近可讀書時間。',
+        '3. 自評弱、最近讀得少的科目要多排；考試當天只排輕鬆的複習或不排。',
+        '4. task 寫具體要做的事（例如「數A 3-1 指數 例題」），不超過 18 個字，不要寫分鐘數。',
+        '5. 同一天同一科最多 2 項。'
+    );
+    return lines.join('\n');
+}
+
+async function getAiModel() {
+    if (aiModel) return aiModel;
+    const aiM = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-ai.js`);
+    const { Schema } = aiM;
+    const schema = Schema.object({
+        properties: {
+            analysis: Schema.array({ items: Schema.string() }),
+            plan: Schema.array({
+                items: Schema.object({
+                    properties: {
+                        date: Schema.string(),
+                        items: Schema.array({
+                            items: Schema.object({
+                                properties: { subject: Schema.integer(), task: Schema.string(), minutes: Schema.integer() }
+                            })
+                        })
+                    }
+                })
+            })
+        }
+    });
+    const ai = aiM.getAI(fb.app, { backend: new aiM.GoogleAIBackend() });
+    aiModel = aiM.getGenerativeModel(ai, {
+        model: AI_MODEL,
+        generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0.6 }
+    });
+    return aiModel;
+}
+
+// 檢查 AI 回傳的內容，只留下合理的部分
+function cleanAiResult(raw) {
+    const dates = aiDates();
+    const analysis = (Array.isArray(raw?.analysis) ? raw.analysis : []).map(s => String(s).trim()).filter(Boolean).slice(0, 4);
+    const taken = new Set();
+    const days = dates.map(ds => {
+        const src = (raw?.plan || []).find(p => p && p.date === ds);
+        const perSubj = {};
+        const items = (src?.items || []).filter(it => it && Number.isInteger(it.subject) && it.subject >= 0 && it.subject < SUBJECTS.length && String(it.task || '').trim())
+            .filter(it => (perSubj[it.subject] = (perSubj[it.subject] || 0) + 1) <= SLOTS)
+            .slice(0, 5)
+            .map(it => {
+                const minutes = Math.min(180, Math.max(10, Math.round(Number(it.minutes) || 30)));
+                const key = freeSlot(ds, it.subject, taken);
+                if (key) taken.add(key);
+                return { subject: it.subject, task: String(it.task).trim().slice(0, 24), minutes, on: !!key, full: !key };
+            });
+        return { date: ds, items };
+    });
+    return { analysis, days };
+}
+
+async function generatePlan() {
+    if (aiBusy) return;
+    if (!fb) { toast('目前無法連線，請連上網路後再試'); return; }
+    if (!currentUser) { toast('請先登入 Google 帳號'); openModal('accountModal'); return; }
+    if (aiUsedToday() >= AI_DAILY_LIMIT) { toast(`今天已經產生 ${AI_DAILY_LIMIT} 次了，明天再來`); return; }
+    aiBusy = true; aiError = ''; renderAI();
+    try {
+        const model = await getAiModel();
+        const res = await model.generateContent(buildAiPrompt());
+        const text = res.response.text();
+        aiResult = cleanAiResult(JSON.parse(text));
+        if (!aiResult.days.some(d => d.items.length)) throw new Error('empty');
+        aiCountUp();
+    } catch (e) {
+        console.error('AI 產生失敗：', e);
+        const msg = String(e?.message || e);
+        aiError = /app-check|appCheck|App Check/i.test(msg) ? 'App Check 驗證失敗，請確認 reCAPTCHA 網站金鑰設定正確。'
+            : /quota|429|RESOURCE_EXHAUSTED/i.test(msg) ? '今天的免費額度用完了，晚點再試。'
+            : /not enabled|PERMISSION_DENIED|403|api-not-enabled/i.test(msg) ? 'Firebase 專案還沒開啟 AI Logic，請照說明到 Firebase 主控台開啟。'
+            : msg === 'empty' ? 'AI 這次沒有排出內容，請再試一次。'
+            : '產生失敗，請檢查網路後再試一次。';
+    }
+    aiBusy = false;
+    renderAI();
+}
+
+function applyPlan() {
+    if (!aiResult) return;
+    const taken = new Set();
+    const added = [];
+    aiResult.days.forEach(d => d.items.forEach(it => {
+        if (!it.on) return;
+        const key = freeSlot(d.date, it.subject, taken);
+        if (!key) return;
+        taken.add(key);
+        added.push(key);
+        state.weekly[key] = { text: `${it.task}（${it.minutes} 分）`, done: false, color: state.weekly[key]?.color || '' };
+    }));
+    if (!added.length) { toast('沒有可以套用的項目'); return; }
+    save(); renderWeek(); renderToday();
+    weekMonday = getMonday(parseYmd(aiResult.days[0].date)); selectedDayIdx = null; renderWeek();
+    showTab('tab-weekly');
+    toast(`已加入 ${added.length} 項`, { label: '復原', fn: () => { added.forEach(k => delete state.weekly[k]); save(); renderWeek(); renderToday(); } });
+}
+
+const ICON_SPARK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>';
+const ICON_BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>';
+const HOUR_OPTS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 7, 8, 10];
+
+function renderAI() {
+    const el = $('tab-ai');
+    if (!el) return;
+    const dates = aiDates();
+    const ex = nextExam();
+    const left = AI_DAILY_LIMIT - aiUsedToday();
+    const hourSel = (id, v) => `<select class="field" id="${id}">${HOUR_OPTS.map(h => `<option value="${h}" ${h === v ? 'selected' : ''}>${h} 小時</option>`).join('')}</select>`;
+    let result = '';
+    if (aiBusy) {
+        result = `<section class="block"><p class="ai-loading"><span class="ai-spin"></span>AI 正在看你的紀錄、排計畫…</p></section>`;
+    } else if (aiError) {
+        result = `<section class="block"><p class="ai-error">${esc(aiError)}</p></section>`;
+    } else if (aiResult) {
+        const onCount = aiResult.days.reduce((a, d) => a + d.items.filter(i => i.on).length, 0);
+        result = `
+        <section class="block">
+            <p class="label" style="margin-bottom:10px">AI 的分析</p>
+            <ul class="ai-bullets">${aiResult.analysis.map(a => `<li>${esc(a)}</li>`).join('')}</ul>
+        </section>
+        <section class="block">
+            <div class="block-head"><p class="label">建議的計畫</p><span class="num" style="font-size:12px;color:var(--muted)">${shortDate(aiResult.days[0].date)} – ${shortDate(aiResult.days[aiResult.days.length - 1].date)}</span></div>
+            <p class="hint" style="text-align:left;margin-bottom:6px">點一下可以取消不想要的項目</p>
+            ${aiResult.days.map((d, di) => {
+                const dd = parseYmd(d.date);
+                return `<div class="plan-day">
+                    <span class="plan-w">${WEEK_ZH[dd.getDay()]}<small class="num">${dd.getMonth() + 1}/${dd.getDate()}</small></span>
+                    <div class="plan-items">${d.items.length ? d.items.map((it, ii) => `<button class="plan-chip ${it.on ? '' : 'off'}" data-ai-item="${di}_${ii}" ${it.full ? 'disabled' : ''} aria-pressed="${it.on}">
+                        <i class="sdot s${it.subject}"></i>${esc(it.task)}<span class="m num">${it.minutes} 分</span>${it.full ? '<span class="m">已滿</span>' : ''}</button>`).join('')
+                        : '<span class="hint">休息</span>'}</div>
+                </div>`;
+            }).join('')}
+        </section>
+        <div class="ai-actions">
+            <button class="btn btn-accent" data-ai="apply" style="flex:1" ${onCount ? '' : 'disabled'}>套用 ${onCount} 項到每週進度表</button>
+            <button class="btn" data-ai="gen">重新產生</button>
+        </div>`;
+    }
+    el.innerHTML = `<div class="sub-wrap">
+        <button class="btn btn-small back-btn" data-ai="back">${ICON_BACK}返回進度</button>
+        <div class="block-head" style="margin-top:14px">
+            <p class="label">告訴 AI 你的狀況</p>
+            <span class="pill">今天還能產生 ${Math.max(0, left)} 次</span>
+        </div>
+        <div class="seg two" role="tablist" aria-label="要排哪一週">
+            <button role="tab" aria-selected="${aiPref.range === 'this'}" class="${aiPref.range === 'this' ? 'active' : ''}" data-ai-range="this">這週（今天起）</button>
+            <button role="tab" aria-selected="${aiPref.range === 'next'}" class="${aiPref.range === 'next' ? 'active' : ''}" data-ai-range="next">下週</button>
+        </div>
+        <p class="hint" style="text-align:left;margin:8px 0 14px">${shortDate(dates[0])} – ${shortDate(dates[dates.length - 1])}，共 ${dates.length} 天</p>
+        <div class="field-row">
+            <div><label class="field-label" for="aiWeekday">平日每天可以讀</label>${hourSel('aiWeekday', aiPref.weekday)}</div>
+            <div><label class="field-label" for="aiWeekend">週末每天可以讀</label>${hourSel('aiWeekend', aiPref.weekend)}</div>
+        </div>
+        <p class="field-label">各科自評（點一下切換）</p>
+        <div class="rate-grid">${SUBJECTS.map((n, i) => `<button class="rate-btn r${aiPref.rate[i]}" data-rate="${i}" aria-label="${n}自評：${RATE_TEXT[aiPref.rate[i]]}">${n}<span>${RATE_TEXT[aiPref.rate[i]]}</span></button>`).join('')}</div>
+        ${ex ? `<label class="field-label" for="aiScope" style="margin-top:16px">${esc(ex.name)}的考試範圍（可留空）</label>
+        <textarea class="field" id="aiScope" rows="2" maxlength="300" placeholder="例如：數A 第一到三冊、物理 1-3 章" style="min-height:64px">${esc(aiPref.scope[ex.key] || '')}</textarea>` : ''}
+        <p class="ai-note">AI 也會參考：最近 2 週的讀書紀錄、進度表完成率${ex ? `、下一場考試（${esc(ex.short)} ${shortDate(ex.date)}）` : ''}。不會傳送你的名字、待辦或進度表文字。</p>
+        ${aiResult || aiBusy || aiError ? '' : `<button class="btn btn-accent btn-wide" data-ai="gen" style="margin-top:14px">${ICON_SPARK}產生計畫</button>`}
+        ${aiError ? `<button class="btn btn-accent btn-wide" data-ai="gen" style="margin-top:14px">${ICON_SPARK}再試一次</button>` : ''}
+        ${result}
+        <p class="hint" style="margin-top:18px">AI 可能出錯，套用前可以逐項取消；只會填進空白格子，不會蓋掉你寫好的內容</p>
+    </div>`;
+}
+
+$('aiPlanBtn').addEventListener('click', () => { renderAI(); showTab('tab-ai'); });
+$('tab-ai').addEventListener('click', (e) => {
+    const r = e.target.closest('[data-ai-range]');
+    if (r) { aiPref.range = r.dataset.aiRange; saveAiPref(); aiResult = null; aiError = ''; renderAI(); return; }
+    const rate = e.target.closest('[data-rate]');
+    if (rate) { const i = Number(rate.dataset.rate); aiPref.rate[i] = (aiPref.rate[i] + 2) % 3; saveAiPref(); renderAI(); return; }
+    const item = e.target.closest('[data-ai-item]');
+    if (item && aiResult) {
+        const [di, ii] = item.dataset.aiItem.split('_').map(Number);
+        const it = aiResult.days[di].items[ii];
+        if (!it.full) { it.on = !it.on; renderAI(); }
+        return;
+    }
+    const act = e.target.closest('[data-ai]')?.dataset.ai;
+    if (act === 'back') showTab('tab-weekly');
+    else if (act === 'gen') generatePlan();
+    else if (act === 'apply') applyPlan();
+});
+$('tab-ai').addEventListener('change', (e) => {
+    if (e.target.id === 'aiWeekday') aiPref.weekday = Number(e.target.value);
+    else if (e.target.id === 'aiWeekend') aiPref.weekend = Number(e.target.value);
+    else if (e.target.id === 'aiScope') { const ex = nextExam(); if (ex) aiPref.scope[ex.key] = e.target.value.slice(0, 300); }
+    saveAiPref();
+});
+
+/* =====================================================
+ * 9. 讀書房間（從「計時」分頁進入，要登入）
+ *    profiles/{uid}：自己的即時狀態；rooms/{邀請碼}：房間
+ * ===================================================== */
+const ROOM_MAX = 20;
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 去掉容易看錯的 0 O 1 I
+let roomPref = Object.assign({ name: '', hidden: false, enabled: false }, lsGet(LS.room, {}));
+const saveRoomPref = () => lsSet(LS.room, roomPref);
+let roomView = null;         // null = 房間列表；否則是房間代碼
+let pendingRoom = null;      // 剛建立／加入、雲端還沒回傳的房間
+let myRooms = [];            // [{ id, name, owner, members }]
+let profiles = {};           // uid → 狀態
+let roomUnsub = null;
+let profUnsubs = [], profKey = '';
+let roomsLoaded = false;
+let lastProfile = '';
+let profTimer = null;
+
+// 其他人的狀態（已經很久沒更新的視為不在讀）
+function liveStatus(p, now = Date.now()) {
+    if (!p) return { phase: 'idle', min: 0 };
+    const today = p.todayDate === todayStr() ? (p.todayMin || 0) : 0;
+    if (p.status === 'focus' && p.startAt) {
+        const el = Math.max(0, (p.pausedAt || now) - p.startAt - (p.pausedTotal || 0));
+        const stale = p.pausedAt ? now - p.pausedAt > 2 * 3600000
+            : p.duration ? el > p.duration + 10 * 60000 : el > 4 * 3600000;
+        if (!stale) return { phase: 'focus', paused: !!p.pausedAt, el, left: p.duration ? p.duration - el : null, subject: p.subject, min: today };
+    }
+    if (p.status === 'break' && p.breakStart && now - p.breakStart < (p.breakLen || 0) + 10 * 60000) {
+        return { phase: 'break', el: now - p.breakStart, min: today };
+    }
+    return { phase: 'idle', min: today };
+}
+const avColor = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return `var(--s${h % 5})`; };
+const avHtml = (p, uidv) => `<span class="av" style="background:${avColor(uidv)}">${esc((p?.name || '?').slice(0, 1))}</span>`;
+const myName = () => (roomPref.name || currentUser?.displayName || '同學').slice(0, 20);
+
+// 把自己的計時狀態寫到 profiles（只有用過讀書房間才會寫）
+function publishProfile(force) {
+    if (!currentUser || !fb || !roomPref.enabled) return;
+    const t = todayStr();
+    const hide = roomPref.hidden;
+    const data = {
+        name: myName(), hidden: !!hide,
+        status: hide ? 'idle' : timer.phase,
+        subject: !hide && timer.phase !== 'idle' ? (timer.subject ?? null) : null,
+        startAt: !hide && timer.phase === 'focus' ? timer.startAt : null,
+        pausedAt: !hide && timer.phase === 'focus' ? (timer.pausedAt || null) : null,
+        pausedTotal: !hide && timer.phase === 'focus' ? (timer.pausedTotal || 0) : 0,
+        duration: !hide && timer.phase === 'focus' ? (timer.duration || 0) : 0,
+        breakStart: !hide && timer.phase === 'break' ? timer.breakStart : null,
+        breakLen: !hide && timer.phase === 'break' ? timer.breakLen : 0,
+        todayMin: Math.round(dayMinutes(t)), todayDate: t
+    };
+    const sig = JSON.stringify(data);
+    if (!force && sig === lastProfile) return;
+    lastProfile = sig;
+    clearTimeout(profTimer);
+    profTimer = setTimeout(() => {
+        fb.fs.setDoc(fb.fs.doc(fb.db, 'profiles', currentUser.uid), { ...data, updatedAt: Date.now() })
+            .catch(e => { console.warn('房間狀態更新失敗：', e); lastProfile = ''; });
+    }, 300);
+}
+
+// 監聽房間列表與所有成員的狀態
+function roomStart() {
+    if (!currentUser || !fb || roomUnsub) return;
+    const { fs, db } = fb;
+    const q = fs.query(fs.collection(db, 'rooms'), fs.where('members', 'array-contains', currentUser.uid));
+    roomUnsub = fs.onSnapshot(q, (snap) => {
+        roomsLoaded = true;
+        myRooms = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        if (myRooms.some(r => r.id === pendingRoom)) pendingRoom = null;
+        if (roomView && roomView !== pendingRoom && !myRooms.some(r => r.id === roomView)) roomView = null;   // 被移出或房間刪除
+        watchProfiles([...new Set(myRooms.flatMap(r => r.members || []))]);
+        renderRoom();
+    }, (err) => { console.error('房間讀取失敗：', err); roomsLoaded = true; renderRoom(err.code === 'permission-denied' ? '讀取被拒絕：請確認 Firestore 規則已更新' : '讀取失敗，請檢查網路'); });
+}
+function watchProfiles(uids) {
+    const key = uids.slice().sort().join(',');
+    if (key === profKey) return;
+    profKey = key;
+    profUnsubs.forEach(u => u()); profUnsubs = [];
+    const { fs, db } = fb;
+    for (let i = 0; i < uids.length; i += 30) {
+        const chunk = uids.slice(i, i + 30);
+        const q = fs.query(fs.collection(db, 'profiles'), fs.where(fs.documentId(), 'in', chunk));
+        profUnsubs.push(fs.onSnapshot(q, (snap) => {
+            snap.docChanges().forEach(ch => {
+                if (ch.type === 'removed') delete profiles[ch.doc.id];
+                else profiles[ch.doc.id] = ch.doc.data();
+            });
+            renderRoom();
+        }, (err) => console.warn('成員狀態讀取失敗：', err)));
+    }
+}
+function roomStop() {
+    if (roomUnsub) { roomUnsub(); roomUnsub = null; }
+    profUnsubs.forEach(u => u()); profUnsubs = []; profKey = '';
+    myRooms = []; profiles = {}; roomsLoaded = false; roomView = pendingRoom = null;
+}
+
+function enableRoom() {
+    if (!roomPref.enabled) { roomPref.enabled = true; saveRoomPref(); }
+    publishProfile(true);
+}
+function makeCode() {
+    const a = new Uint32Array(6);
+    crypto.getRandomValues(a);
+    return [...a].map(n => CODE_CHARS[n % CODE_CHARS.length]).join('');
+}
+async function createRoom(name) {
+    const { fs, db } = fb;
+    enableRoom();
+    for (let tries = 0; tries < 5; tries++) {
+        const code = makeCode();
+        const ref = fs.doc(db, 'rooms', code);
+        const snap = await fs.getDoc(ref);
+        if (snap.exists()) continue;
+        await fs.setDoc(ref, { name, owner: currentUser.uid, members: [currentUser.uid], createdAt: Date.now() });
+        return code;
+    }
+    throw new Error('code');
+}
+async function joinRoom(code) {
+    code = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length !== 6) { toast('邀請碼是 6 碼'); return; }
+    if (myRooms.some(r => r.id === code)) { roomView = code; renderRoom(); return; }
+    const { fs, db } = fb;
+    try {
+        const ref = fs.doc(db, 'rooms', code);
+        const snap = await fs.getDoc(ref);
+        if (!snap.exists()) { toast('找不到這個房間，檢查一下邀請碼'); return; }
+        if ((snap.data().members || []).length >= ROOM_MAX) { toast(`房間已滿（最多 ${ROOM_MAX} 人）`); return; }
+        enableRoom();
+        roomView = pendingRoom = code;
+        await fs.updateDoc(ref, { members: fs.arrayUnion(currentUser.uid) });
+        toast(`已加入「${snap.data().name}」`);
+        renderRoom();
+    } catch (e) {
+        if (roomView === pendingRoom) roomView = pendingRoom = null;
+        renderRoom();
+        console.error('加入房間失敗：', e);
+        toast(e.code === 'permission-denied' ? '加入失敗：房間可能已滿' : '加入失敗，請檢查網路');
+    }
+}
+async function leaveRoom(code) {
+    const r = myRooms.find(x => x.id === code);
+    if (!r || !confirm(`確定要離開「${r.name}」嗎？`)) return;
+    const { fs, db } = fb;
+    const ref = fs.doc(db, 'rooms', code);
+    try {
+        if ((r.members || []).length <= 1) await fs.deleteDoc(ref);   // 最後一個人離開就刪掉房間
+        else await fs.updateDoc(ref, { members: fs.arrayRemove(currentUser.uid) });
+        roomView = null; renderRoom();
+        toast('已離開房間');
+    } catch (e) { console.error(e); toast('離開失敗，請檢查網路'); }
+}
+async function shareRoom(code) {
+    const r = myRooms.find(x => x.id === code);
+    const text = `一起來讀書！在「學測倒數」的讀書房間輸入邀請碼 ${code} 加入「${r?.name || ''}」`;
+    const url = location.origin + location.pathname;
+    try {
+        if (navigator.share) { await navigator.share({ title: '讀書房間邀請', text, url }); return; }
+    } catch (e) { if (e.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(`${text}\n${url}`); toast('已複製邀請訊息'); }
+    catch (e) { toast(`邀請碼：${code}`); }
+}
+
+function memberLine(s) {
+    if (s.phase === 'focus') return `<span class="st on">${s.subject != null ? `<i class="sdot s${s.subject}"></i>${SUBJECTS[s.subject]} · ` : ''}${s.paused ? '暫停中' : '專注中'}</span>`;
+    if (s.phase === 'break') return `<span class="st">休息中</span>`;
+    return `<span class="st">今天 ${fmtHM(s.min)}</span>`;
+}
+function memberClock(s) {
+    if (s.phase === 'focus') return fmtClock(s.left != null ? Math.max(0, s.left) : s.el);
+    if (s.phase === 'break') return fmtClock(s.el);
+    return '';
+}
+
+function renderRoom(errMsg) {
+    const el = $('tab-room');
+    if (!el || document.body.dataset.tab !== 'tab-room') return;
+    const back = (label, act) => `<button class="btn btn-small back-btn" data-room="${act}">${ICON_BACK}${label}</button>`;
+    if (!currentUser) {
+        el.innerHTML = `<div class="sub-wrap">${back('返回計時', 'back')}
+            <div class="room-empty"><p class="zh" style="font-size:17px;font-weight:700;margin:0">和朋友一起讀書</p>
+            <p class="empty">建立房間、分享邀請碼，就能看到大家正在讀什麼、今天讀了多久。<br>需要先登入 Google 帳號。</p>
+            <button class="btn btn-accent" data-room="login">登入</button></div></div>`;
+        return;
+    }
+    if (!roomsLoaded) {
+        el.innerHTML = `<div class="sub-wrap">${back('返回計時', 'back')}<p class="ai-loading" style="margin-top:30px">${errMsg ? esc(errMsg) : '<span class="ai-spin"></span>載入房間中…'}</p></div>`;
+        return;
+    }
+    const now = Date.now();
+    const meUid = currentUser.uid;
+    if (roomView) {
+        const r = myRooms.find(x => x.id === roomView);
+        if (!r) {
+            if (roomView === pendingRoom) { el.innerHTML = `<div class="sub-wrap">${back('房間列表', 'lobby')}<p class="ai-loading" style="margin-top:30px"><span class="ai-spin"></span>進入房間中…</p></div>`; return; }
+            roomView = null; return renderRoom();
+        }
+        const ms = (r.members || []).map(u => ({ u, p: profiles[u], s: liveStatus(profiles[u], now) }));
+        const order = { focus: 0, break: 1, idle: 2 };
+        const live = ms.slice().sort((a, b) => order[a.s.phase] - order[b.s.phase] || (b.s.el || 0) - (a.s.el || 0));
+        const total = (m) => Math.round(m.s.min + (m.s.phase === 'focus' ? m.s.el / 60000 : 0));   // 正在讀的那一輪也算進去
+        const rank = ms.slice().sort((a, b) => total(b) - total(a));
+        const maxMin = Math.max(1, ...rank.map(total));
+        const studying = ms.filter(m => m.s.phase === 'focus').length;
+        el.innerHTML = `<div class="sub-wrap">
+            ${back('房間列表', 'lobby')}
+            <div class="room-title">
+                <div><h2 class="zh">${esc(r.name)}</h2><p class="hint" style="text-align:left">${ms.length} 位成員 · <span class="live-dot"></span>${studying} 人正在讀</p></div>
+                <button class="code-chip num" data-room="share" aria-label="分享邀請碼 ${r.id}">${r.id}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
+            </div>
+            <section class="block">
+                <p class="label" style="margin-bottom:6px">大家的狀態</p>
+                <ul class="member-list">${live.map(m => `<li class="member-row ${m.s.phase}">
+                    ${avHtml(m.p, m.u)}
+                    <span class="mn"><b>${esc(m.p?.name || '同學')}${m.u === meUid ? '<small>（你）</small>' : ''}</b>${memberLine(m.s)}</span>
+                    <span class="clk num" data-clock="${m.u}">${memberClock(m.s)}</span>
+                </li>`).join('')}</ul>
+            </section>
+            <section class="block">
+                <p class="label" style="margin-bottom:10px">今天排行</p>
+                ${rank.map((m, i) => `<div class="rank-row">
+                    <span class="rk num ${i < 3 && total(m) ? 'top' : ''}">${i + 1}</span>
+                    <span class="nm">${esc(m.p?.name || '同學')}</span>
+                    <span class="track"><i style="width:${(total(m) / maxMin * 100).toFixed(1)}%"></i></span>
+                    <span class="t num">${fmtHM(total(m))}</span>
+                </div>`).join('')}
+            </section>
+            <div class="ai-actions">
+                <button class="btn btn-accent" data-room="focus" style="flex:1">${timer.phase === 'focus' ? '回到計時' : '開始專注'}</button>
+                <button class="btn" data-room="share">邀請朋友</button>
+            </div>
+            <div class="ai-actions" style="margin-top:8px">
+                ${r.owner === meUid ? '<button class="btn btn-small" data-room="rename">改名稱</button>' : ''}
+                <button class="btn btn-small btn-danger" data-room="leave">離開房間</button>
+            </div>
+            <p class="hint" style="margin-top:16px">房間裡的人看得到你的暱稱、正在讀的科目和今天的時數</p>
+        </div>`;
+        return;
+    }
+    el.innerHTML = `<div class="sub-wrap">
+        ${back('返回計時', 'back')}
+        <p class="label" style="margin:18px 0 10px">我的房間</p>
+        ${myRooms.length ? myRooms.map(r => {
+            const ms = (r.members || []);
+            const n = ms.filter(u => liveStatus(profiles[u], now).phase === 'focus').length;
+            return `<button class="room-card ${n ? 'hot' : ''}" data-open="${r.id}">
+                <span class="rc-top"><b class="zh">${esc(r.name)}</b><span class="num code">${r.id}</span></span>
+                <span class="rc-bot"><span class="avatars">${ms.slice(0, 4).map(u => avHtml(profiles[u], u)).join('')}${ms.length > 4 ? `<span class="av more num">+${ms.length - 4}</span>` : ''}</span>
+                <span class="rc-live">${n ? `<span class="live-dot"></span>${n} 人正在讀` : `${ms.length} 位成員 · 目前沒人在讀`}</span></span>
+            </button>`;
+        }).join('') : '<p class="empty">還沒有房間，建立一個或用邀請碼加入</p>'}
+        <section class="block">
+            <p class="label" style="margin-bottom:10px">用邀請碼加入</p>
+            <div class="input-row">
+                <input type="text" class="text-input num code-input" id="roomCodeInput" maxlength="6" placeholder="輸入 6 碼" autocapitalize="characters" autocomplete="off" aria-label="邀請碼">
+                <button class="btn btn-accent" data-room="join">加入</button>
+            </div>
+            <button class="btn btn-wide" data-room="create" style="margin-top:10px">＋ 建立新房間</button>
+        </section>
+        <section class="block">
+            <p class="label" style="margin-bottom:10px">我在房間裡的樣子</p>
+            <label class="field-label" for="roomName">暱稱（最多 20 字）</label>
+            <input type="text" class="field" id="roomName" maxlength="20" value="${esc(myName())}">
+            <label class="toggle-row"><input type="checkbox" class="checkbox" id="roomHidden" ${roomPref.hidden ? 'checked' : ''}>隱身模式：只顯示今天時數，不顯示在讀什麼</label>
+        </section>
+    </div>`;
+}
+// 每秒更新房間裡的時鐘（不重畫整頁）
+function roomTick() {
+    if (document.body.dataset.tab !== 'tab-room' || !roomView) return;
+    const now = Date.now();
+    document.querySelectorAll('#tab-room [data-clock]').forEach(n => {
+        n.textContent = memberClock(liveStatus(profiles[n.dataset.clock], now));
+    });
+}
+
+function openRoomModal(mode) {
+    roomModalMode = mode;
+    const r = myRooms.find(x => x.id === roomView);
+    $('roomModalTitle').textContent = mode === 'rename' ? '房間名稱' : '建立新房間';
+    $('roomNameInput').value = mode === 'rename' ? (r?.name || '') : '';
+    $('saveRoomBtn').textContent = mode === 'rename' ? '儲存' : '建立';
+    openModal('roomModal');
+    setTimeout(() => { if ($('roomModal').classList.contains('open')) $('roomNameInput').focus(); }, 120);
+}
+let roomModalMode = 'create';
+$('saveRoomBtn').addEventListener('click', async () => {
+    const name = $('roomNameInput').value.trim().slice(0, 30);
+    if (!name) { toast('取個房間名稱吧'); return; }
+    closeModal('roomModal');
+    try {
+        if (roomModalMode === 'rename') {
+            await fb.fs.updateDoc(fb.fs.doc(fb.db, 'rooms', roomView), { name });
+            toast('已改名');
+        } else {
+            const code = await createRoom(name);
+            roomView = pendingRoom = code;
+            renderRoom();
+            toast(`房間建立好了，邀請碼 ${code}`);
+        }
+    } catch (e) {
+        console.error(e);
+        toast(e.code === 'permission-denied' ? '被拒絕：請確認 Firestore 規則已更新' : '失敗了，請檢查網路');
+    }
+});
+onEnter($('roomNameInput'), () => $('saveRoomBtn').click());
+
+$('tab-room').addEventListener('click', (e) => {
+    const open = e.target.closest('[data-open]');
+    if (open) { roomView = open.dataset.open; renderRoom(); window.scrollTo({ top: 0 }); return; }
+    const act = e.target.closest('[data-room]')?.dataset.room;
+    if (act === 'back') showTab('tab-timer');
+    else if (act === 'lobby') { roomView = null; renderRoom(); }
+    else if (act === 'login') openModal('accountModal');
+    else if (act === 'join') joinRoom($('roomCodeInput').value);
+    else if (act === 'create') openRoomModal('create');
+    else if (act === 'rename') openRoomModal('rename');
+    else if (act === 'leave') leaveRoom(roomView);
+    else if (act === 'share') shareRoom(roomView);
+    else if (act === 'focus') showTab('tab-timer');
+});
+$('tab-room').addEventListener('keydown', (e) => {
+    if (e.target.id === 'roomCodeInput' && e.key === 'Enter' && !e.isComposing) { e.preventDefault(); joinRoom(e.target.value); }
+});
+$('tab-room').addEventListener('input', (e) => {
+    if (e.target.id === 'roomCodeInput') e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+});
+$('tab-room').addEventListener('change', (e) => {
+    if (e.target.id === 'roomName') {
+        const v = e.target.value.trim().slice(0, 20);
+        roomPref.name = v; saveRoomPref();
+        e.target.value = myName();
+        if (roomPref.enabled) { publishProfile(); toast('已更新暱稱'); }
+    } else if (e.target.id === 'roomHidden') {
+        roomPref.hidden = e.target.checked; saveRoomPref();
+        publishProfile();
+        toast(roomPref.hidden ? '已開啟隱身模式' : '已關閉隱身模式');
+    }
+});
+
+// 登入後：讀回自己的房間設定（換裝置也能用）
+async function loadRoomProfile(user) {
+    try {
+        const snap = await fb.fs.getDoc(fb.fs.doc(fb.db, 'profiles', user.uid));
+        if (snap.exists()) {
+            const p = snap.data();
+            roomPref = { ...roomPref, enabled: true, name: roomPref.name || p.name || '', hidden: !!p.hidden };
+            saveRoomPref();
+        }
+    } catch (e) { /* 離線或規則還沒設定 */ }
+    publishProfile(true);
+    if (document.body.dataset.tab === 'tab-room') { roomStart(); renderRoom(); }
+}
+
+/* =====================================================
  * 帳號畫面
  * ===================================================== */
 function renderAccount(statusText) {
@@ -1597,7 +2257,7 @@ if (timer.phase === 'focus' && timer.duration && !timer.pausedAt && focusElapsed
 if (timer.phase === 'break' && Date.now() - timer.breakStart >= timer.breakLen && !timer.chimed) { timer.chimed = true; saveTimer(); }
 if (timer.phase === 'focus' && !timer.pausedAt) requestWake();
 tick();
-setInterval(() => { tick(); timerTick(); }, 1000);
+setInterval(() => { tick(); timerTick(); roomTick(); }, 1000);
 renderAll();
 renderAccount();
 showTab(localStorage.getItem(LS.tab) || 'tab-countdown');
@@ -1628,6 +2288,14 @@ async function initFirebase() {
             import(`${base}/firebase-firestore.js`)
         ]);
         const app = appM.initializeApp(FIREBASE_CONFIG);
+        // App Check：證明請求來自這個網站，保護 AI 額度（要先在主控台註冊 reCAPTCHA）
+        if (RECAPTCHA_SITE_KEY) {
+            try {
+                if (['localhost', '127.0.0.1'].includes(location.hostname)) self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+                const acM = await import(`${base}/firebase-app-check.js`);
+                acM.initializeAppCheck(app, { provider: new acM.ReCaptchaV3Provider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+            } catch (e) { console.warn('App Check 啟動失敗：', e); }
+        }
         const auth = authM.getAuth(app);
         const provider = new authM.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
@@ -1638,7 +2306,7 @@ async function initFirebase() {
         } catch (e) {
             db = fsM.getFirestore(app);
         }
-        fb = { auth, provider, authM, db, fs: fsM };
+        fb = { app, auth, provider, authM, db, fs: fsM };
         renderAccount();
         authM.getRedirectResult(auth).catch(err => console.warn('跳轉登入結果：', err));
         authM.onAuthStateChanged(auth, onAuthChanged);
@@ -1653,10 +2321,12 @@ function onAuthChanged(user) {
     cloudReady = false;
     if (unsubscribe) { unsubscribe(); unsubscribe = null; }
     if (!user) {
+        roomStop(); lastProfile = '';
         state = loadLocal();
-        renderAll(); renderAccount();
+        renderAll(); renderAccount(); renderRoom();
         return;
     }
+    loadRoomProfile(user);
     renderAccount('同步中…');
     let first = true;
     const ref = fb.fs.doc(fb.db, 'users', user.uid);
@@ -1686,6 +2356,7 @@ function onAuthChanged(user) {
         }
         if (dupes && cloud) { save(); toast(`已移除 ${dupes} 個和考試重複的行程`); }
         renderAll();
+        publishProfile();   // 別台裝置新增了讀書紀錄時，更新房間裡的今日時數
         renderAccount(snap.metadata.fromCache ? '離線中，連上網路後會自動同步' : '');
     }, (err) => {
         console.error('雲端讀取失敗：', err);

@@ -144,7 +144,10 @@
                 </button>
             </div>
             <div class="progress"><div id="weekBar"></div></div>
-            <div class="week-tools"><button class="btn btn-small" id="thisWeekBtn">回到本週</button></div>
+            <div class="week-tools">
+                <button class="btn btn-small" id="thisWeekBtn">回到本週</button>
+                <button class="btn btn-small btn-outline-accent" id="aiPlanBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:15px;height:15px"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>AI 排計畫</button>
+            </div>
 
             <!-- 手機：選一天，看當天各科 -->
             <div class="mobile-only narrow">
@@ -164,6 +167,12 @@
 
         <!-- ========== 6. 統計 ========== -->
         <section id="tab-stats" class="tab"></section>
+
+        <!-- ========== 8. AI 讀書計畫（進度的子頁面） ========== -->
+        <section id="tab-ai" class="tab"></section>
+
+        <!-- ========== 9. 讀書房間（計時的子頁面） ========== -->
+        <section id="tab-room" class="tab"></section>
 
         <section id="tab-calendar" class="tab">
           <div class="cal-layout">
@@ -378,6 +387,20 @@
                 <div><span>關閉視窗</span><span class="kbd">Esc</span></div>
             </div>
             <div class="sheet-btns"><button class="btn" data-close>關閉</button></div>
+        </div>
+    </div>
+
+    <!-- 建立／改名讀書房間 -->
+    <div class="modal" id="roomModal" role="dialog" aria-modal="true" aria-labelledby="roomModalTitle">
+        <div class="sheet">
+            <h2 id="roomModalTitle">建立新房間</h2>
+            <label class="field-label" for="roomNameInput">房間名稱（最多 30 字）</label>
+            <input type="text" class="field" id="roomNameInput" maxlength="30" placeholder="例如：三年八班讀書會" enterkeyhint="done">
+            <p class="note" style="font-size:13px;color:var(--muted);margin:0 0 14px">建立後會拿到 6 碼邀請碼，分享給朋友就能加入，最多 20 人。</p>
+            <div class="sheet-btns">
+                <button class="btn" data-close>取消</button>
+                <button class="btn btn-accent" id="saveRoomBtn">建立</button>
+            </div>
         </div>
     </div>
 
