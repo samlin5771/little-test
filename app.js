@@ -54,7 +54,7 @@ const LS = {
     exam: 'selectedExamKey', theme: 'study_theme', tab: 'study_tab', accent: 'study_accent',
     sessions: 'study_sessions', timer: 'study_timer', tpref: 'study_timer_pref',
     aiPref: 'study_ai_pref', aiCount: 'study_ai_count', room: 'study_room',
-    install: 'study_install_seen', chatSeen: 'study_chat_seen', photoCount: 'study_photo_count'
+    install: 'study_install_seen', tour: 'study_tour_seen', chatSeen: 'study_chat_seen', photoCount: 'study_photo_count'
 };
 // 沒有頭像時的預設圖（顏色跟著主題色）
 function defaultAvatar() {
@@ -195,7 +195,13 @@ $('accentGrid').addEventListener('click', (e) => {
     if (!b) return;
     applyAccent(b.dataset.accent);
     lsSet(LS.accent, b.dataset.accent);
-    renderAccount();   // 預設頭像換色
+    renderAccount();   // 預設頭像、目前主題色名稱
+});
+// 個人設定：點「主題色」展開／收起顏色選項
+$('accentRow').addEventListener('click', () => {
+    const g = $('accentGrid'), open = g.hidden;
+    g.hidden = !open;
+    $('accentRow').setAttribute('aria-expanded', open);
 });
 
 $('themeBtn').addEventListener('click', () => {
@@ -263,12 +269,13 @@ function closeModal(id) {
     if (id === 'rouletteModal') stopSpin();
 }
 document.querySelectorAll('.modal').forEach(m => {
-    m.addEventListener('click', (e) => { if (e.target === m || e.target.closest('[data-close]')) closeModal(m.id); });
+    // data-locked 的視窗（加到主畫面教學）只能按裡面的按鈕關閉
+    m.addEventListener('click', (e) => { if (m.hasAttribute('data-locked')) return; if (e.target === m || e.target.closest('[data-close]')) closeModal(m.id); });
 });
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     const open = document.querySelectorAll('.modal.open');
-    if (open.length) open.forEach(m => closeModal(m.id));
+    if (open.length) open.forEach(m => { if (!m.hasAttribute('data-locked')) closeModal(m.id); });
     else if (document.body.classList.contains('sub') && !isTyping(document.activeElement)) goBack();   // 子頁面按 Esc 返回
 });
 function onEnter(el, fn) {
@@ -1412,7 +1419,7 @@ document.addEventListener('keydown', (e) => {
         return;
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (isTyping(document.activeElement) || document.querySelector('.modal.open') || document.body.classList.contains('chat-open')) return;
+    if (isTyping(document.activeElement) || document.querySelector('.modal.open') || document.body.classList.contains('chat-open') || document.body.classList.contains('guide-open')) return;
     const tab = document.body.dataset.tab;
     if (/^[1-5]$/.test(e.key)) { showTab(TAB_ORDER[Number(e.key) - 1]); return; }
     if (e.key === '?') { openModal('keysModal'); return; }
@@ -2202,7 +2209,7 @@ function renderRoom(errMsg) {
                 </div>`).join('')}
             </section>
             <p class="hint" style="margin-top:16px">房間裡的人看得到你的暱稱、正在讀的科目和今天的時數</p>
-            <div class="sticky-cta"><button class="btn btn-accent btn-wide" data-room="focus"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>${timer.phase === 'focus' ? '回到計時' : '開始讀書📖'}</button></div>
+            <div class="sticky-cta"><button class="btn btn-accent btn-wide" data-room="focus"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>${timer.phase === 'focus' ? '回到計時' : '跟大家一起開始專注'}</button></div>
         </div>`;
         return;
     }
@@ -2744,36 +2751,79 @@ function renderInstall() {
     $('installIOS').hidden = installOS !== 'ios';
     $('installAndroid').hidden = installOS !== 'android';
 }
-function openInstall() { renderInstall(); openModal('installModal'); }
+let tourAfterInstall = false;
+function openInstall(chain) { tourAfterInstall = !!chain; renderInstall(); openModal('installModal'); }
 $('installModal').addEventListener('click', (e) => {
     const os = e.target.closest('[data-os]');
     if (os) { installOS = os.dataset.os; renderInstall(); return; }
-    if (e.target.closest('[data-install-done]')) { lsSet(LS.install, '1'); closeModal('installModal'); }
+    if (e.target.closest('[data-install-done]')) {
+        lsSet(LS.install, '1'); closeModal('installModal');
+        if (tourAfterInstall) { tourAfterInstall = false; setTimeout(openTour, 260); }   // 接著顯示簡易導覽
+    }
 });
-$('installGuideBtn').addEventListener('click', () => { closeModal('accountModal'); openInstall(); });
-// 第一次用手機瀏覽器打開時自動出現（已經從主畫面打開就不出現）
+
+/* --- 簡易導覽（第一次打開）與完整網站導覽 --- */
+function openTour() { lsSet(LS.tour, '1'); openModal('tourModal'); }
+$('tourFull').addEventListener('click', () => { closeModal('tourModal'); openGuide(); });
+let guideSavedScroll = 0;
+function openGuide(sectionId) {
+    guideSavedScroll = window.scrollY;
+    $('guideScreen').classList.add('open');
+    document.body.classList.add('guide-open');
+    $('guideBody').scrollTop = 0;
+    if (sectionId) requestAnimationFrame(() => $(sectionId)?.scrollIntoView());
+}
+function closeGuide() {
+    if (!$('guideScreen').classList.contains('open')) return;
+    $('guideScreen').classList.remove('open');
+    document.body.classList.remove('guide-open');
+    window.scrollTo(0, guideSavedScroll);
+}
+$('guideBack').addEventListener('click', closeGuide);
+$('guideDone').addEventListener('click', closeGuide);
+// 目錄：在導覽頁裡面捲動，不改網址
+$('guideScreen').addEventListener('click', (e) => {
+    const a = e.target.closest('.guide-toc a');
+    if (!a) return;
+    e.preventDefault();
+    const t = document.querySelector(a.getAttribute('href'));
+    if (t) $('guideBody').scrollTo({ top: t.offsetTop - 70, behavior: 'smooth' });
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('guideScreen').classList.contains('open') && !document.querySelector('.modal.open')) { e.stopImmediatePropagation(); closeGuide(); }
+}, true);
+// 第一次打開：手機瀏覽器先教「加到主畫面」（一定要按我知道了），接著簡易導覽；其他情況只顯示簡易導覽
 setTimeout(() => {
-    if (localStorage.getItem(LS.install) || isStandalone() || !isMobile()) return;
     if (document.querySelector('.modal.open')) return;
-    lsSet(LS.install, '1');
-    openInstall();
+    const needInstall = !localStorage.getItem(LS.install) && !isStandalone() && isMobile();
+    const needTour = !localStorage.getItem(LS.tour);
+    if (needInstall) openInstall(needTour);
+    else if (needTour) openTour();
 }, 1200);
 
 /* =====================================================
  * 帳號畫面
  * ===================================================== */
+const ACCENT_NAME = { amber: '琥珀', mint: '薄荷', violet: '霧紫', sakura: '櫻花' };
 function renderAccount(statusText) {
     const u = currentUser;
     $('avatarImg').src = u?.photoURL || defaultAvatar();
     $('accountAvatar').src = u?.photoURL || defaultAvatar();
-    $('accountName').textContent = u ? (u.displayName || u.email || '已登入') : '未登入';
-    $('accountStatus').textContent = statusText || (u ? '雲端同步已開啟' : (fb ? '資料只存在這台裝置' : '離線中，資料只存在這台裝置'));
+    $('accountName').textContent = u ? (u.displayName || '已登入') : '未登入';
+    $('accountEmail').textContent = u ? (u.email || '') : '';
+    const status = statusText || (u ? '雲端同步已開啟' : (fb ? '資料只存在這台裝置' : '離線中，資料只存在這台裝置'));
+    $('accountStatus').textContent = status;
+    $('syncDot').className = 'sync-dot ' + (u && !statusText ? 'ok' : /失敗|離線/.test(status) ? 'bad' : u ? 'wait' : '');
     $('accountHint').style.display = u ? 'none' : '';
+    $('accentName').textContent = ACCENT_NAME[localStorage.getItem(LS.accent) || 'amber'] || '琥珀';
+    $('installState').textContent = isStandalone() ? '已加入 ✓' : '教學';
     $('loginBtn').textContent = u ? '登出' : '使用 Google 登入';
     $('loginBtn').classList.toggle('btn-accent', !u);
-    $('loginBtn').classList.toggle('btn-danger', !!u);
+    $('loginBtn').classList.toggle('btn-logout', !!u);
 }
-$('accountBtn').addEventListener('click', () => { $('installGuideBtn').hidden = isStandalone(); openModal('accountModal'); });
+$('accountBtn').addEventListener('click', () => { $('installState').textContent = isStandalone() ? '已加入 ✓' : '教學'; $('accentGrid').hidden = true; $('accentRow').setAttribute('aria-expanded', false); openModal('accountModal'); });
+$('guideRow').addEventListener('click', () => { closeModal('accountModal'); openGuide(); });
+$('installRow').addEventListener('click', () => { closeModal('accountModal'); openInstall(false); });
 
 // 禁止雙指縮放（iOS Safari 不吃 viewport 設定，要另外擋）
 ['gesturestart', 'gesturechange', 'gestureend'].forEach(t =>
