@@ -2184,7 +2184,7 @@ function renderRoom(errMsg) {
         const unread = unreadOf(r.id);
         const chatBtn = `<button class="chat-entry" data-chat="${r.id}">
                 <span class="ce-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/></svg></span>
-                <span class="ce-tx"><b>聊天室</b><small>${last ? esc(`${last.uid === meUid ? '你' : (last.name || '同學')}：${last.img ? '傳了一張照片' : last.text}`) : '和房間裡的大家聊聊'}</small></span>
+                <span class="ce-tx"><b>聊天室</b><small>${last ? esc(`${last.uid === meUid ? '你' : (last.name || '同學')}：${last.img ? '傳了一張照片' : last.text}`) : '與朋友聊聊'}</small></span>
                 ${unread ? `<span class="seg-n">${unread > 99 ? '99+' : unread}</span>` : ''}
                 <svg class="go-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
             </button>`;
@@ -2217,7 +2217,7 @@ function renderRoom(errMsg) {
                 </div>`).join('')}
             </section>
             <p class="hint" style="margin-top:16px">房間裡的人看得到你的暱稱、正在讀的科目和今天的時數</p>
-            <div class="sticky-cta"><button class="btn btn-accent btn-wide" data-room="focus"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>${timer.phase === 'focus' ? '回到計時' : '跟大家一起開始專注'}</button></div>
+            <div class="sticky-cta"><button class="btn btn-accent btn-wide" data-room="focus"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>${timer.phase === 'focus' ? '回到計時' : '開始讀書'}</button></div>
         </div>`;
         return;
     }
