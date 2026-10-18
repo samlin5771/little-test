@@ -34,16 +34,22 @@ const SUBJECTS = ['數學', '自然', '英文', '國文', '社會'];
 const SLOTS = 2;
 const TZ = '+08:00'; // 以台灣時間倒數
 
-const FIREBASE_CONFIG = {
-    apiKey: "AIzaSyCsoIvDKShBF1w39m9JzRNPUrkA4UDx5hk",
-    authDomain: "study-countdown.firebaseapp.com",
-    projectId: "study-countdown"
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCsoIvDKShBF1w39m9JzRNPUrkA4UDx5hk",
+  authDomain: "study-countdown.firebaseapp.com",
+  projectId: "study-countdown",
+  storageBucket: "study-countdown.firebasestorage.app",
+  messagingSenderId: "28447904418",
+  appId: "1:28447904418:web:dbf52d5d9ad0b7aef27dfb",
+  measurementId: "G-01SBVEFL1R"
 };
+
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
 const AI_MODEL = 'gemini-3.5-flash';
 // App Check（reCAPTCHA v3）網站金鑰：到 Firebase 主控台 → App Check 註冊後貼在這裡；留空就不啟用
-const RECAPTCHA_SITE_KEY = '';
+const RECAPTCHA_SITE_KEY = '6LeR9vQtAAAAAKsbIXmqZCd4sHONdH-mvcTx_qtJ';
 
 const LS = {
     todos: 'study_todos', weekly: 'study_weekly', events: 'study_events',
