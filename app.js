@@ -2126,8 +2126,8 @@ const MEDAL = ['#E9B154', '#C9CED6', '#C98A5A'];
 const SEAT_C = 2 * Math.PI * 31;
 function seatSub(s) {
     if (s.phase === 'focus') return s.subject != null ? `<span class="ss" style="color:var(--s${s.subject})">${SUBJECTS[s.subject]}${s.paused ? ' · 暫停' : ''}</span>` : `<span class="ss on">${s.paused ? '暫停中' : '專注中'}</span>`;
-    if (s.phase === 'break') return '<span class="ss">休息中</span>';
-    return '<span class="ss">未開始</span>';
+    if (s.phase === 'break') return '<span class="ss">番茄鐘休息</span>';
+    return s.min > 0 ? '<span class="ss">休息中</span>' : '<span class="ss">今天還沒開始</span>';   // 今天讀過但現在沒在讀＝休息中
 }
 function memberClock(s) {
     if (s.phase === 'focus') return fmtClock(s.left != null ? Math.max(0, s.left) : s.el);
@@ -2199,7 +2199,7 @@ function renderRoom(errMsg) {
             ${chatBtn}
             <div class="seats">${seats.map(m => {
                 const fr = seatFrac(m.s);
-                return `<div class="seat ${m.s.phase}" data-seat="${m.u}">
+                return `<div class="seat ${m.s.phase}${m.s.phase === 'idle' && m.s.min > 0 ? ' rested' : ''}" data-seat="${m.u}">
                     <div class="seat-av"><svg viewBox="0 0 68 68" aria-hidden="true"><circle class="st-track" cx="34" cy="34" r="31"/><circle class="st-bar" cx="34" cy="34" r="31" stroke-dasharray="${SEAT_C.toFixed(1)}" stroke-dashoffset="${(SEAT_C * (1 - fr)).toFixed(1)}"/></svg>
                         <span class="seat-face" style="background:${avColor(m.u)}">${esc(memberName(m).slice(0, 1))}</span></div>
                     <b class="sn">${esc(memberName(m))}${m.u === meUid ? '<small>（你）</small>' : ''}</b>
