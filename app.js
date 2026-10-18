@@ -216,6 +216,9 @@ function showTab(id) {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === id));
     document.body.dataset.tab = id;
     $('pageTitle').textContent = { 'tab-stats': '讀書統計', 'tab-room': '讀書房間', 'tab-ai': 'AI 讀書計畫' }[id] || btn.dataset.title;
+    document.body.classList.toggle('sub', !!SUB[id]);   // 子頁面：頂部左邊出現返回鍵
+    $('topExtra').innerHTML = '';
+    if (id === 'tab-stats') renderStats();
     if (id === 'tab-room') { roomStart(); renderRoom(); }
     if (id === 'tab-ai') renderAI();
     lsSet(LS.tab, id);
@@ -223,6 +226,22 @@ function showTab(id) {
     window.scrollTo({ top: 0 });
 }
 tabBtns.forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+// 子頁面右上角的按鈕（分享、⋯ 等），只在那一頁顯示
+function setTopExtra(tab, html) { if (document.body.dataset.tab === tab) $('topExtra').innerHTML = html; }
+function goBack() {
+    const tab = document.body.dataset.tab;
+    if (tab === 'tab-room' && roomView) { roomView = null; renderRoom(); window.scrollTo({ top: 0 }); return; }
+    showTab(tab === 'tab-ai' ? 'tab-weekly' : 'tab-timer');
+}
+$('backBtn').addEventListener('click', goBack);
+$('topExtra').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-top]');
+    if (!b) return;
+    const a = b.dataset.top;
+    if (a === 'share-day') openShareCard(statSel || todayStr());
+    else if (a === 'room-menu') openRoomMenu();
+    else if (a === 'me') openMeModal();
+});
 
 /* =====================================================
  * 彈出視窗
@@ -322,7 +341,7 @@ function tick() {
         : '所有考試都完成了，恭喜！';
 }
 
-// 今日進度：讀取每週進度表中「今天」有寫內容的格子
+// 今天：讀了多久（對照每日目標）＋進度表中「今天」有寫內容的格子
 function renderToday() {
     const t = todayStr();
     const items = [];
@@ -330,16 +349,22 @@ function renderToday() {
         for (let slot = 0; slot < SLOTS; slot++) {
             const key = `${t}_${s}_${slot}`;
             const d = state.weekly[key];
-            if (d && d.text) items.push({ key, subj, text: d.text, done: !!d.done });
+            if (d && d.text) items.push({ key, s, subj, text: d.text, done: !!d.done });
         }
     });
     const done = items.filter(i => i.done).length;
-    $('todayCount').textContent = items.length ? `${done} / ${items.length}` : '';
+    $('todayCount').textContent = items.length ? `${items.length} 項 · 完成 ${done} 項` : '';
+    const min = Math.round(dayMinutes(t)), goal = tpref.goal;
+    const left = goal - min;
+    $('todayTime').innerHTML = `${hmHtml(min)}<span class="goal-of">／ 目標 ${goal / 60} 小時</span>`;
+    $('todayTag').className = 'tag ' + (left <= 0 ? 'ok' : 'warn');
+    $('todayTag').textContent = left <= 0 ? '今天達標了' : `還差 ${fmtHM(left)}`;
+    $('todayBar').style.width = Math.min(100, min / goal * 100) + '%';
     $('todayList').innerHTML = items.length
         ? items.map(i => `
             <li class="check-item ${i.done ? 'done' : ''}">
                 <input type="checkbox" class="checkbox" data-key="${i.key}" ${i.done ? 'checked' : ''} aria-label="完成 ${esc(i.subj)}">
-                <span class="text"><span class="subj">${esc(i.subj)}</span>${esc(i.text)}</span>
+                <span class="text"><span class="subj" style="color:var(--s${i.s})">${esc(i.subj)}</span>${esc(i.text)}</span>
             </li>`).join('')
         : `<li class="empty">今天還沒安排進度，<button class="btn btn-small" id="goWeekBtn">去安排</button></li>`;
 }
@@ -923,29 +948,39 @@ function renderTimer() {
     } else {
         const m = MODES[tpref.mode];
         const task = taskFor(tpref.subject);
+        const todayMin = Math.round(dayMinutes(t));
+        const goalFrac = Math.min(1, todayMin / tpref.goal);
+        const GC = 2 * Math.PI * 122;
+        const wk = getMonday(new Date());
+        let weekMin = 0;
+        for (let i = 0; i < 7; i++) { const d = new Date(wk); d.setDate(d.getDate() + i); weekMin += dayMinutes(ymd(d)); }
+        const live = roomLiveCount();
         el.innerHTML = `<div class="timer-wrap">
-            <div class="timer-head">
-                <p class="label">讀哪一科</p>
-                <span style="display:flex;gap:8px">
-                    <button class="btn btn-small" data-act="room">${ICON_ROOM}房間</button>
-                    <button class="btn btn-small" data-act="stats">${ICON_CHART.replace('<svg', '<svg style="width:16px;height:16px"')}統計</button>
-                </span>
+            <div class="go-row">
+                <button class="go-btn room" data-act="room">
+                    <span class="go-ic">${ICON_ROOM.replace('style="width:16px;height:16px"', '')}</span>
+                    <span class="go-tx"><b>讀書房間</b><small>${live === null ? '和朋友一起讀' : live ? `● ${live} 人在讀` : '目前沒人在讀'}</small></span>
+                    <svg class="go-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+                </button>
+                <button class="go-btn" data-act="stats">
+                    <span class="go-ic">${ICON_CHART}</span>
+                    <span class="go-tx"><b>讀書統計</b><small>本週 ${weekMin >= 60 ? Math.floor(weekMin / 60) + ' 小時' : Math.round(weekMin) + ' 分鐘'}</small></span>
+                    <svg class="go-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+                </button>
             </div>
             <div class="subj-grid">${subjButtons(tpref.subject, 'data-subj')}</div>
             <div class="seg" role="tablist" aria-label="計時模式" style="margin-top:12px">${MODES.map((x, i) =>
                 `<button role="tab" aria-selected="${i === tpref.mode}" class="${i === tpref.mode ? 'active' : ''}" data-mode="${i}">${x.label}</button>`).join('')}</div>
             <div class="ring-wrap">${ringSvg()}
+                <svg class="goal-ring" viewBox="0 0 290 290" aria-hidden="true"><circle class="goal-track" cx="145" cy="145" r="122"/><circle class="goal-bar" cx="145" cy="145" r="122" stroke-dasharray="${GC.toFixed(1)}" stroke-dashoffset="${(GC * (1 - goalFrac)).toFixed(1)}"/></svg>
                 <div class="ring-center"><span class="ring-time num">${m.focus ? pad(m.focus) + ':00' : '00:00'}</span><span class="ring-sub">${m.hint}</span></div>
             </div>
+            <p class="goal-line"><i></i>今天 ${fmtHM(todayMin)} ／ 目標 ${tpref.goal / 60} 小時${todayMin >= tpref.goal ? '，達標了！' : ''}</p>
             <p class="task-line">${task && !task.done ? `今天的${SUBJECTS[tpref.subject]}進度：<b>${esc(task.text)}</b>` : ''}</p>
             <button class="btn btn-accent btn-wide" data-act="start" style="margin-top:14px">
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>開始專注
             </button>
-            <div class="stat3">
-                <div><strong class="num">${hmHtml(dayMinutes(t))}</strong><span>今天</span></div>
-                <div><strong class="num">${roundsOn(t)}<small>輪</small></strong><span>番茄鐘</span></div>
-                <div><strong class="num hot">${studyStreak()}<small>天</small></strong><span>連續讀書</span></div>
-            </div>
+            <p class="mini-stats"><span><b class="num">${roundsOn(t)}</b> 輪番茄鐘</span><span><b class="num hot">${studyStreak()}</b> 天連續讀書</span></p>
         </div>`;
         if (pipWin) { try { pipWin.close(); } catch (e) {} }
     }
@@ -1132,20 +1167,22 @@ function renderStats() {
     if (!statSel || !keys.includes(statSel)) {
         statSel = keys.includes(t) ? t : (keys.slice().reverse().find(k => map[k].some(v => v)) || keys[keys.length - 1]);
     }
+    const goal = tpref.goal;
+    const rounds = state.sessions.filter(x => x.pomo && keys.includes(sessionDay(x))).length;
 
-    // 差異
+    // 和上一期比較
     const diff = total - prevTotal;
     let deltaHtml = '';
     if (total || prevTotal) {
         deltaHtml = diff > 0
-            ? `<svg class="up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>比上${word}多 ${fmtHM(diff)}`
+            ? `<span class="up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>比上${word}多 ${fmtHM(diff)}</span>`
             : diff < 0 ? `比上${word}少 ${fmtHM(-diff)}` : `和上${word}一樣`;
-        deltaHtml += ` · 日平均 ${fmtHM(avg)}`;
     }
+    if (rounds) deltaHtml += `${deltaHtml ? ' · ' : ''}${rounds} 輪番茄鐘`;
 
-    // 圖表刻度（整點小時）
+    // 圖表刻度（整點小時，一定包含目標線）
     const maxDay = Math.max(0, ...sums);
-    let topH = Math.max(1, Math.ceil(maxDay / 60));
+    let topH = Math.max(1, Math.ceil(maxDay / 60), Math.ceil(goal / 60));
     const step = topH > 6 ? 2 : 1;
     topH = Math.ceil(topH / step) * step;
     const H = 200, topMin = topH * 60;
@@ -1155,111 +1192,123 @@ function renderStats() {
         grid += `<div class="chart-grid ${h === 0 ? 'base' : ''}" style="bottom:${y}%"></div>`;
         ylab += `<span style="bottom:${y}%">${h}h</span>`;
     }
+    const isWeek = statRange === 'week';
     const bars = keys.map((k, i) => {
         const row = map[k];
         const segs = row.map((v, s) => v > 0 ? `<i style="height:${Math.max(2, v / topMin * H - 2).toFixed(1)}px;background:var(--s${s})"></i>` : '').join('');
         const d = days[i];
         const label = `${fmtMD(d)} 星期${WEEK_ZH[d.getDay()]}：${fmtHM(sums[i])}`;
-        return `<button class="bar-col ${k === statSel ? 'sel' : ''}" data-day="${k}" title="${label}" aria-label="${label}"><span class="bar-stack">${segs}</span></button>`;
+        const top = isWeek && sums[i] ? `<span class="bar-top num ${sums[i] >= goal ? 'ok' : ''}">${Math.floor(sums[i] / 60)}:${pad(sums[i] % 60)}</span>` : '';
+        return `<button class="bar-col ${k === statSel ? 'sel' : ''}" data-day="${k}" title="${label}" aria-label="${label}">${top}<span class="bar-stack">${segs}</span></button>`;
     }).join('');
     const xlab = days.map((d, i) => {
         const k = keys[i];
-        let txt = statRange === 'week' ? WEEK_ZH[d.getDay()] : ([1, 5, 10, 15, 20, 25, 30].includes(d.getDate()) ? d.getDate() : '');
-        if (statRange === 'week' && k === t) txt += '（今）';
+        let txt = isWeek ? WEEK_ZH[d.getDay()] : ([1, 5, 10, 15, 20, 25, 30].includes(d.getDate()) ? d.getDate() : '');
+        if (isWeek && k === t) txt += '（今）';
         return `<span class="${k === statSel ? 'sel' : ''}">${txt}</span>`;
     }).join('');
 
-    // 選中那天
+    // 選中的那天
     const sd = parseYmd(statSel);
-    const selRow = map[statSel];
-    const selSum = selRow.reduce((a, b) => a + b, 0);
-    const selDetail = selRow.map((v, s) => v ? `${SUBJECTS[s]} ${fmtHM(v)}` : '').filter(Boolean).join('　') || '這天沒有讀書紀錄';
-    const logs = state.sessions.filter(x => sessionDay(x) === statSel).sort((a, b) => a.start - b.start);
+    const selSum = map[statSel].reduce((a, b) => a + b, 0);
+    const selCount = state.sessions.filter(x => sessionDay(x) === statSel).length;
 
     // 各科
     const subjTot = SUBJECTS.map((_, s) => keys.reduce((a, k) => a + map[k][s], 0));
-    const maxS = Math.max(1, ...subjTot);
-    const goalDays = sums.filter(v => v >= tpref.goal).length;
-    const rounds = state.sessions.filter(x => x.pomo && keys.includes(sessionDay(x))).length;
+    const goalDays = sums.filter(v => v >= goal).length;
+    const order = SUBJECTS.map((_, s) => s).sort((a, b) => subjTot[b] - subjTot[a]);
 
     el.innerHTML = `<div class="stats-wrap">
-        <button class="btn btn-small back-btn" data-sact="back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>返回計時</button>
         <div class="stats-head">
-            <button class="icon-btn" data-sact="prev" aria-label="上一${word}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <button class="icon-btn ghost" data-sact="prev" aria-label="上一${word}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
             <div class="period"><b>${periodTitle}</b><span class="num">${fmtMD(days[0])} – ${fmtMD(days[days.length - 1])}</span></div>
-            <button class="icon-btn" data-sact="next" aria-label="下一${word}" ${statOffset >= 0 ? 'disabled style="opacity:.3"' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+            <button class="icon-btn ghost" data-sact="next" aria-label="下一${word}" ${statOffset >= 0 ? 'disabled style="opacity:.3"' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+            <div class="seg two" role="tablist" aria-label="統計範圍">
+                <button role="tab" aria-selected="${isWeek}" class="${isWeek ? 'active' : ''}" data-range="week">週</button>
+                <button role="tab" aria-selected="${!isWeek}" class="${!isWeek ? 'active' : ''}" data-range="month">月</button>
+            </div>
         </div>
-        <div class="stats-range"><div class="seg two" role="tablist" aria-label="統計範圍">
-            <button role="tab" aria-selected="${statRange === 'week'}" class="${statRange === 'week' ? 'active' : ''}" data-range="week">週</button>
-            <button role="tab" aria-selected="${statRange === 'month'}" class="${statRange === 'month' ? 'active' : ''}" data-range="month">月</button>
-        </div></div>
 
-        <section style="margin-top:22px">
-            <p class="label">${periodTitle}總共讀了</p>
-            <div class="hero-total num">${Math.floor(total / 60) ? `<b>${Math.floor(total / 60)}</b><span>時</span>` : ''}<b>${total % 60}</b><span>分</span></div>
+        <section style="margin-top:14px" aria-label="${periodTitle}總共讀了 ${fmtHM(total)}">
+            <div class="hero-total num">${Math.floor(total / 60) ? `<b>${Math.floor(total / 60)}</b><span>時</span>` : ''}<b>${pad(total % 60)}</b><span>分</span></div>
             <p class="delta">${deltaHtml}</p>
         </section>
+
+        <div class="kpi3">
+            <div><b class="num">${Math.floor(avg / 60)}:${pad(Math.round(avg % 60))}</b><span>日平均</span></div>
+            <div><b class="num hot">${studyStreak()}<small>天</small></b><span>連續讀書</span></div>
+            <div><b class="num ok">${goalDays}<small>/ ${countedDays || days.length}</small></b>
+                <span>達標每日 <select class="goal-select" id="goalSelect" aria-label="每日目標">${GOALS.map(g => `<option value="${g}" ${g === goal ? 'selected' : ''}>${g / 60} 小時</option>`).join('')}</select></span></div>
+        </div>
 
         <section aria-label="每天讀書時數，依科目堆疊">
             <div class="chart">
                 <div class="chart-y num">${ylab}</div>
-                <div class="chart-plot">${grid}<div class="chart-bars">${bars}</div></div>
+                <div class="chart-plot">${grid}<div class="goal-dash" style="bottom:${(goal / topMin * 100).toFixed(2)}%"></div><div class="chart-bars">${bars}</div></div>
             </div>
             <div class="chart-x">${xlab}</div>
-            <div class="legend-row">${SUBJECTS.map((n, s) => `<span><i class="sdot s${s}"></i>${n}</span>`).join('')}</div>
+            <div class="legend-row">${SUBJECTS.map((n, s) => `<span><i class="sdot s${s}"></i>${n}</span>`).join('')}<span class="goal-key"><i></i>每日目標</span></div>
+            <button class="day-row" data-sact="day">
+                <b>${fmtMD(sd)} 星期${WEEK_ZH[sd.getDay()]}${statSel === t ? '（今天）' : ''}</b>
+                <span class="muted">${selCount ? `${selCount} 筆紀錄` : '沒有紀錄'}</span>
+                <span class="grow"></span>
+                <b class="num">${fmtHM(selSum)}</b>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+            </button>
         </section>
 
-        <section class="block">
-            <div class="block-head">
-                <strong class="zh" style="font-size:15px">${fmtMD(sd)} 星期${WEEK_ZH[sd.getDay()]}${statSel === t ? '（今天）' : ''}</strong>
-                <span class="num" style="font-weight:700">${fmtHM(selSum)}</span>
-            </div>
-            <p class="empty" style="padding:0 0 6px">${selDetail}</p>
-            <ul class="event-list">${logs.map(x => {
-                const d = new Date(x.start);
-                return `<li class="log-row"><span class="at">${pad(d.getHours())}:${pad(d.getMinutes())}</span><i class="sdot s${x.subject}"></i><span class="nm">${SUBJECTS[x.subject]}${x.pomo ? '' : ''}</span><span class="mn">${fmtHM(x.minutes)}</span><button class="del-btn" data-del="${x.id}" aria-label="刪除這筆紀錄">${ICON_X}</button></li>`;
-            }).join('')}</ul>
-            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-                <button class="btn btn-small" data-sact="add">＋ 補登時間</button>
-                <button class="btn btn-small" data-sact="share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:15px;height:15px"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>分享這天</button>
-            </div>
-        </section>
-
-        <section class="block">
-            <p class="label" style="margin-bottom:10px">各科時數</p>
-            ${SUBJECTS.map((n, s) => `<div class="subj-row">
-                <span class="nm">${n}</span>
-                <span class="track"><i style="width:${(subjTot[s] / maxS * 100).toFixed(1)}%;background:var(--s${s})"></i></span>
-                <span class="t num">${fmtHM(subjTot[s])}</span>
-                <span class="p num">${total ? Math.round(subjTot[s] / total * 100) : 0}%</span>
+        <section class="stats-sec">
+            <div class="sec-head"><h3>各科比例</h3><span>${periodTitle}</span></div>
+            <div class="split-bar">${total ? subjTot.map((v, s) => v ? `<i style="width:${(v / total * 100).toFixed(2)}%;background:var(--s${s})"></i>` : '').join('') : '<i style="width:100%;background:var(--surface-2)"></i>'}</div>
+            ${order.map((s, k) => `<div class="rank-subj">
+                <span class="num rk">${k + 1}</span><i class="sdot s${s}"></i><span class="nm">${SUBJECTS[s]}</span>
+                <span class="t num">${fmtHM(subjTot[s])}</span><span class="p num">${total ? Math.round(subjTot[s] / total * 100) : 0}%</span>
             </div>`).join('')}
         </section>
 
-        <div class="stat3">
-            <div><strong class="num hot">${studyStreak()}<small>天</small></strong><span>連續讀書</span></div>
-            <div><strong class="num">${rounds}<small>輪</small></strong><span>番茄鐘</span></div>
-            <div><strong class="num">${goalDays}<small>/ ${countedDays || days.length}</small></strong>
-                <span>達成每日 <select class="goal-select" id="goalSelect" aria-label="每日目標">${GOALS.map(g => `<option value="${g}" ${g === tpref.goal ? 'selected' : ''}>${g / 60} 小時</option>`).join('')}</select></span></div>
+        <div style="display:flex;justify-content:center;margin-top:16px">
+            <button class="text-link" data-sact="add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>補登讀書時間</button>
         </div>
     </div>`;
+    setTopExtra('tab-stats', `<button class="icon-btn" data-top="share-day" aria-label="分享這天"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>`);
+    if ($('dayModal').classList.contains('open')) renderDaySheet();
 }
+
+// 某一天的明細（下方滑出）
+function renderDaySheet() {
+    const sd = parseYmd(statSel);
+    const logs = state.sessions.filter(x => sessionDay(x) === statSel).sort((a, b) => a.start - b.start);
+    const sum = logs.reduce((a, x) => a + x.minutes, 0);
+    $('dayTitle').textContent = `${sd.getMonth() + 1}/${sd.getDate()} 星期${WEEK_ZH[sd.getDay()]}${statSel === todayStr() ? '（今天）' : ''}`;
+    $('daySum').textContent = fmtHM(sum);
+    $('daySplit').innerHTML = sum ? logs.map(x => `<i style="width:${(x.minutes / sum * 100).toFixed(2)}%;background:var(--s${x.subject})"></i>`).join('') : '';
+    $('dayLogs').innerHTML = logs.length ? logs.map(x => {
+        const d = new Date(x.start);
+        return `<li class="log-row"><span class="at">${pad(d.getHours())}:${pad(d.getMinutes())}</span><i class="sdot s${x.subject}"></i><span class="nm">${SUBJECTS[x.subject]}</span><span class="mn">${fmtHM(x.minutes)}</span><button class="del-btn" data-del="${x.id}" aria-label="刪除這筆紀錄">${ICON_X}</button></li>`;
+    }).join('') : '<li class="empty">這天沒有讀書紀錄</li>';
+}
+function openDaySheet() { renderDaySheet(); openModal('dayModal'); }
+$('dayModal').addEventListener('click', (e) => {
+    const del = e.target.closest('[data-del]');
+    if (del) { removeSession(del.dataset.del); renderDaySheet(); return; }
+    const a = e.target.closest('[data-day-act]')?.dataset.dayAct;
+    if (a === 'add') openLogModal();
+    else if (a === 'share') { closeModal('dayModal'); openShareCard(statSel); }
+});
 
 $('tab-stats').addEventListener('click', (e) => {
     const day = e.target.closest('[data-day]');
     if (day) { statSel = day.dataset.day; renderStats(); return; }
     const range = e.target.closest('[data-range]');
     if (range) { statRange = range.dataset.range; statOffset = 0; statSel = null; renderStats(); return; }
-    const del = e.target.closest('[data-del]');
-    if (del) { removeSession(del.dataset.del); return; }
     const act = e.target.closest('[data-sact]')?.dataset.sact;
     if (act === 'prev') { statOffset--; statSel = null; renderStats(); }
     else if (act === 'next' && statOffset < 0) { statOffset++; statSel = null; renderStats(); }
     else if (act === 'add') openLogModal();
-    else if (act === 'back') showTab('tab-timer');
-    else if (act === 'share') openShareCard(statSel);
+    else if (act === 'day') openDaySheet();
 });
 $('tab-stats').addEventListener('change', (e) => {
-    if (e.target.id === 'goalSelect') { tpref.goal = Number(e.target.value); saveTpref(); renderStats(); }
+    if (e.target.id === 'goalSelect') { tpref.goal = Number(e.target.value); saveTpref(); renderStats(); renderTimer(); renderToday(); }
 });
 
 /* --- 補登 --- */
@@ -1589,6 +1638,7 @@ let aiBusy = false;
 let aiResult = null;   // { analysis: [], days: [{ date, items: [{ subject, task, minutes, on, full }] }] }
 let aiError = '';
 let aiModel = null;
+let aiStep = 0;        // 0 讀書時間、1 各科狀況、2 確認計畫
 
 function aiUsedToday() {
     const c = lsGet(LS.aiCount, {});
@@ -1724,8 +1774,10 @@ async function generatePlan() {
     if (aiBusy) return;
     if (!fb) { toast('目前無法連線，請連上網路後再試'); return; }
     if (!currentUser) { toast('請先登入 Google 帳號'); openModal('accountModal'); return; }
+    const sc = $('aiScope'); const ex0 = nextExam();
+    if (sc && ex0) { aiPref.scope[ex0.key] = sc.value.slice(0, 300); saveAiPref(); }
     if (aiUsedToday() >= AI_DAILY_LIMIT) { toast(`今天已經產生 ${AI_DAILY_LIMIT} 次了，明天再來`); return; }
-    aiBusy = true; aiError = ''; renderAI();
+    aiBusy = true; aiError = ''; aiStep = 2; renderAI();
     try {
         const model = await getAiModel();
         const res = await model.generateContent(buildAiPrompt());
@@ -1759,8 +1811,10 @@ function applyPlan() {
         state.weekly[key] = { text: `${it.task}（${it.minutes} 分）`, done: false, color: state.weekly[key]?.color || '' };
     }));
     if (!added.length) { toast('沒有可以套用的項目'); return; }
+    const firstDate = aiResult.days[0].date;
+    aiResult = null; aiStep = 0;   // 下次進來從第一步開始
     save(); renderWeek(); renderToday();
-    weekMonday = getMonday(parseYmd(aiResult.days[0].date)); selectedDayIdx = null; renderWeek();
+    weekMonday = getMonday(parseYmd(firstDate)); selectedDayIdx = null; renderWeek();
     showTab('tab-weekly');
     toast(`已加入 ${added.length} 項`, { label: '復原', fn: () => { added.forEach(k => delete state.weekly[k]); save(); renderWeek(); renderToday(); } });
 }
@@ -1774,71 +1828,74 @@ function renderAI() {
     if (!el) return;
     const dates = aiDates();
     const ex = nextExam();
-    const left = AI_DAILY_LIMIT - aiUsedToday();
+    const left = Math.max(0, AI_DAILY_LIMIT - aiUsedToday());
+    const LABELS = ['讀書時間', '各科狀況', '確認計畫'];
+    const steps = `<div class="steps-bar">${LABELS.map((l, i) => `<div class="${i < aiStep ? 'done' : i === aiStep ? 'cur' : ''}"><i></i><span>${i + 1} ${l}</span></div>`).join('')}</div>`;
     const hourSel = (id, v) => `<select class="field" id="${id}">${HOUR_OPTS.map(h => `<option value="${h}" ${h === v ? 'selected' : ''}>${h} 小時</option>`).join('')}</select>`;
-    let result = '';
-    if (aiBusy) {
-        result = `<section class="block"><p class="ai-loading"><span class="ai-spin"></span>AI 正在看你的紀錄、排計畫…</p></section>`;
-    } else if (aiError) {
-        result = `<section class="block"><p class="ai-error">${esc(aiError)}</p></section>`;
-    } else if (aiResult) {
-        const onCount = aiResult.days.reduce((a, d) => a + d.items.filter(i => i.on).length, 0);
-        result = `
-        <section class="block">
-            <p class="label" style="margin-bottom:10px">AI 的分析</p>
-            <ul class="ai-bullets">${aiResult.analysis.map(a => `<li>${esc(a)}</li>`).join('')}</ul>
-        </section>
-        <section class="block">
-            <div class="block-head"><p class="label">建議的計畫</p><span class="num" style="font-size:12px;color:var(--muted)">${shortDate(aiResult.days[0].date)} – ${shortDate(aiResult.days[aiResult.days.length - 1].date)}</span></div>
-            <p class="hint" style="text-align:left;margin-bottom:6px">點一下可以取消不想要的項目</p>
-            ${aiResult.days.map((d, di) => {
-                const dd = parseYmd(d.date);
-                return `<div class="plan-day">
-                    <span class="plan-w">${WEEK_ZH[dd.getDay()]}<small class="num">${dd.getMonth() + 1}/${dd.getDate()}</small></span>
-                    <div class="plan-items">${d.items.length ? d.items.map((it, ii) => `<button class="plan-chip ${it.on ? '' : 'off'}" data-ai-item="${di}_${ii}" ${it.full ? 'disabled' : ''} aria-pressed="${it.on}">
-                        <i class="sdot s${it.subject}"></i>${esc(it.task)}<span class="m num">${it.minutes} 分</span>${it.full ? '<span class="m">已滿</span>' : ''}</button>`).join('')
-                        : '<span class="hint">休息</span>'}</div>
-                </div>`;
-            }).join('')}
-        </section>
-        <div class="ai-actions">
-            <button class="btn btn-accent" data-ai="apply" style="flex:1" ${onCount ? '' : 'disabled'}>套用 ${onCount} 項到每週進度表</button>
-            <button class="btn" data-ai="gen">重新產生</button>
-        </div>`;
-    }
-    el.innerHTML = `<div class="sub-wrap">
-        <button class="btn btn-small back-btn" data-ai="back">${ICON_BACK}返回進度</button>
-        <div class="block-head" style="margin-top:14px">
-            <p class="label">告訴 AI 你的狀況</p>
-            <span class="pill">今天還能產生 ${Math.max(0, left)} 次</span>
-        </div>
-        <div class="seg two" role="tablist" aria-label="要排哪一週">
+    let body = '';
+    if (aiStep === 0) {
+        body = `<h2 class="step-q">這週可以讀多久？</h2>
+        <p class="step-sub">AI 會照你填的時間排，不會排超過。</p>
+        <p class="field-label">要排哪幾天</p>
+        <div class="seg two" role="tablist" aria-label="要排哪一週" style="margin-bottom:6px">
             <button role="tab" aria-selected="${aiPref.range === 'this'}" class="${aiPref.range === 'this' ? 'active' : ''}" data-ai-range="this">這週（今天起）</button>
             <button role="tab" aria-selected="${aiPref.range === 'next'}" class="${aiPref.range === 'next' ? 'active' : ''}" data-ai-range="next">下週</button>
         </div>
-        <p class="hint" style="text-align:left;margin:8px 0 14px">${shortDate(dates[0])} – ${shortDate(dates[dates.length - 1])}，共 ${dates.length} 天</p>
+        <p class="hint" style="text-align:left;margin:0 0 18px">${shortDate(dates[0])} – ${shortDate(dates[dates.length - 1])}，共 ${dates.length} 天</p>
         <div class="field-row">
             <div><label class="field-label" for="aiWeekday">平日每天可以讀</label>${hourSel('aiWeekday', aiPref.weekday)}</div>
             <div><label class="field-label" for="aiWeekend">週末每天可以讀</label>${hourSel('aiWeekend', aiPref.weekend)}</div>
         </div>
-        <p class="field-label">各科自評（點一下切換）</p>
-        <div class="rate-grid">${SUBJECTS.map((n, i) => `<button class="rate-btn r${aiPref.rate[i]}" data-rate="${i}" aria-label="${n}自評：${RATE_TEXT[aiPref.rate[i]]}">${n}<span>${RATE_TEXT[aiPref.rate[i]]}</span></button>`).join('')}</div>
-        ${ex ? `<label class="field-label" for="aiScope" style="margin-top:16px">${esc(ex.name)}的考試範圍（可留空）</label>
+        <div class="sticky-cta"><button class="btn btn-accent btn-wide" data-ai="next">下一步</button></div>`;
+    } else if (aiStep === 1) {
+        body = `<h2 class="step-q">你覺得各科讀得怎麼樣？</h2>
+        <p class="step-sub">AI 會多排你比較弱、最近又讀得少的科目。</p>
+        <div class="rate-list">${SUBJECTS.map((n, i) => `<div class="rate-row"><i class="sdot s${i}"></i><b>${n}</b>
+            <div class="seg rate-seg" role="radiogroup" aria-label="${n}自評">${RATE_TEXT.map((r, k) => `<button role="radio" aria-checked="${aiPref.rate[i] === k}" class="${aiPref.rate[i] === k ? 'active r' + k : ''}" data-rate="${i}" data-r="${k}">${r}</button>`).join('')}</div></div>`).join('')}</div>
+        ${ex ? `<label class="field-label" for="aiScope" style="margin-top:20px">${esc(ex.name)}的範圍（可留空）</label>
         <textarea class="field" id="aiScope" rows="2" maxlength="300" placeholder="例如：數A 第一到三冊、物理 1-3 章" style="min-height:64px">${esc(aiPref.scope[ex.key] || '')}</textarea>` : ''}
-        <p class="ai-note">AI 也會參考：最近 2 週的讀書紀錄、進度表完成率${ex ? `、下一場考試（${esc(ex.short)} ${shortDate(ex.date)}）` : ''}。不會傳送你的名字、待辦或進度表文字。</p>
-        ${aiResult || aiBusy || aiError ? '' : `<button class="btn btn-accent btn-wide" data-ai="gen" style="margin-top:14px">${ICON_SPARK}產生計畫</button>`}
-        ${aiError ? `<button class="btn btn-accent btn-wide" data-ai="gen" style="margin-top:14px">${ICON_SPARK}再試一次</button>` : ''}
-        ${result}
-        <p class="hint" style="margin-top:18px">AI 可能出錯，套用前可以逐項取消；只會填進空白格子，不會蓋掉你寫好的內容</p>
-    </div>`;
+        <p class="ai-note">AI 也會參考最近 2 週的讀書紀錄和進度表完成率${ex ? `、下一場考試（${esc(ex.short)} ${shortDate(ex.date)}）` : ''}。不會傳送你的名字、待辦或進度表文字。</p>
+        <div class="sticky-cta row2">
+            <button class="btn" data-ai="prev">上一步</button>
+            <button class="btn btn-accent" data-ai="gen" style="flex:1">${ICON_SPARK}產生計畫</button>
+        </div>`;
+    } else {
+        let result = '';
+        if (aiBusy) result = `<p class="ai-loading"><span class="ai-spin"></span>AI 正在看你的紀錄、排計畫…</p>`;
+        else if (aiError) result = `<p class="ai-error">${esc(aiError)}</p>
+            <div class="sticky-cta row2"><button class="btn" data-ai="prev">上一步</button><button class="btn btn-accent" data-ai="gen" style="flex:1">${ICON_SPARK}再試一次</button></div>`;
+        else if (aiResult) {
+            const onCount = aiResult.days.reduce((a, d) => a + d.items.filter(i => i.on).length, 0);
+            result = `<div class="ai-advice"><b>${ICON_SPARK}AI 的建議</b>${aiResult.analysis.map(a => `<p>${esc(a)}</p>`).join('')}</div>
+            <div class="sec-head" style="margin-top:22px"><h3>建議的計畫</h3><span>取消勾選就不會加入</span></div>
+            ${aiResult.days.map((d, di) => {
+                const dd = parseYmd(d.date);
+                return `<div class="plan-day">
+                    <span class="plan-w">${WEEK_ZH[dd.getDay()]}<small class="num">${dd.getMonth() + 1}/${dd.getDate()}</small></span>
+                    <div class="plan-items">${d.items.length ? d.items.map((it, ii) => `<button class="plan-item ${it.on ? '' : 'off'}" data-ai-item="${di}_${ii}" ${it.full ? 'disabled' : ''} role="checkbox" aria-checked="${it.on}">
+                        <span class="pbox">${it.on ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : ''}</span>
+                        <i class="sdot s${it.subject}"></i><span class="pt">${esc(it.task)}${it.full ? '<small>（這天這科已排滿）</small>' : ''}</span><span class="pm num">${it.minutes} 分</span></button>`).join('')
+                        : '<span class="hint" style="padding:10px 0">休息</span>'}</div>
+                </div>`;
+            }).join('')}
+            <p class="hint" style="margin-top:14px">AI 可能出錯；只會填進空白格子，不會蓋掉你寫好的內容</p>
+            <div class="sticky-cta row2">
+                <button class="btn" data-ai="gen">重新產生</button>
+                <button class="btn btn-accent" data-ai="apply" style="flex:1" ${onCount ? '' : 'disabled'}>套用 ${onCount} 項到進度表</button>
+            </div>`;
+        }
+        body = result;
+    }
+    el.innerHTML = `<div class="sub-wrap">${steps}${body}</div>`;
+    setTopExtra('tab-ai', `<span class="tag mute">今天剩 ${left} 次</span>`);
 }
 
-$('aiPlanBtn').addEventListener('click', () => { renderAI(); showTab('tab-ai'); });
+$('aiPlanBtn').addEventListener('click', () => { if (!aiResult && !aiBusy && !aiError) aiStep = 0; showTab('tab-ai'); });
 $('tab-ai').addEventListener('click', (e) => {
     const r = e.target.closest('[data-ai-range]');
     if (r) { aiPref.range = r.dataset.aiRange; saveAiPref(); aiResult = null; aiError = ''; renderAI(); return; }
     const rate = e.target.closest('[data-rate]');
-    if (rate) { const i = Number(rate.dataset.rate); aiPref.rate[i] = (aiPref.rate[i] + 2) % 3; saveAiPref(); renderAI(); return; }
+    if (rate) { aiPref.rate[Number(rate.dataset.rate)] = Number(rate.dataset.r); saveAiPref(); renderAI(); return; }
     const item = e.target.closest('[data-ai-item]');
     if (item && aiResult) {
         const [di, ii] = item.dataset.aiItem.split('_').map(Number);
@@ -1847,7 +1904,8 @@ $('tab-ai').addEventListener('click', (e) => {
         return;
     }
     const act = e.target.closest('[data-ai]')?.dataset.ai;
-    if (act === 'back') showTab('tab-weekly');
+    if (act === 'next') { aiStep = 1; renderAI(); window.scrollTo({ top: 0 }); }
+    else if (act === 'prev') { aiStep = Math.max(0, aiStep - 1); aiError = ''; renderAI(); window.scrollTo({ top: 0 }); }
     else if (act === 'gen') generatePlan();
     else if (act === 'apply') applyPlan();
 });
@@ -1894,6 +1952,14 @@ function liveStatus(p, now = Date.now()) {
 const avColor = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return `var(--s${h % 5})`; };
 const avHtml = (p, uidv) => `<span class="av" style="background:${avColor(uidv)}">${esc((p?.name || '?').slice(0, 1))}</span>`;
 const myName = () => (roomPref.name || currentUser?.displayName || '同學').slice(0, 20);
+// 計時頁顯示：所有房間裡正在讀的人數（沒用過房間時回傳 null）
+function roomLiveCount() {
+    if (!currentUser || !roomsLoaded || !myRooms.length) return null;
+    const now = Date.now();
+    const uids = new Set(myRooms.flatMap(r => r.members || []));
+    uids.delete(currentUser.uid);
+    return [...uids].filter(u => liveStatus(profiles[u], now).phase === 'focus').length;
+}
 
 // 把自己的計時狀態寫到 profiles（只有用過讀書房間才會寫）
 function publishProfile(force) {
@@ -1934,6 +2000,7 @@ function roomStart() {
         if (roomView && roomView !== pendingRoom && !myRooms.some(r => r.id === roomView)) roomView = null;   // 被移出或房間刪除
         watchProfiles([...new Set(myRooms.flatMap(r => r.members || []))]);
         renderRoom();
+        if (document.body.dataset.tab === 'tab-timer' && timer.phase === 'idle') renderTimer();
     }, (err) => { console.error('房間讀取失敗：', err); roomsLoaded = true; renderRoom(err.code === 'permission-denied' ? '讀取被拒絕：請確認 Firestore 規則已更新' : '讀取失敗，請檢查網路'); });
 }
 function watchProfiles(uids) {
@@ -1995,6 +2062,7 @@ async function joinRoom(code) {
         enableRoom();
         roomView = pendingRoom = code;
         await fs.updateDoc(ref, { members: fs.arrayUnion(currentUser.uid) });
+        codeDraft = '';
         toast(`已加入「${snap.data().name}」`);
         renderRoom();
     } catch (e) {
@@ -2027,30 +2095,40 @@ async function shareRoom(code) {
     catch (e) { toast(`邀請碼：${code}`); }
 }
 
-function memberLine(s) {
-    if (s.phase === 'focus') return `<span class="st on">${s.subject != null ? `<i class="sdot s${s.subject}"></i>${SUBJECTS[s.subject]} · ` : ''}${s.paused ? '暫停中' : '專注中'}</span>`;
-    if (s.phase === 'break') return `<span class="st">休息中</span>`;
-    return `<span class="st">今天 ${fmtHM(s.min)}</span>`;
+const MEDAL = ['#E9B154', '#C9CED6', '#C98A5A'];
+const SEAT_C = 2 * Math.PI * 31;
+function seatSub(s) {
+    if (s.phase === 'focus') return s.subject != null ? `<span class="ss" style="color:var(--s${s.subject})">${SUBJECTS[s.subject]}${s.paused ? ' · 暫停' : ''}</span>` : `<span class="ss on">${s.paused ? '暫停中' : '專注中'}</span>`;
+    if (s.phase === 'break') return '<span class="ss">休息中</span>';
+    return '<span class="ss">未開始</span>';
 }
 function memberClock(s) {
     if (s.phase === 'focus') return fmtClock(s.left != null ? Math.max(0, s.left) : s.el);
-    if (s.phase === 'break') return fmtClock(s.el);
-    return '';
+    if (s.phase === 'break') return '休息 ' + fmtClock(s.el);
+    return '今天 ' + fmtHM(s.min);
 }
+function seatFrac(s) {
+    if (s.phase !== 'focus') return 0;
+    return s.left != null && s.left + s.el > 0 ? Math.min(1, s.el / (s.el + Math.max(0, s.left))) : Math.min(1, s.el / 3600000);
+}
+const ticketAvs = (ms) => `<span class="avatars">${ms.slice(0, 4).map(u => avHtml(profiles[u], u)).join('')}${ms.length > 4 ? `<span class="av more num">+${ms.length - 4}</span>` : ''}</span>`;
+const codeBoxes = (v) => Array.from({ length: 6 }, (_, i) => `<span class="cb ${i === Math.min(v.length, 5) ? 'cur' : ''}">${esc(v[i] || '')}</span>`).join('');
+let codeDraft = '';
 
 function renderRoom(errMsg) {
     const el = $('tab-room');
     if (!el || document.body.dataset.tab !== 'tab-room') return;
-    const back = (label, act) => `<button class="btn btn-small back-btn" data-room="${act}">${ICON_BACK}${label}</button>`;
+    $('pageTitle').textContent = '讀書房間';
     if (!currentUser) {
-        el.innerHTML = `<div class="sub-wrap">${back('返回計時', 'back')}
-            <div class="room-empty"><p class="zh" style="font-size:17px;font-weight:700;margin:0">和朋友一起讀書</p>
+        setTopExtra('tab-room', '');
+        el.innerHTML = `<div class="sub-wrap">
+            <div class="room-empty"><p class="zh" style="font-size:18px;font-weight:700;margin:0">和朋友一起讀書</p>
             <p class="empty">建立房間、分享邀請碼，就能看到大家正在讀什麼、今天讀了多久。<br>需要先登入 Google 帳號。</p>
             <button class="btn btn-accent" data-room="login">登入</button></div></div>`;
         return;
     }
     if (!roomsLoaded) {
-        el.innerHTML = `<div class="sub-wrap">${back('返回計時', 'back')}<p class="ai-loading" style="margin-top:30px">${errMsg ? esc(errMsg) : '<span class="ai-spin"></span>載入房間中…'}</p></div>`;
+        el.innerHTML = `<div class="sub-wrap"><p class="ai-loading" style="margin-top:30px">${errMsg ? esc(errMsg) : '<span class="ai-spin"></span>載入房間中…'}</p></div>`;
         return;
     }
     const now = Date.now();
@@ -2058,76 +2136,73 @@ function renderRoom(errMsg) {
     if (roomView) {
         const r = myRooms.find(x => x.id === roomView);
         if (!r) {
-            if (roomView === pendingRoom) { el.innerHTML = `<div class="sub-wrap">${back('房間列表', 'lobby')}<p class="ai-loading" style="margin-top:30px"><span class="ai-spin"></span>進入房間中…</p></div>`; return; }
+            if (roomView === pendingRoom) { el.innerHTML = `<div class="sub-wrap"><p class="ai-loading" style="margin-top:30px"><span class="ai-spin"></span>進入房間中…</p></div>`; return; }
             roomView = null; return renderRoom();
         }
+        $('pageTitle').textContent = r.name;
+        setTopExtra('tab-room', `<button class="icon-btn" data-top="room-menu" aria-label="房間選項"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>`);
         const ms = (r.members || []).map(u => ({ u, p: profiles[u], s: liveStatus(profiles[u], now) }));
         const order = { focus: 0, break: 1, idle: 2 };
-        const live = ms.slice().sort((a, b) => order[a.s.phase] - order[b.s.phase] || (b.s.el || 0) - (a.s.el || 0));
+        const seats = ms.slice().sort((a, b) => order[a.s.phase] - order[b.s.phase] || (b.s.el || 0) - (a.s.el || 0));
         const total = (m) => Math.round(m.s.min + (m.s.phase === 'focus' ? m.s.el / 60000 : 0));   // 正在讀的那一輪也算進去
         const rank = ms.slice().sort((a, b) => total(b) - total(a));
         const maxMin = Math.max(1, ...rank.map(total));
         const studying = ms.filter(m => m.s.phase === 'focus').length;
         el.innerHTML = `<div class="sub-wrap">
-            ${back('房間列表', 'lobby')}
-            <div class="room-title">
-                <div><h2 class="zh">${esc(r.name)}</h2><p class="hint" style="text-align:left">${ms.length} 位成員 · <span class="live-dot"></span>${studying} 人正在讀</p></div>
-                <button class="code-chip num" data-room="share" aria-label="分享邀請碼 ${r.id}">${r.id}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
+            <div class="room-status">
+                ${studying ? `<span class="tag ok"><span class="live-dot"></span>${studying} 人在讀</span>` : '<span class="tag mute">目前沒人在讀</span>'}
+                <span class="muted">${ms.length} 位成員</span>
+                <span class="grow"></span>
+                <button class="code-stub" data-room="share" aria-label="分享邀請碼 ${r.id}"><span class="num">${r.id}</span><span class="cs-r"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>邀請</span></button>
             </div>
-            <section class="block">
-                <p class="label" style="margin-bottom:6px">大家的狀態</p>
-                <ul class="member-list">${live.map(m => `<li class="member-row ${m.s.phase}">
-                    ${avHtml(m.p, m.u)}
-                    <span class="mn"><b>${esc(m.p?.name || '同學')}${m.u === meUid ? '<small>（你）</small>' : ''}</b>${memberLine(m.s)}</span>
-                    <span class="clk num" data-clock="${m.u}">${memberClock(m.s)}</span>
-                </li>`).join('')}</ul>
-            </section>
-            <section class="block">
-                <p class="label" style="margin-bottom:10px">今天排行</p>
-                ${rank.map((m, i) => `<div class="rank-row">
-                    <span class="rk num ${i < 3 && total(m) ? 'top' : ''}">${i + 1}</span>
+            <div class="seats">${seats.map(m => {
+                const fr = seatFrac(m.s);
+                return `<div class="seat ${m.s.phase}" data-seat="${m.u}">
+                    <div class="seat-av"><svg viewBox="0 0 68 68" aria-hidden="true"><circle class="st-track" cx="34" cy="34" r="31"/><circle class="st-bar" cx="34" cy="34" r="31" stroke-dasharray="${SEAT_C.toFixed(1)}" stroke-dashoffset="${(SEAT_C * (1 - fr)).toFixed(1)}"/></svg>
+                        <span class="seat-face" style="background:${avColor(m.u)}">${esc((m.p?.name || '?').slice(0, 1))}</span></div>
+                    <b class="sn">${esc(m.p?.name || '同學')}${m.u === meUid ? '<small>（你）</small>' : ''}</b>
+                    ${seatSub(m.s)}
+                    <span class="sc num" data-clock="${m.u}">${memberClock(m.s)}</span>
+                </div>`;
+            }).join('')}</div>
+            <section class="stats-sec">
+                <div class="sec-head"><h3>今天排行</h3><span>正在讀的那一輪也算</span></div>
+                ${rank.map((m, i) => `<div class="rank-row ${m.u === meUid ? 'me' : ''}">
+                    <span class="rk num" ${i < 3 && total(m) ? `style="background:${MEDAL[i]};color:#050608"` : ''}>${i + 1}</span>
                     <span class="nm">${esc(m.p?.name || '同學')}</span>
-                    <span class="track"><i style="width:${(total(m) / maxMin * 100).toFixed(1)}%"></i></span>
+                    <span class="track"><i style="width:${(total(m) / maxMin * 100).toFixed(1)}%;background:${avColor(m.u)}"></i></span>
                     <span class="t num">${fmtHM(total(m))}</span>
                 </div>`).join('')}
             </section>
-            <div class="ai-actions">
-                <button class="btn btn-accent" data-room="focus" style="flex:1">${timer.phase === 'focus' ? '回到計時' : '開始專注'}</button>
-                <button class="btn" data-room="share">邀請朋友</button>
-            </div>
-            <div class="ai-actions" style="margin-top:8px">
-                ${r.owner === meUid ? '<button class="btn btn-small" data-room="rename">改名稱</button>' : ''}
-                <button class="btn btn-small btn-danger" data-room="leave">離開房間</button>
-            </div>
             <p class="hint" style="margin-top:16px">房間裡的人看得到你的暱稱、正在讀的科目和今天的時數</p>
+            <div class="sticky-cta"><button class="btn btn-accent btn-wide" data-room="focus"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>${timer.phase === 'focus' ? '回到計時' : '跟大家一起開始專注'}</button></div>
         </div>`;
         return;
     }
+    setTopExtra('tab-room', `<button class="me-chip" data-top="me" aria-label="我的暱稱與隱身設定"><span class="av" style="background:${avColor(meUid)}">${esc(myName().slice(0, 1))}</span><span class="zh">${esc(myName())}</span></button>`);
     el.innerHTML = `<div class="sub-wrap">
-        ${back('返回計時', 'back')}
-        <p class="label" style="margin:18px 0 10px">我的房間</p>
+        <div class="sec-head" style="margin:6px 0 14px"><h3>我的房間</h3><span>${myRooms.length ? myRooms.length + ' 間' : ''}</span></div>
         ${myRooms.length ? myRooms.map(r => {
             const ms = (r.members || []);
             const n = ms.filter(u => liveStatus(profiles[u], now).phase === 'focus').length;
-            return `<button class="room-card ${n ? 'hot' : ''}" data-open="${r.id}">
-                <span class="rc-top"><b class="zh">${esc(r.name)}</b><span class="num code">${r.id}</span></span>
-                <span class="rc-bot"><span class="avatars">${ms.slice(0, 4).map(u => avHtml(profiles[u], u)).join('')}${ms.length > 4 ? `<span class="av more num">+${ms.length - 4}</span>` : ''}</span>
-                <span class="rc-live">${n ? `<span class="live-dot"></span>${n} 人正在讀` : `${ms.length} 位成員 · 目前沒人在讀`}</span></span>
+            return `<button class="ticket ${n ? 'hot' : ''}" data-open="${r.id}">
+                <span class="tk-main">
+                    <b class="zh">${esc(r.name)}</b>
+                    <span class="tk-row">${ticketAvs(ms)}${n ? `<span class="tag ok"><span class="live-dot"></span>${n} 人在讀</span>` : '<span class="tag mute">目前沒人在讀</span>'}</span>
+                </span>
+                <span class="tk-stub"><small>邀請碼</small><b class="num">${r.id}</b></span>
             </button>`;
         }).join('') : '<p class="empty">還沒有房間，建立一個或用邀請碼加入</p>'}
-        <section class="block">
-            <p class="label" style="margin-bottom:10px">用邀請碼加入</p>
-            <div class="input-row">
-                <input type="text" class="text-input num code-input" id="roomCodeInput" maxlength="6" placeholder="輸入 6 碼" autocapitalize="characters" autocomplete="off" aria-label="邀請碼">
-                <button class="btn btn-accent" data-room="join">加入</button>
+        <section class="stats-sec">
+            <div class="sec-head"><h3>輸入邀請碼加入</h3></div>
+            <label class="code-wrap" aria-label="邀請碼">
+                <span class="code-boxes num" id="codeBoxes">${codeBoxes(codeDraft)}</span>
+                <input id="roomCodeInput" maxlength="6" value="${esc(codeDraft)}" autocapitalize="characters" autocomplete="off" spellcheck="false" inputmode="text" enterkeyhint="go">
+            </label>
+            <button class="btn btn-accent btn-wide" data-room="join" style="margin-top:14px">加入房間</button>
+            <div style="display:flex;justify-content:center;margin-top:16px">
+                <button class="text-link" data-room="create"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>建立新房間</button>
             </div>
-            <button class="btn btn-wide" data-room="create" style="margin-top:10px">＋ 建立新房間</button>
-        </section>
-        <section class="block">
-            <p class="label" style="margin-bottom:10px">我在房間裡的樣子</p>
-            <label class="field-label" for="roomName">暱稱（最多 20 字）</label>
-            <input type="text" class="field" id="roomName" maxlength="20" value="${esc(myName())}">
-            <label class="toggle-row"><input type="checkbox" class="checkbox" id="roomHidden" ${roomPref.hidden ? 'checked' : ''}>隱身模式：只顯示今天時數，不顯示在讀什麼</label>
         </section>
     </div>`;
 }
@@ -2136,7 +2211,10 @@ function roomTick() {
     if (document.body.dataset.tab !== 'tab-room' || !roomView) return;
     const now = Date.now();
     document.querySelectorAll('#tab-room [data-clock]').forEach(n => {
-        n.textContent = memberClock(liveStatus(profiles[n.dataset.clock], now));
+        const st = liveStatus(profiles[n.dataset.clock], now);
+        n.textContent = memberClock(st);
+        const bar = n.parentElement.querySelector('.st-bar');
+        if (bar) bar.setAttribute('stroke-dashoffset', (SEAT_C * (1 - seatFrac(st))).toFixed(1));
     });
 }
 
@@ -2178,7 +2256,7 @@ $('tab-room').addEventListener('click', (e) => {
     if (act === 'back') showTab('tab-timer');
     else if (act === 'lobby') { roomView = null; renderRoom(); }
     else if (act === 'login') openModal('accountModal');
-    else if (act === 'join') joinRoom($('roomCodeInput').value);
+    else if (act === 'join') joinRoom(codeDraft);
     else if (act === 'create') openRoomModal('create');
     else if (act === 'rename') openRoomModal('rename');
     else if (act === 'leave') leaveRoom(roomView);
@@ -2186,22 +2264,46 @@ $('tab-room').addEventListener('click', (e) => {
     else if (act === 'focus') showTab('tab-timer');
 });
 $('tab-room').addEventListener('keydown', (e) => {
-    if (e.target.id === 'roomCodeInput' && e.key === 'Enter' && !e.isComposing) { e.preventDefault(); joinRoom(e.target.value); }
+    if (e.target.id === 'roomCodeInput' && e.key === 'Enter' && !e.isComposing) { e.preventDefault(); joinRoom(codeDraft); }
 });
 $('tab-room').addEventListener('input', (e) => {
-    if (e.target.id === 'roomCodeInput') e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-});
-$('tab-room').addEventListener('change', (e) => {
-    if (e.target.id === 'roomName') {
-        const v = e.target.value.trim().slice(0, 20);
-        roomPref.name = v; saveRoomPref();
-        e.target.value = myName();
-        if (roomPref.enabled) { publishProfile(); toast('已更新暱稱'); }
-    } else if (e.target.id === 'roomHidden') {
-        roomPref.hidden = e.target.checked; saveRoomPref();
-        publishProfile();
-        toast(roomPref.hidden ? '已開啟隱身模式' : '已關閉隱身模式');
+    if (e.target.id === 'roomCodeInput') {
+        e.target.value = codeDraft = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+        $('codeBoxes').innerHTML = codeBoxes(codeDraft);
     }
+});
+// 我的暱稱、隱身模式（房間列表右上角）
+function openMeModal() {
+    $('meName').value = myName();
+    $('meHidden').checked = !!roomPref.hidden;
+    openModal('meModal');
+}
+$('saveMeBtn').addEventListener('click', () => {
+    const v = $('meName').value.trim().slice(0, 20);
+    const hid = $('meHidden').checked;
+    const changedHidden = hid !== !!roomPref.hidden;
+    roomPref.name = v; roomPref.hidden = hid; saveRoomPref();
+    closeModal('meModal');
+    publishProfile();
+    renderRoom();
+    toast(changedHidden ? (hid ? '已開啟隱身模式' : '已關閉隱身模式') : '已更新暱稱');
+});
+onEnter($('meName'), () => $('saveMeBtn').click());
+// 房間內右上角「⋯」
+function openRoomMenu() {
+    const r = myRooms.find(x => x.id === roomView);
+    if (!r) return;
+    $('rmTitle').textContent = r.name;
+    $('rmRename').style.display = r.owner === currentUser?.uid ? '' : 'none';
+    openModal('roomMenuModal');
+}
+$('roomMenuModal').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-rm]')?.dataset.rm;
+    if (!a) return;
+    closeModal('roomMenuModal');
+    if (a === 'share') shareRoom(roomView);
+    else if (a === 'rename') openRoomModal('rename');
+    else if (a === 'leave') leaveRoom(roomView);
 });
 
 // 登入後：讀回自己的房間設定（換裝置也能用）
