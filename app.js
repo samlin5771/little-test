@@ -2320,7 +2320,8 @@ navigator.serviceWorker?.addEventListener('message', (e) => {
 function openChat(code) {
     const r = myRooms.find(x => x.id === code);
     if (!r || !fb || !currentUser) return;
-    chatRoom = code; lastReadSent = 0; chatReads = {};
+    chatRoom = code; lastReadSent = 0; chatReads = {}; lastFit = '';
+    chatSavedScroll = window.scrollY; window.scrollTo(0, 0);
     if (!chats[code]) chatListen(code);
     $('chatTitle').textContent = r.name;
     renderChatHead();
@@ -2342,9 +2343,12 @@ function closeChat() {
     if (!chatRoom) return;
     if (readsUnsub) readsUnsub();
     readsUnsub = null; chatRoom = null;
-    $('chatScreen').classList.remove('open');
-    document.body.classList.remove('chat-open');
     $('chatInput').blur();
+    const el = $('chatScreen');
+    el.classList.remove('open', 'kb-open');
+    el.style.height = ''; el.style.transform = '';
+    document.body.classList.remove('chat-open');
+    window.scrollTo(0, chatSavedScroll);
     document.title = BASE_TITLE;
     renderRoom(); updateChatBadges();
 }
@@ -2352,16 +2356,33 @@ function renderChatHead() {
     const r = myRooms.find(x => x.id === chatRoom);
     if (!r) return;
     const n = (r.members || []).filter(u => liveStatus(profiles[u]).phase === 'focus').length;
-    $('chatSub').innerHTML = `${(r.members || []).length} 位成員${n ? ` · <span class="live-dot"></span>${n} 人在讀` : ''}`;
+    const html = `${(r.members || []).length} 位成員${n ? ` · <span class="live-dot"></span>${n} 人在讀` : ''}`;
+    if ($('chatSub').dataset.h !== html) { $('chatSub').dataset.h = html; $('chatSub').innerHTML = html; }
 }
 // iPhone 鍵盤跳出來時，聊天室跟著可見範圍縮小，輸入框不會被蓋住
+// 每一格動畫最多算一次，數值沒變就不動畫面（避免卡頓）
+let fitRaf = 0, lastFit = '', chatSavedScroll = 0;
 function fitChat() {
-    const vv = window.visualViewport, el = $('chatScreen');
-    if (!el.classList.contains('open')) return;
-    if (vv) { el.style.height = vv.height + 'px'; el.style.transform = `translateY(${vv.offsetTop}px)`; }
-    else { el.style.height = ''; el.style.transform = ''; }
+    cancelAnimationFrame(fitRaf);
+    fitRaf = requestAnimationFrame(() => {
+        const vv = window.visualViewport, el = $('chatScreen');
+        if (!vv || !el.classList.contains('open')) return;
+        const h = Math.round(Math.min(vv.height, window.innerHeight)), top = Math.max(0, Math.round(vv.offsetTop));
+        const kb = window.innerHeight - vv.height > 120;   // 鍵盤是否打開
+        const key = `${h},${top},${kb}`;
+        if (key === lastFit) return;
+        lastFit = key;
+        const box = $('chatList');
+        const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
+        el.style.height = h + 'px';
+        el.style.transform = top ? `translate3d(0, ${top}px, 0)` : '';
+        el.classList.toggle('kb-open', kb);
+        // 鍵盤收起後，iPhone 有時會讓整頁停在往上捲的位置，把它拉回來
+        if (!kb && (window.scrollY || document.documentElement.scrollTop)) window.scrollTo(0, 0);
+        if (atEnd) box.scrollTop = box.scrollHeight;
+    });
 }
-window.visualViewport?.addEventListener('resize', () => { fitChat(); scrollChatEnd(); });
+window.visualViewport?.addEventListener('resize', fitChat);
 window.visualViewport?.addEventListener('scroll', fitChat);
 function scrollChatEnd(smooth) {
     const box = $('chatList');
@@ -2534,7 +2555,7 @@ $('chatInput').addEventListener('keydown', (e) => {
     // 電腦：Enter 傳送、Shift+Enter 換行；手機按鍵盤上的換行
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && matchMedia('(pointer: fine)').matches) { e.preventDefault(); $('chatForm').requestSubmit(); }
 });
-$('chatInput').addEventListener('focus', () => setTimeout(() => scrollChatEnd(), 300));
+$('chatInput').addEventListener('blur', () => setTimeout(fitChat, 60));
 $('chatFile').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     e.target.value = '';
