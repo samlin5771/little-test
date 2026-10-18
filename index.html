@@ -111,7 +111,7 @@
         .topbar {
             position: sticky; top: 0; z-index: 40;
             display: flex; align-items: center; justify-content: space-between;
-            padding: calc(10px + env(safe-area-inset-top)) 20px 10px;
+            padding: calc(18px + env(safe-area-inset-top)) 20px 12px;
             background: transparent; border-bottom: 1px solid transparent;
             transition: background-color 0.2s, border-color 0.2s;
         }
@@ -122,7 +122,7 @@
             opacity: 0; transition: opacity 0.2s; pointer-events: none;
         }
         .topbar.scrolled::after { opacity: 1; }
-        .topbar-title { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.28em; }
+        .topbar-title { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: 0.1em; }
         .topbar-actions { display: flex; gap: 8px; }
         .icon-btn {
             width: 44px; height: 44px; border-radius: 22px; flex-shrink: 0;
@@ -454,7 +454,7 @@
         .focus-extra { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 30px; }
         .hint { font-size: 12px; color: var(--faint); text-align: center; margin: 0; font-family: 'Noto Sans TC', sans-serif; }
         body.focus-mode .tabbar, body.focus-mode .topbar { display: none; }
-        body.focus-mode .main { padding-top: calc(16px + env(safe-area-inset-top)); }
+        body.focus-mode .main { padding-top: calc(24px + env(safe-area-inset-top)); }
         .done-badge {
             width: 56px; height: 56px; border-radius: 28px; margin: 18px auto 0;
             background: var(--mark-green-bg); color: var(--mark-green); display: flex; align-items: center; justify-content: center;
@@ -480,7 +480,9 @@
          * 6. 統計
          * ===================================================== */
         .stats-wrap { max-width: 640px; margin: 0 auto; }
-        .stats-head { display: flex; align-items: center; gap: 10px; padding-top: 12px; }
+        .stats-head { display: flex; align-items: center; gap: 10px; padding-top: 14px; }
+        .back-btn { margin-top: 8px; padding-left: 10px; }
+        .back-btn svg { width: 16px; height: 16px; }
         .stats-head .period { flex: 1; text-align: center; }
         .stats-head .period b { display: block; font-size: 15px; font-weight: 700; }
         .stats-head .period span { font-size: 12px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
@@ -900,29 +902,6 @@
             <div class="sheet-btns">
                 <button class="btn" data-close>取消</button>
                 <button class="btn btn-accent" id="saveLogBtn">儲存</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- iPhone 計時器（捷徑）設定 -->
-    <div class="modal" id="shortcutModal" role="dialog" aria-modal="true" aria-labelledby="shortcutTitle">
-        <div class="sheet">
-            <h2 id="shortcutTitle">在動態島顯示計時</h2>
-            <p class="note">網頁 App 不能直接用動態島，但可以借用 iPhone 內建的計時器：開始專注時，自動啟動「時鐘」的計時器，它會顯示在動態島和鎖定畫面，時間到也會響。只要設定一次：</p>
-            <ol class="steps">
-                <li>打開「捷徑」App，點右上角 <b>＋</b> 建立新捷徑。</li>
-                <li>搜尋並加入「<b>開始計時器</b>」動作。</li>
-                <li>點動作裡的數字，選「<b>捷徑輸入</b>」，單位選「<b>分鐘</b>」。</li>
-                <li>把捷徑名稱改成下面這個名字（要一模一樣）。</li>
-            </ol>
-            <label class="field-label" for="shortcutName">捷徑名稱</label>
-            <input type="text" class="field" id="shortcutName" autocomplete="off">
-            <label class="toggle-row"><input type="checkbox" class="checkbox" id="shortcutOn">開始專注時，自動啟動 iPhone 計時器</label>
-            <p class="note">注意：在 App 裡暫停，iPhone 計時器不會跟著暫停。按了沒反應的話，檢查捷徑名稱是否一致，或在捷徑最上方允許接收「文字」。</p>
-            <div class="sheet-btns">
-                <button class="btn" id="testShortcutBtn">測試 1 分鐘</button>
-                <span class="spacer"></span>
-                <button class="btn btn-accent" id="saveShortcutBtn">完成</button>
             </div>
         </div>
     </div>
@@ -1540,13 +1519,12 @@
             { label: '自由計時', focus: 0, rest: 5, hint: '按下開始就往上計時' }
         ];
         const RING_C = 2 * Math.PI * 134;   // 圓環周長（viewBox 290、半徑 134）
-        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         const pipSupported = 'documentPictureInPicture' in window;
         const BASE_TITLE = document.title;
 
         // 計時狀態只存在這台裝置；記錄下來的讀書時間（sessions）會同步到雲端
         let timer = lsGet(LS.timer, null) || { phase: 'idle' };
-        let tpref = Object.assign({ subject: 0, mode: 0, goal: 180, shortcut: false, shortcutName: '學測計時' }, lsGet(LS.tpref, {}));
+        let tpref = Object.assign({ subject: 0, mode: 0, goal: 180 }, lsGet(LS.tpref, {}));
         const saveTimer = () => lsSet(LS.timer, timer);
         const saveTpref = () => lsSet(LS.tpref, tpref);
 
@@ -1637,11 +1615,6 @@
             } catch (e) {}
         }
 
-        /* --- iPhone 捷徑（動態島） --- */
-        function runShortcut(minutes) {
-            location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(tpref.shortcutName)}&input=text&text=${Math.max(1, Math.round(minutes))}`;
-        }
-
         /* --- 計時動作 --- */
         function startFocus() {
             const m = MODES[tpref.mode];
@@ -1650,7 +1623,6 @@
             unlockAudio();
             requestWake();
             renderTimer();
-            if (isIOS && tpref.shortcut && m.focus) runShortcut(m.focus);
         }
         function togglePause() {
             if (timer.phase !== 'focus') return;
@@ -1731,7 +1703,6 @@
                     </div>
                     <div class="focus-extra">
                         ${pipSupported ? '<button class="btn btn-small" data-act="pip">開啟子母畫面</button>' : ''}
-                        ${isIOS && timer.duration ? '<button class="btn btn-small" data-act="ios-timer">同時開 iPhone 計時器（顯示在動態島）</button>' : ''}
                         <p class="hint">關掉 App 也沒關係，回來時會自動算好經過的時間</p>
                     </div>
                 </div>`;
@@ -1776,7 +1747,6 @@
                         <div><strong class="num">${roundsOn(t)}<small>輪</small></strong><span>番茄鐘</span></div>
                         <div><strong class="num hot">${studyStreak()}<small>天</small></strong><span>連續讀書</span></div>
                     </div>
-                    ${isIOS ? `<div style="text-align:center;margin-top:20px"><button class="btn btn-small" data-act="shortcut-setup">動態島計時：${tpref.shortcut ? '已開啟' : '設定'}</button></div>` : ''}
                 </div>`;
                 if (pipWin) { try { pipWin.close(); } catch (e) {} }
             }
@@ -1900,8 +1870,6 @@
             else if (act === 'stop') endBreak(false);
             else if (act === 'stats') { statOffset = 0; statSel = null; renderStats(); showTab('tab-stats'); }
             else if (act === 'pip') openPip();
-            else if (act === 'ios-timer') runShortcut((timer.duration - focusElapsed()) / 60000);
-            else if (act === 'shortcut-setup') openShortcutModal();
         });
         $('tab-timer').addEventListener('change', (e) => {
             const key = e.target.dataset.task;
@@ -1915,20 +1883,6 @@
             if (timer.phase === 'focus' && !timer.pausedAt) requestWake();
             timerTick();
         });
-
-        /* --- iPhone 捷徑設定 --- */
-        function openShortcutModal() {
-            $('shortcutName').value = tpref.shortcutName;
-            $('shortcutOn').checked = tpref.shortcut;
-            openModal('shortcutModal');
-        }
-        function saveShortcutPref() {
-            tpref.shortcutName = $('shortcutName').value.trim() || '學測計時';
-            tpref.shortcut = $('shortcutOn').checked;
-            saveTpref();
-        }
-        $('saveShortcutBtn').addEventListener('click', () => { saveShortcutPref(); closeModal('shortcutModal'); renderTimer(); });
-        $('testShortcutBtn').addEventListener('click', () => { saveShortcutPref(); runShortcut(1); });
 
         /* =====================================================
          * 6. 統計
@@ -2027,6 +1981,7 @@
             const rounds = state.sessions.filter(x => x.pomo && keys.includes(sessionDay(x))).length;
 
             el.innerHTML = `<div class="stats-wrap">
+                <button class="btn btn-small back-btn" data-sact="back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>返回計時</button>
                 <div class="stats-head">
                     <button class="icon-btn" data-sact="prev" aria-label="上一${word}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
                     <div class="period"><b>${periodTitle}</b><span class="num">${fmtMD(days[0])} – ${fmtMD(days[days.length - 1])}</span></div>
@@ -2095,6 +2050,7 @@
             if (act === 'prev') { statOffset--; statSel = null; renderStats(); }
             else if (act === 'next' && statOffset < 0) { statOffset++; statSel = null; renderStats(); }
             else if (act === 'add') openLogModal();
+            else if (act === 'back') showTab('tab-timer');
         });
         $('tab-stats').addEventListener('change', (e) => {
             if (e.target.id === 'goalSelect') { tpref.goal = Number(e.target.value); saveTpref(); renderStats(); }

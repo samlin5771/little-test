@@ -1,6 +1,6 @@
-// 快取版本號：以後更新網頁內容時，把這個數字改一下（例如 v8, v9...）
+// 快取版本號：以後更新網頁內容時，把這個數字改一下（例如 v9, v10...）
 // 才能讓使用者的手機抓到新版本並清掉舊快取
-const CACHE_NAME = 'study-countdown-v7';
+const CACHE_NAME = 'study-countdown-v8';
 
 // 開啟時要預先快取的本機檔案
 const PRECACHE_URLS = [
