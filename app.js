@@ -231,6 +231,7 @@ function showTab(id) {
     document.body.classList.toggle('sub', !!SUB[id]);   // 子頁面：頂部左邊出現返回鍵
     $('topExtra').innerHTML = '';
     if (id === 'tab-stats') renderStats();
+    if (id === 'tab-countdown') tick();
     if (id === 'tab-room') { roomStart(); renderRoom(); }
     if (id === 'tab-ai') renderAI();
     lsSet(LS.tab, id);
@@ -328,33 +329,37 @@ function roll(el, str) {
     chars.forEach(c => { if (/\d/.test(c)) cols[i++].style.transform = `translateY(-${c}em)`; });
 }
 
+// 內容一樣就不重寫（每秒都會呼叫，避免不必要的重新排版）
+const setText = (el, v) => { if (el.textContent !== v) el.textContent = v; };
+const setHtml = (el, v) => { if (el.dataset.h !== v) { el.dataset.h = v; el.innerHTML = v; } };
 function tick() {
+    if (document.body.dataset.tab !== 'tab-countdown' || document.visibilityState === 'hidden') return;   // 看不到就不用更新
     const now = Date.now();
     const exam = EXAMS[examKey];
     const diff = examTime(exam.date) - now;
-    $('cdEyebrow').textContent = `${exam.date.slice(0, 4)} · ${exam.name}`;
+    setText($('cdEyebrow'), `${exam.date.slice(0, 4)} · ${exam.name}`);
     const ed = parseYmd(exam.date);
     let dateHtml = `考試日期 <strong>${ed.getFullYear()}/${pad(ed.getMonth() + 1)}/${pad(ed.getDate())}</strong>（${WEEK_ZH[ed.getDay()]}）`;
     if (exam.end) {
         const ee = parseYmd(exam.end);
         dateHtml += ` – <strong>${pad(ee.getMonth() + 1)}/${pad(ee.getDate())}</strong>（${WEEK_ZH[ee.getDay()]}）`;
     }
-    $('cdDate').innerHTML = dateHtml;
+    setHtml($('cdDate'), dateHtml);
     if (diff > 0) {
         roll($('days'), pad(Math.floor(diff / 86400000)));
         roll($('hours'), pad(Math.floor(diff % 86400000 / 3600000)));
         roll($('minutes'), pad(Math.floor(diff % 3600000 / 60000)));
         roll($('seconds'), pad(Math.floor(diff % 60000 / 1000)));
-        $('cdNote').textContent = '';
+        setText($('cdNote'), '');
     } else {
         ['days', 'hours', 'minutes', 'seconds'].forEach(id => roll($(id), '00'));
-        $('cdNote').textContent = now < examEndTime(exam) ? '考試進行中，加油！' : '這場已經考完了，辛苦了！';
+        setText($('cdNote'), now < examEndTime(exam) ? '考試進行中，加油！' : '這場已經考完了，辛苦了！');
     }
     const next = examEntries.map(([, e]) => ({ ...e, diff: examTime(e.date) - now }))
         .filter(e => e.diff > 0).sort((a, b) => a.diff - b.diff)[0];
-    $('nextExamLine').innerHTML = next
+    setHtml($('nextExamLine'), next
         ? `下一場：${esc(next.name)} · 還有 <strong>${Math.ceil(next.diff / 86400000)}</strong> 天`
-        : '所有考試都完成了，恭喜！';
+        : '所有考試都完成了，恭喜！');
 }
 
 // 今天：讀了多久（對照每日目標）＋進度表中「今天」有寫內容的格子
@@ -1133,6 +1138,8 @@ $('tab-timer').addEventListener('change', (e) => {
 });
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
+    tick();
+    publishProfile(true);
     if (timer.phase === 'focus' && !timer.pausedAt) requestWake();
     timerTick();
 });
@@ -2012,6 +2019,7 @@ function roomStart() {
     roomUnsub = fs.onSnapshot(q, (snap) => {
         roomsLoaded = true;
         myRooms = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        if (myRooms.length && !roomPref.enabled) { roomPref.enabled = true; saveRoomPref(); publishProfile(true); }
         if (myRooms.some(r => r.id === pendingRoom)) pendingRoom = null;
         if (roomView && roomView !== pendingRoom && !myRooms.some(r => r.id === roomView)) roomView = null;   // 被移出或房間刪除
         watchProfiles([...new Set(myRooms.flatMap(r => r.members || []))]);
@@ -2431,6 +2439,24 @@ function msgBody(m) {
     if (m.img) return photoExpired(m) ? `<div class="bubble expired" data-mid="${m.id}">照片已過期</div>` : `<img class="chat-img" src="${esc(m.img)}" alt="照片" data-mid="${m.id}" loading="lazy">`;
     return `<div class="bubble" data-mid="${m.id}">${linkify(m.text || '')}</div>`;
 }
+// 依 key 比對：只換掉內容有變的節點（新訊息只會新增一個，不會整串重畫）
+const chatCache = new WeakMap();
+function patchList(box, items) {
+    if (box.firstElementChild?.classList.contains('chat-empty')) box.innerHTML = '';
+    const have = new Map([...box.children].map(n => [n.dataset.k, n]));
+    const nodes = items.map(([k, html]) => {
+        const old = have.get(k);
+        if (old && chatCache.get(old) === html) { have.delete(k); return old; }   // 沒變：沿用（照片不用重新解碼）
+        const t = document.createElement('template');
+        t.innerHTML = html.trim();
+        const n = t.content.firstElementChild;
+        n.dataset.k = k; chatCache.set(n, html);
+        return n;
+    });
+    have.forEach(n => n.remove());   // 已刪除或內容有變的舊節點
+    let cur = box.firstElementChild;
+    nodes.forEach(n => { if (n === cur) cur = cur.nextElementSibling; else box.insertBefore(n, cur); });
+}
 function renderChatList(toEnd) {
     const box = $('chatList');
     if (!box || !chatRoom) return;
@@ -2441,11 +2467,12 @@ function renderChatList(toEnd) {
         box.innerHTML = `<div class="chat-empty"><p>還沒有訊息</p><span>跟大家打聲招呼，或約好一起開始下一輪 ✏️</span></div>`;
         return;
     }
-    let html = '', prev = null;
+    const items = [];   // [key, html]
+    let prev = null;
     msgs.forEach(m => {
-        if (!prev || m.at - prev.at > 30 * 60000 || ymd(new Date(m.at)) !== ymd(new Date(prev.at))) html += `<p class="chat-sys">${chatDayLabel(m.at)}</p>`;
+        if (!prev || m.at - prev.at > 30 * 60000 || ymd(new Date(m.at)) !== ymd(new Date(prev.at))) items.push(['t' + m.id, `<p class="chat-sys">${chatDayLabel(m.at)}</p>`]);
         if (m.recalled) {
-            html += `<p class="chat-sys">${m.uid === me ? '你' : esc(m.name || '同學')} 收回了一則訊息</p>`;
+            items.push([m.id, `<p class="chat-sys">${m.uid === me ? '你' : esc(m.name || '同學')} 收回了一則訊息</p>`]);
             prev = m; return;
         }
         const mine = m.uid === me;
@@ -2455,15 +2482,15 @@ function renderChatList(toEnd) {
         let readN = 0;
         if (mine) Object.entries(chatReads).forEach(([u, at]) => { if (u !== me && at >= m.at) readN++; });
         const meta = `<span class="chat-meta">${mine && readN ? `<span>已讀 ${readN}</span>` : ''}<span class="num">${tm}</span></span>`;
-        html += mine
+        items.push([m.id, mine
             ? `<div class="msg mine ${grouped ? 'grouped' : ''}">${meta}${msgBody(m)}</div>`
             : `<div class="msg them ${grouped ? 'grouped' : ''}">
                 ${grouped ? '<span class="chat-av-sp"></span>' : `<span class="chat-av" style="background:${avColor(m.uid)}">${esc((m.name || '?').slice(0, 1))}</span>`}
                 <div class="msg-col">${grouped ? '' : `<p class="chat-who">${esc(m.name || '同學')}</p>`}<div class="msg-line">${msgBody(m)}${meta}</div></div>
-            </div>`;
+            </div>`]);
         prev = m;
     });
-    box.innerHTML = html;
+    patchList(box, items);
     if (nearEnd) scrollChatEnd();
 }
 
@@ -2731,8 +2758,9 @@ async function loadRoomProfile(user) {
         }
     } catch (e) { /* 離線或規則還沒設定 */ }
     publishProfile(true);
-    // 用過讀書房間的話，登入後就開始監聽（計時頁可以顯示幾個人在讀）
-    if (roomPref.enabled || document.body.dataset.tab === 'tab-room') roomStart();
+    // 登入後一律監聽自己的房間：只要在任何房間裡，就會自動把讀書狀態分享出去
+    // （iPhone 的 Safari 和主畫面 App 資料是分開的，不能只靠這台裝置的記錄判斷）
+    roomStart();
     if (document.body.dataset.tab === 'tab-room') renderRoom();
 }
 
@@ -2828,7 +2856,7 @@ $('installRow').addEventListener('click', () => { closeModal('accountModal'); op
 // 禁止雙指縮放（iOS Safari 不吃 viewport 設定，要另外擋）
 ['gesturestart', 'gesturechange', 'gestureend'].forEach(t =>
     document.addEventListener(t, (e) => e.preventDefault(), { passive: false }));
-document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+// （不再監聽 touchmove：非 passive 的 touchmove 會讓每次捲動都要等程式，手機會卡；縮放改用 CSS touch-action 擋）
 // 電腦上擋掉 Ctrl/⌘ + 滾輪、觸控板縮放
 document.addEventListener('wheel', (e) => { if (e.ctrlKey || e.metaKey) e.preventDefault(); }, { passive: false });
 document.addEventListener('keydown', (e) => {

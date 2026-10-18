@@ -41,7 +41,7 @@
     --exam: #D92D2D;
     --exam-text: #B91C1C;
     --exam-soft: rgba(217, 45, 45, 0.1);
-    --nav-bg: rgba(247, 246, 242, 0.92);
+    --nav-bg: rgba(247, 246, 242, 0.97);
     --modal-bg: #FFFFFF;
     --shadow: 0 20px 50px rgba(22, 20, 15, 0.18);
     --mark-green-bg: rgba(16, 185, 129, 0.16);  --mark-green: #047857;
@@ -70,7 +70,7 @@
     --exam: #FF5A5F;
     --exam-text: #FF7A7E;
     --exam-soft: rgba(255, 90, 95, 0.16);
-    --nav-bg: rgba(5, 6, 8, 0.92);
+    --nav-bg: rgba(5, 6, 8, 0.96);
     --modal-bg: #12131A;
     --shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
     --mark-green-bg: rgba(16, 185, 129, 0.18);  --mark-green: #34D399;
@@ -156,8 +156,8 @@ button { cursor: pointer; }
     50% { opacity: 1; }
     100% { transform: translate(8%, 6%) scale(1.16); opacity: 0.85; }
 }
-.bg-grain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.08; mix-blend-mode: overlay; }
-[data-theme="light"] .bg-grain { opacity: 0.05; mix-blend-mode: multiply; }
+.bg-grain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.045; }
+[data-theme="light"] .bg-grain { opacity: 0.03; }
 
 /* ② 數字滾動 */
 .roll { display: inline-flex; }
@@ -1005,7 +1005,7 @@ body.chat-open { overflow: hidden; }
  * ===================================================== */
 .acct-sheet { max-width: 400px; padding: 18px 18px 22px; display: flex; flex-direction: column; gap: 12px; }
 .acct-top { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
-.acct-top h2 { margin: 0; font-size: 17px; }
+.acct-sheet .acct-top h2 { margin: 0; font-size: 18px; line-height: 44px; }
 .acct-group { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; }
 .acct-row { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 16px; border: none; background: none; text-align: left; font-size: 15px; font-family: 'Noto Sans TC', sans-serif; }
 button.acct-row:hover { background: var(--surface-2); }
@@ -1203,8 +1203,8 @@ body.guide-open { overflow: hidden; }
     display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
     padding: 6px max(4px, calc(50% - 320px)) calc(8px + env(safe-area-inset-bottom));
     background: var(--nav-bg); border-top: 1px solid var(--line);
-    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
 }
+@media (min-width: 900px) { .tabbar { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); } }
 .tab-btn {
     display: flex; flex-direction: column; align-items: center; gap: 4px;
     min-height: 50px; padding: 6px 0; border: none; background: transparent;
@@ -1349,3 +1349,11 @@ textarea.field { height: auto; min-height: 96px; resize: vertical; line-height: 
 }
 [hidden] { display: none !important; }
 body.chat-open .toast { bottom: calc(86px + env(safe-area-inset-bottom)); }
+
+/* --- 流暢度 --- */
+html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影響捲動 */
+.bg-glow { contain: strict; }
+.g-sec { content-visibility: auto; contain-intrinsic-size: auto 900px; }   /* 導覽頁：看不到的段落先不畫 */
+.event-list, .todo-list, .seats { contain: layout paint; }
+@media (max-width: 899px) { .bg-glow { animation-duration: 20s; } }
+@media (prefers-reduced-motion: reduce) { .bg-glow { animation: none; } }
