@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v24';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v26';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
 const RECAPTCHA_SITE_KEY = '6LeR9vQtAAAAAKsbIXmqZCd4sHONdH-mvcTx_qtJ';
@@ -55,6 +55,7 @@ const LS = {
     exam: 'selectedExamKey', theme: 'study_theme', tab: 'study_tab', accent: 'study_accent',
     sessions: 'study_sessions', timer: 'study_timer', tpref: 'study_timer_pref',
     aiPref: 'study_ai_pref', aiCount: 'study_ai_count', room: 'study_room',
+    bg: 'study_bg', syllabus: 'study_syllabus',
     install: 'study_install_seen', tour: 'study_tour_seen', chatSeen: 'study_chat_seen', photoCount: 'study_photo_count'
 };
 // 沒有頭像時的預設圖（顏色跟著主題色）
@@ -96,7 +97,7 @@ function toast(msg, action) {
 /* =====================================================
  * 資料與儲存
  * ===================================================== */
-let state = { todos: [], events: [], weekly: {}, sessions: [] };
+let state = { todos: [], events: [], weekly: {}, sessions: [], syllabus: { picked: null, custom: {}, status: {}, flags: [] } };
 let currentUser = null;
 let fb = null; // Firebase（動態載入，離線時 App 照常可用）
 
@@ -120,19 +121,21 @@ function normalize(raw = {}) {
             ? { id: uid(), text: t }
             : { id: t.id || uid(), text: t.text || '' }),
         events: (raw.events || []).filter(e => e && e.start).map(e => ({
-            id: String(e.id || uid()), title: e.title || '', start: String(e.start).slice(0, 10), important: !!e.important
+            id: String(e.id || uid()), title: e.title || '', start: String(e.start).slice(0, 10), important: !!e.important,
+            ...(e.end && String(e.end).slice(0, 10) > String(e.start).slice(0, 10) ? { end: String(e.end).slice(0, 10) } : {})
         })).filter(e => { if (isExamDuplicate(e)) { removedDupes++; return false; } return true; }),
         weekly: raw.weekly && typeof raw.weekly === 'object' ? raw.weekly : {},
         sessions: (raw.sessions || []).filter(x => x && x.start && x.minutes > 0).map(x => ({
             id: String(x.id || uid()), subject: Math.min(4, Math.max(0, x.subject | 0)),
             start: Number(x.start), minutes: Math.round(x.minutes), pomo: !!x.pomo
-        }))
+        })),
+        syllabus: normSyllabus(raw.syllabus)
     };
 }
-const isEmpty = (s) => !s.todos.length && !s.events.length && !Object.keys(s.weekly).length && !s.sessions.length;
-const loadLocal = () => normalize({ todos: lsGet(LS.todos, []), events: lsGet(LS.events, []), weekly: lsGet(LS.weekly, {}), sessions: lsGet(LS.sessions, []) });
+const isEmpty = (s) => !s.todos.length && !s.events.length && !Object.keys(s.weekly).length && !s.sessions.length && !s.syllabus.picked;
+const loadLocal = () => normalize({ todos: lsGet(LS.todos, []), events: lsGet(LS.events, []), weekly: lsGet(LS.weekly, {}), sessions: lsGet(LS.sessions, []), syllabus: lsGet(LS.syllabus, null) });
 function saveLocal() {
-    lsSet(LS.todos, state.todos); lsSet(LS.events, state.events); lsSet(LS.weekly, state.weekly); lsSet(LS.sessions, state.sessions);
+    lsSet(LS.todos, state.todos); lsSet(LS.events, state.events); lsSet(LS.weekly, state.weekly); lsSet(LS.sessions, state.sessions); lsSet(LS.syllabus, state.syllabus);
 }
 
 let cloudTimer;
@@ -147,8 +150,8 @@ function save() {
         try {
             // mergeFields：只覆蓋這幾個欄位，雲端其他舊資料不受影響
             await fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), {
-                todos: state.todos, events: state.events, weekly: state.weekly, sessions: state.sessions, updatedAt: Date.now()
-            }, { mergeFields: ['todos', 'events', 'weekly', 'sessions', 'updatedAt'] });
+                todos: state.todos, events: state.events, weekly: state.weekly, sessions: state.sessions, syllabus: state.syllabus, updatedAt: Date.now()
+            }, { mergeFields: ['todos', 'events', 'weekly', 'sessions', 'syllabus', 'updatedAt'] });
         } catch (e) {
             console.error('雲端儲存失敗：', e);
             toast('雲端儲存失敗，請檢查網路');
@@ -163,6 +166,8 @@ function renderAll() {
     renderTodos();
     renderTimer();
     renderStats();
+    renderSyllabus();
+    renderReviewLine();
 }
 
 /* =====================================================
@@ -171,10 +176,12 @@ function renderAll() {
 function applyTheme(t) {
     document.documentElement.setAttribute('data-theme', t);
     document.querySelector('meta[name="theme-color"]').setAttribute('content', t === 'dark' ? '#050608' : '#F7F6F2');
+    try { bgFx.refresh(); } catch (e) { /* 啟動時背景還沒準備好 */ }
+    renderModeSeg();
 }
 applyTheme(document.documentElement.getAttribute('data-theme'));
 /* ④ 主題色（帳號視窗裡切換） */
-const ACCENTS = ['amber', 'mint', 'violet', 'sakura'];
+const ACCENTS = ['amber', 'mint', 'violet', 'sakura', 'ocean', 'coral', 'matcha', 'moon'];
 function applyAccent(a) {
     if (!ACCENTS.includes(a)) a = 'amber';
     if (a === 'amber') document.documentElement.removeAttribute('data-accent');
@@ -196,7 +203,9 @@ $('accentGrid').addEventListener('click', (e) => {
     if (!b) return;
     applyAccent(b.dataset.accent);
     lsSet(LS.accent, b.dataset.accent);
+    bgFx.refresh();
     renderAccount();   // 預設頭像、目前主題色名稱
+    savePrefs();
 });
 // 個人設定：點「主題色」展開／收起顏色選項
 $('accentRow').addEventListener('click', () => {
@@ -207,14 +216,206 @@ $('accentRow').addEventListener('click', () => {
 
 $('themeBtn').addEventListener('click', () => {
     const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    applyTheme(next);
     lsSet(LS.theme, next);
+    applyTheme(next);
 });
 // 沒手動選過時，跟著手機切換深淺色
+const sysLight = () => !!window.matchMedia?.('(prefers-color-scheme: light)').matches;
 window.matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change', (e) => {
     const saved = localStorage.getItem(LS.theme);
     if (saved !== 'light' && saved !== 'dark') applyTheme(e.matches ? 'light' : 'dark');
 });
+// 個人設定：外觀（淺色／深色／跟系統）
+function renderModeSeg() {
+    const saved = localStorage.getItem(LS.theme);
+    const m = saved === 'light' || saved === 'dark' ? saved : 'auto';
+    document.querySelectorAll('#modeSeg button').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === m); b.setAttribute('aria-pressed', b.dataset.mode === m);
+    });
+}
+$('modeSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-mode]');
+    if (!b) return;
+    if (b.dataset.mode === 'auto') { try { localStorage.removeItem(LS.theme); } catch (err) {} applyTheme(sysLight() ? 'light' : 'dark'); }
+    else { lsSet(LS.theme, b.dataset.mode); applyTheme(b.dataset.mode); }
+});
+renderModeSeg();
+
+/* =====================================================
+ * 背景（個人設定裡選）
+ * 呼吸光、極光、晨霧、方格紙、極簡只用 CSS；星空、雨夜、花瓣用一張 canvas 畫
+ * 專注計時、聊天室、切到背景、系統「減少動態效果」時都會停下來，省電也不卡
+ * ===================================================== */
+const BG_NAME = { glow: '呼吸光', stars: '星空', aurora: '極光', mist: '晨霧', rain: '雨夜', petal: '花瓣', grid: '方格紙', plain: '極簡' };
+const bgFx = (() => {
+    const layer = $('bgLayer');
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    let kind = '', cv = null, ctx = null, w = 0, h = 0, parts = [], runs = [], streaks = [], shoot = null;
+    let raf = 0, last = 0, t = 0, rgb = '233,177,84', dark = true;
+    const R = Math.random;
+    const add = (cls) => { const d = document.createElement('div'); d.className = cls; layer.appendChild(d); return d; };
+    function readColors() {
+        rgb = getComputedStyle(document.documentElement).getPropertyValue('--accent-rgb').trim().replace(/\s/g, '') || '233,177,84';
+        dark = document.documentElement.getAttribute('data-theme') !== 'light';
+    }
+    function resize() {
+        if (!cv) return;
+        const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+        w = window.innerWidth; h = window.innerHeight;
+        cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    function seed() {
+        const n = Math.min(1.6, (w * h) / (390 * 844));   // 螢幕越大，數量越多（有上限）
+        shoot = null; runs = []; streaks = [];
+        if (kind === 'stars') parts = Array.from({ length: Math.round(110 * n) }, () => ({ x: R() * w, y: R() * h * .88, r: R() < .1 ? 1.3 + R() * .6 : .5 + R() * .7, p: R() * 6.28, s: .6 + R() * 1.6 }));
+        if (kind === 'petal') parts = Array.from({ length: Math.round(20 * n) }, () => ({ x: R() * w, y: R() * h, s: 4 + R() * 4, v: .35 + R() * .5, sw: R() * 6.28, rot: R() * 6.28, vr: (R() - .5) * .03 }));
+        if (kind === 'rain') {
+            parts = Array.from({ length: Math.round(140 * n) }, () => ({ x: R() * w, y: R() * h, r: R() < .85 ? .6 + R() * 1.3 : 1.8 + R() * 1.6 }));
+            runs = Array.from({ length: Math.round(6 * n) }, () => ({ x: R() * w, y: R() * h, r: 2.2 + R() * 1.4, v: 0, wait: R() * 3000, trail: [] }));
+            streaks = Array.from({ length: Math.round(30 * n) }, () => ({ x: R() * w * 1.2, y: R() * h, l: 14 + R() * 22, v: 7 + R() * 5, a: .05 + R() * .1 }));
+        }
+    }
+    function drop(x, y, r) {
+        const c = ctx;
+        c.fillStyle = dark ? 'rgba(10,14,22,.35)' : 'rgba(120,135,150,.18)';
+        c.beginPath(); c.ellipse(x, y + r * .15, r, r * 1.12, 0, 0, 6.283); c.fill();
+        c.strokeStyle = dark ? 'rgba(220,230,245,.28)' : 'rgba(255,255,255,.75)'; c.lineWidth = Math.max(.6, r * .28);
+        c.beginPath(); c.arc(x, y, r * .85, 3.6, 5.6); c.stroke();
+        c.fillStyle = dark ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.95)';
+        c.beginPath(); c.arc(x - r * .3, y - r * .35, Math.max(.4, r * .22), 0, 6.283); c.fill();
+    }
+    function draw(dt) {
+        const c = ctx, f = dt / 16;
+        c.clearRect(0, 0, w, h); t += dt;
+        if (kind === 'stars') {
+            for (const s of parts) {
+                const tw = .55 + .45 * Math.sin(t * .001 * s.s + s.p);
+                c.fillStyle = dark ? `rgba(255,252,240,${.25 + .7 * tw})` : `rgba(${rgb},${.18 + .4 * tw})`;
+                c.beginPath(); c.arc(s.x, s.y, s.r, 0, 6.283); c.fill();
+            }
+            if (!shoot && dt && R() < .003) shoot = { x: w * (.3 + R() * .7), y: R() * h * .35, k: 0 };
+            if (shoot) {
+                shoot.k += dt / 900;
+                const x = shoot.x - shoot.k * w * .55, y = shoot.y + shoot.k * w * .3, a = Math.sin(Math.min(1, shoot.k) * Math.PI);
+                const g = c.createLinearGradient(x, y, x + 60, y - 32);
+                g.addColorStop(0, dark ? `rgba(255,255,255,${a})` : `rgba(${rgb},${a})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+                c.strokeStyle = g; c.lineWidth = 1.4; c.beginPath(); c.moveTo(x, y); c.lineTo(x + 60, y - 32); c.stroke();
+                if (shoot.k >= 1) shoot = null;
+            }
+        } else if (kind === 'petal') {
+            for (const p of parts) {
+                p.y += p.v * f; p.sw += .012 * f; p.rot += p.vr * f;
+                if (p.y > h + 10) { p.y = -10; p.x = R() * w; }
+                c.save(); c.translate(p.x + Math.sin(p.sw) * 22, p.y); c.rotate(p.rot);
+                c.fillStyle = `rgba(${rgb},${dark ? .7 : .85})`;
+                c.beginPath(); c.ellipse(0, 0, p.s, p.s * .55, 0, 0, 6.283); c.fill();
+                c.fillStyle = `rgba(255,255,255,${dark ? .15 : .35})`;
+                c.beginPath(); c.ellipse(-p.s * .25, -p.s * .12, p.s * .45, p.s * .2, 0, 0, 6.283); c.fill();
+                c.restore();
+            }
+        } else if (kind === 'rain') {
+            c.lineCap = 'round'; c.lineWidth = .8;
+            for (const d of streaks) {   // 遠處的雨絲
+                d.y += d.v * f; d.x -= d.v * .12 * f;
+                if (d.y > h + d.l) { d.y = -d.l; d.x = R() * w * 1.2; }
+                c.strokeStyle = dark ? `rgba(190,205,225,${d.a})` : `rgba(80,100,125,${d.a})`;
+                c.beginPath(); c.moveTo(d.x, d.y); c.lineTo(d.x + d.l * .12, d.y - d.l); c.stroke();
+            }
+            for (const d of parts) drop(d.x, d.y, d.r);   // 玻璃上的小水珠
+            for (const d of runs) {   // 慢慢滑下來的水珠，留下一條水痕
+                if (d.wait > 0) d.wait -= dt; else { d.v = Math.min(2.2, d.v + .03 * f); d.y += d.v * f; d.x += Math.sin(d.y * .05) * .15; }
+                if (dt) { d.trail.push([d.x, d.y]); if (d.trail.length > 40) d.trail.shift(); }
+                if (d.trail.length > 2) {
+                    c.strokeStyle = dark ? 'rgba(200,215,235,.12)' : 'rgba(255,255,255,.6)'; c.lineWidth = d.r * .7;
+                    c.beginPath(); c.moveTo(d.trail[0][0], d.trail[0][1]); d.trail.forEach(([x, y]) => c.lineTo(x, y)); c.stroke();
+                }
+                drop(d.x, d.y, d.r);
+                if (d.y > h + 10) { d.y = -10; d.x = R() * w; d.v = 0; d.wait = 1500 + R() * 4000; d.trail = []; }
+            }
+        }
+    }
+    const still = () => document.hidden || reduce?.matches || document.body.classList.contains('focus-mode') || document.body.classList.contains('chat-open');
+    function loop(now) {
+        raf = 0;
+        if (!cv || still()) return;
+        const dt = Math.min(60, now - last);
+        if (dt >= 32) { last = now; draw(dt); }   // 約 30 fps 就夠順，比較省電
+        raf = requestAnimationFrame(loop);
+    }
+    function update() {   // 依狀態決定要不要動
+        const s = still();
+        document.documentElement.classList.toggle('bg-still', s);
+        if (!cv) return;
+        if (s) { if (raf) cancelAnimationFrame(raf); raf = 0; draw(0); }
+        else if (!raf) { last = performance.now(); raf = requestAnimationFrame(loop); }
+    }
+    function set(k) {
+        if (!BG_NAME[k]) k = 'glow';
+        document.documentElement.setAttribute('data-bg', k);
+        if (k === kind) { update(); return; }
+        kind = k; layer.innerHTML = ''; cv = null; ctx = null;
+        if (raf) cancelAnimationFrame(raf); raf = 0;
+        if (k === 'aurora') { add('b-au a1'); add('b-au a2'); add('b-au a3'); }
+        if (k === 'mist') { add('b-mist m1'); add('b-mist m2'); add('b-mist m3'); }
+        if (k === 'grid') add('b-grid');
+        if (k === 'stars') add('b-sky');
+        if (k === 'rain') {
+            add('b-rain-sky');
+            // 窗外模糊的燈：主題色、暖黃、冷藍
+            [[18, 72, 52, 'rgba(var(--accent-rgb),.6)'], [72, 80, 70, 'rgba(255,170,90,.55)'], [84, 56, 40, 'rgba(110,160,255,.45)'],
+             [38, 90, 44, 'rgba(255,214,140,.45)'], [8, 50, 30, 'rgba(110,160,255,.35)'], [56, 64, 28, 'rgba(var(--accent-rgb),.4)']]
+                .forEach(([x, y, r, c], i) => { const d = add('b-bokeh'); d.style.cssText = `left:${x}%;top:${y}%;width:${r * 2}px;height:${r * 2}px;margin:-${r}px;background:${c};animation-delay:-${i * 1.7}s`; });
+            add('b-fog');
+        }
+        if (k === 'stars' || k === 'rain' || k === 'petal') {
+            cv = document.createElement('canvas'); layer.appendChild(cv); ctx = cv.getContext('2d');
+            readColors(); resize(); seed(); draw(0);
+        }
+        update();
+    }
+    let rt = 0;
+    window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (cv) { resize(); seed(); draw(0); } }, 200); });
+    document.addEventListener('visibilitychange', update);
+    reduce?.addEventListener?.('change', update);
+    // body 的 class 變了（進入專注、打開聊天室）就重新判斷
+    new MutationObserver(update).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return { set, update, get kind() { return kind; }, refresh() { readColors(); if (cv) draw(0); } };
+})();
+function applyBg(k) {
+    bgFx.set(k);
+    document.querySelectorAll('.bg-opt').forEach(b => { const on = b.dataset.bg === bgFx.kind; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on); });
+    if ($('bgName')) $('bgName').textContent = BG_NAME[bgFx.kind];
+}
+applyBg(localStorage.getItem(LS.bg) || 'glow');
+$('bgGrid').addEventListener('click', (e) => {
+    const b = e.target.closest('.bg-opt');
+    if (!b) return;
+    applyBg(b.dataset.bg); lsSet(LS.bg, b.dataset.bg); savePrefs();
+});
+$('bgRow').addEventListener('click', () => {
+    const g = $('bgGrid'), open = g.hidden;
+    g.hidden = !open;
+    $('bgRow').setAttribute('aria-expanded', open);
+});
+// 主題色和背景跟著帳號同步（深淺色每台裝置各自決定）
+let prefsTimer = 0;
+function savePrefs() {
+    if (!currentUser || !fb || !cloudReady) return;
+    clearTimeout(prefsTimer);
+    prefsTimer = setTimeout(() => {
+        fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), {
+            prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow' }
+        }, { mergeFields: ['prefs'] }).catch(e => console.warn('設定同步失敗：', e));
+    }, 400);
+}
+function applyCloudPrefs(p) {
+    if (!p || typeof p !== 'object') return;
+    if (ACCENTS.includes(p.accent) && p.accent !== (localStorage.getItem(LS.accent) || 'amber')) {
+        applyAccent(p.accent); lsSet(LS.accent, p.accent); bgFx.refresh();
+    }
+    if (BG_NAME[p.bg] && p.bg !== (localStorage.getItem(LS.bg) || 'glow')) { applyBg(p.bg); lsSet(LS.bg, p.bg); }
+}
 
 /* =====================================================
  * 分頁
@@ -222,24 +423,31 @@ window.matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change'
 const tabBtns = document.querySelectorAll('.tab-btn');
 function showTab(id) {
     if (!document.getElementById(id)) id = 'tab-countdown';
-    const SUB = { 'tab-stats': 'tab-timer', 'tab-room': 'tab-timer', 'tab-ai': 'tab-weekly' };   // 子頁面屬於哪個分頁
+    const SUB = { 'tab-stats': 'tab-timer', 'tab-room': 'tab-timer', 'tab-ai': 'tab-weekly', 'tab-syllabus': 'tab-weekly' };   // 子頁面屬於哪個分頁
     const navId = SUB[id] || id;
     const btn = [...tabBtns].find(b => b.dataset.tab === navId) || tabBtns[0];
     tabBtns.forEach(b => b.classList.toggle('active', b === btn));
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === id));
     document.body.dataset.tab = id;
-    $('pageTitle').textContent = { 'tab-stats': '讀書統計', 'tab-room': '讀書房間', 'tab-ai': 'AI 讀書計畫' }[id] || btn.dataset.title;
-    document.body.classList.toggle('sub', !!SUB[id]);   // 子頁面：頂部左邊出現返回鍵
+    $('pageTitle').textContent = { 'tab-stats': '讀書統計', 'tab-room': '讀書房間', 'tab-ai': 'AI 讀書計畫', 'tab-syllabus': '學測範圍' }[id] || btn.dataset.title;
+    document.body.classList.toggle('sub', !!SUB[id] && id !== 'tab-syllabus');   // 學測範圍和每週進度是並排切換，不需要返回鍵   // 子頁面：頂部左邊出現返回鍵
     $('topExtra').innerHTML = '';
     if (id === 'tab-stats') renderStats();
     if (id === 'tab-countdown') tick();
     if (id === 'tab-room') { roomStart(); renderRoom(); }
     if (id === 'tab-ai') renderAI();
+    if (id === 'tab-syllabus') { renderSyllabus(); if (!state.syllabus.picked) setTimeout(() => { if (document.body.dataset.tab === 'tab-syllabus' && !document.querySelector('.modal.open')) openSylPick(); }, 350); }
+    if (id === 'tab-weekly' || id === 'tab-syllabus') lsSet('study_prog_view', id);
     lsSet(LS.tab, id);
     applyFocusMode();
     window.scrollTo({ top: 0 });
 }
-tabBtns.forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+// 點「進度」：回到上次看的（本週進度或學測範圍）
+tabBtns.forEach(b => b.addEventListener('click', () => {
+    let id = b.dataset.tab;
+    if (id === 'tab-weekly' && document.body.dataset.tab !== 'tab-weekly' && document.body.dataset.tab !== 'tab-syllabus' && localStorage.getItem('study_prog_view') === 'tab-syllabus') id = 'tab-syllabus';
+    showTab(id);
+}));
 // 子頁面右上角的按鈕（分享、⋯ 等），只在那一頁顯示
 function setTopExtra(tab, html) { if (document.body.dataset.tab === tab) $('topExtra').innerHTML = html; }
 function goBack() {
@@ -408,9 +616,18 @@ function spin() {
     $('rouletteBtns').style.visibility = 'hidden';
     let i = 0;
     spinI = setInterval(() => { $('rouletteResult').textContent = SUBJECTS[i++ % SUBJECTS.length]; }, 80);
+    $('rouletteSub').textContent = '';
+    // 有選學測科目的話只轉選了的科目；有重點複習時，一半機會直接推薦重點單元
+    const picked = state.syllabus.picked;
+    const pool = picked ? SUBJECTS.map((n, i) => i).filter(i => picked.some(g => SYL_GROUP[g].s === i)) : SUBJECTS.map((n, i) => i);
+    const flags = sylFlags();
     spinT = setTimeout(() => {
         stopSpin();
-        $('rouletteResult').textContent = SUBJECTS[Math.floor(Math.random() * SUBJECTS.length)];
+        let s = pool[Math.floor(Math.random() * pool.length)], unit = null;
+        if (flags.length && Math.random() < .5) { const f = flags[Math.floor(Math.random() * flags.length)]; s = f.s; unit = f; }
+        else { const fs = flags.filter(f => f.s === s); if (fs.length) unit = fs[Math.floor(Math.random() * fs.length)]; }
+        $('rouletteResult').textContent = SUBJECTS[s];
+        $('rouletteSub').textContent = unit ? `重點複習：${unit.u}` : '';
         $('rouletteBtns').style.visibility = 'visible';
     }, 1800);
 }
@@ -546,13 +763,302 @@ $('clearWeeklyBtn').addEventListener('click', () => {
 });
 
 /* =====================================================
+ * 2-2. 學測範圍：每科的單元清單，讀完一個勾一個
+ * 資料放在 state.syllabus，跟著帳號同步
+ *   picked：選了哪些科目（例如 ['國文','英文','數學A','物理']），null 代表還沒選
+ *   custom：使用者改過的單元清單（沒改過就用預設）
+ *   status：'物理/能量' → 0 未讀、1 讀過、2 熟練
+ *   flags：重點複習的單元
+ * ===================================================== */
+// 依 108 課綱學測範圍整理的大方向（國英考到高三上必修，數社自是高一、高二部定必修），可以自己改
+const SYL = [
+    { s: 3, name: '國文', groups: [['國文', ['燭之武退秦師', '大同與小康', '諫逐客書', '鴻門宴', '出師表', '桃花源記', '師說', '始得西山宴遊記', '岳陽樓記', '赤壁賦', '晚遊六橋待月記', '項脊軒志', '廉恥', '臺灣通史序', '勸和論', '白話文選讀', '國學常識與文化經典', '字音字形與成語', '國寫：知性題', '國寫：情意題']]] },
+    { s: 2, name: '英文', groups: [['英文', ['單字 Level 1–2', '單字 Level 3–4', '單字 Level 5–6', '文法', '克漏字', '文意選填', '篇章結構', '閱讀測驗', '混合題', '中譯英', '英文作文']]] },
+    { s: 0, name: '數學', pickOne: true, groups: [
+        ['數學A', ['數與式', '直線與圓', '多項式函數', '數列與級數', '數據分析', '排列組合', '機率', '三角函數', '指數與對數函數', '平面向量', '空間向量', '空間中的平面與直線', '矩陣', '條件機率與貝氏定理']],
+        ['數學B', ['數與式', '直線與圓', '多項式函數', '數列與級數', '數據分析', '排列組合', '機率', '三角函數', '指數與對數函數', '平面向量', '空間概念', '矩陣', '條件機率與貝氏定理']]] },
+    { s: 4, name: '社會', groups: [
+        ['歷史', ['臺灣史：早期與清代', '臺灣史：日治時期', '臺灣史：戰後', '東亞史', '世界史', '史料閱讀與判讀']],
+        ['地理', ['地圖與地理資訊', '地形', '氣候', '水文', '人口', '聚落與都市', '產業', '全球化與區域發展', '區域地理']],
+        ['公民', ['社會與文化', '民主政治', '法律與生活', '經濟與市場', '公共議題與時事']]] },
+    { s: 1, name: '自然', groups: [
+        ['物理', ['科學方法與單位', '物質組成與基本交互作用', '物體的運動', '能量與能量守恆', '電與磁', '波動、光與聲音', '量子現象']],
+        ['化學', ['物質的組成與特性', '原子構造與週期表', '化學反應與計量', '水溶液與酸鹼', '氧化還原', '化學與能源', '生活中的化學']],
+        ['生物', ['細胞的構造與功能', '遺傳', '演化', '生物多樣性', '生態系與環境']],
+        ['地科', ['宇宙與天文', '地球的大氣', '海洋', '固體地球與板塊', '地球歷史與災害']]] }
+];
+const SYL_GROUP = {};   // '物理' → { s, subj }
+SYL.forEach(x => x.groups.forEach(([g, units]) => { SYL_GROUP[g] = { s: x.s, subj: x.name, def: units }; }));
+const SYL_STATUS = ['未讀', '讀過', '熟練'];
+const ICON_BOOK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>';
+
+function normSyllabus(raw) {
+    const r = raw && typeof raw === 'object' ? raw : {};
+    const picked = Array.isArray(r.picked) ? r.picked.filter(g => SYL_GROUP[g]) : null;
+    const custom = {};
+    if (r.custom && typeof r.custom === 'object') Object.entries(r.custom).forEach(([g, list]) => {
+        if (SYL_GROUP[g] && Array.isArray(list)) custom[g] = [...new Set(list.map(u => String(u).trim().slice(0, 30)).filter(Boolean))].slice(0, 60);
+    });
+    const status = {};
+    if (r.status && typeof r.status === 'object') Object.entries(r.status).forEach(([k, v]) => { v = v | 0; if (v > 0 && v < 3) status[k] = v; });
+    const flags = Array.isArray(r.flags) ? [...new Set(r.flags.map(String))].slice(0, 100) : [];
+    return { picked, custom, status, flags };
+}
+const sylUnits = (g) => state.syllabus.custom[g] || SYL_GROUP[g].def;
+const sylKey = (g, u) => `${g}/${u}`;
+// 目前選的科目裡所有的單元
+function sylAll() {
+    const sy = state.syllabus, out = [];
+    if (!sy.picked) return out;
+    SYL.forEach(x => x.groups.forEach(([g]) => {
+        if (sy.picked.includes(g)) sylUnits(g).forEach(u => out.push({ g, u, k: sylKey(g, u), s: x.s }));
+    }));
+    return out;
+}
+// 重點複習（只算目前還存在的單元）
+function sylFlags() {
+    const all = new Map(sylAll().map(x => [x.k, x]));
+    return state.syllabus.flags.map(k => all.get(k)).filter(Boolean);
+}
+const sylScore = (k) => (state.syllabus.status[k] || 0) / 2;
+
+let sylEdit = false;
+let sylOpen = new Set(lsGet('study_syl_open', null) || ['國文']);
+function saveSylOpen() { lsSet('study_syl_open', [...sylOpen]); }
+
+function renderSyllabus() {
+    const el = $('sylBody');
+    if (!el) return;
+    const sy = state.syllabus;
+    if (!sy.picked) {
+        el.innerHTML = `<div class="syl-empty">
+            <div class="syl-empty-ic">${ICON_BOOK}</div>
+            <h3>把學測範圍變成清單</h3>
+            <p>選好要考的科目，就會列出每科的單元。讀完一個勾一個，隨時知道自己準備了幾 %。</p>
+            <button class="btn btn-accent btn-wide" data-syl="pick">選擇科目</button>
+        </div>`;
+        return;
+    }
+    const all = sylAll();
+    const total = all.length ? all.reduce((a, x) => a + sylScore(x.k), 0) / all.length : 0;
+    const left = all.filter(x => (sy.status[x.k] || 0) < 2).length;
+    const ex = examEntries.find(([k]) => k === 'gsat')?.[1] || nextExam();
+    const daysLeft = ex ? Math.max(0, Math.floor((examTime(ex.date) - Date.now()) / 86400000)) : null;   // 和倒數頁的天數一致
+    const C = 2 * Math.PI * 30;
+    // 各科在整體裡占多少（彩色條）
+    const bySubj = SYL.map(x => {
+        const us = all.filter(a => a.s === x.s);
+        return { x, us, done: us.reduce((a, u) => a + sylScore(u.k), 0) };
+    }).filter(o => o.us.length);
+    const stack = bySubj.map(o => `<i style="width:${o.done / Math.max(1, all.length) * 100}%;background:var(--s${o.x.s})"></i>`).join('');
+    const flags = sylFlags();
+    let h = `<div class="syl-sum">
+        <svg class="syl-ring" viewBox="0 0 72 72" aria-hidden="true"><circle class="tr" cx="36" cy="36" r="30"/><circle class="pr" cx="36" cy="36" r="30" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - total)).toFixed(1)}" transform="rotate(-90 36 36)"/></svg>
+        <div class="syl-pct num" aria-label="整體完成度 ${Math.round(total * 100)}%">${Math.round(total * 100)}<small>%</small></div>
+        <div class="syl-sum-t">
+            <b>整體完成度</b>
+            <span>還有 <span class="num">${left}</span> 個單元沒熟練${daysLeft !== null ? `　距${esc(ex.short || '學測')} <span class="num">${daysLeft}</span> 天` : ''}</span>
+            <div class="syl-stack">${stack}</div>
+        </div>
+    </div>
+    <div class="syl-tools">
+        <button class="btn btn-small" data-syl="pick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>選科目</button>
+        <button class="btn btn-small ${sylEdit ? 'btn-accent' : ''}" data-syl="edit">${sylEdit ? '完成編輯' : '編輯單元'}</button>
+    </div>
+    <div class="syl-focus">
+        <h4>${ICON_BOOK}重點複習<small>${flags.length ? flags.length + ' 個' : ''}</small></h4>
+        <div class="syl-fchips">${flags.length ? flags.map(f => `<button class="syl-fchip" data-goto="${esc(f.k)}"><i style="background:var(--s${f.s})"></i>${esc(f.u)}</button>`).join('')
+            : '<span class="syl-fempty">點單元右邊的書籤，就會出現在這裡提醒你</span>'}</div>
+    </div>`;
+    for (const x of SYL) {
+        const groups = x.groups.filter(([g]) => sy.picked.includes(g));
+        if (!groups.length) continue;
+        const us = all.filter(a => a.s === x.s);
+        const p = us.length ? us.reduce((a, u) => a + sylScore(u.k), 0) / us.length : 0;
+        const open = sylOpen.has(x.name) || sylEdit;
+        h += `<div class="syl-subj ${open ? 'open' : ''}">
+            <button class="syl-subj-h" data-open="${x.name}" aria-expanded="${open}">
+                <i style="background:var(--s${x.s})"></i>${x.name}<span class="syl-cnt">${us.filter(u => (sy.status[u.k] || 0) === 2).length}/${us.length}</span>
+                <span class="syl-subj-pct num">${Math.round(p * 100)}%</span>
+                <svg class="syl-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="syl-bar"><i style="width:${p * 100}%;background:var(--s${x.s})"></i></div>`;
+        if (open) for (const [g] of groups) {
+            if (groups.length > 1 || g !== x.name) h += `<div class="syl-grp">${g.replace(/^數學([AB])$/, '數學 $1')}</div>`;
+            h += `<ul class="syl-units">` + sylUnits(g).map(u => {
+                const k = sylKey(g, u), st = sy.status[k] || 0, fl = sy.flags.includes(k);
+                if (sylEdit) return `<li class="syl-unit edit" data-k="${esc(k)}">
+                    <input class="field syl-name" value="${esc(u)}" maxlength="30" data-rename="${esc(k)}" aria-label="單元名稱">
+                    <button class="icon-btn syl-del" data-del="${esc(k)}" aria-label="刪除 ${esc(u)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></li>`;
+                return `<li class="syl-unit ${st === 2 ? 'done' : ''}" data-k="${esc(k)}">
+                    <span class="syl-u">${esc(u)}</span>
+                    <button class="syl-st" data-st="${esc(k)}" data-s="${st}" aria-label="${esc(u)}：${SYL_STATUS[st]}，點一下切換">${SYL_STATUS[st]}</button>
+                    <button class="syl-flag ${fl ? 'on' : ''}" data-flag="${esc(k)}" aria-pressed="${fl}" aria-label="${fl ? '取消重點複習' : '加入重點複習'}">${ICON_BOOK}</button></li>`;
+            }).join('') + `</ul>`;
+            if (sylEdit) h += `<div class="syl-add"><input class="field" placeholder="新增單元到${g.replace(/^數學([AB])$/, '數學 $1')}" maxlength="30" data-add="${g}" enterkeyhint="done"><button class="btn btn-small" data-addbtn="${g}">新增</button>${state.syllabus.custom[g] ? `<button class="btn btn-small btn-ghost" data-reset="${g}">恢復預設</button>` : ''}</div>`;
+        }
+        h += `</div>`;
+    }
+    const y = window.scrollY;
+    el.innerHTML = h;
+    if (document.body.dataset.tab === 'tab-syllabus') window.scrollTo(0, y);
+}
+
+function sylSave() { save(); renderSyllabus(); renderReviewLine(); }
+$('sylBody').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const sy = state.syllabus;
+    if (b.dataset.syl === 'pick') { openSylPick(); return; }
+    if (b.dataset.syl === 'edit') { sylEdit = !sylEdit; renderSyllabus(); return; }
+    if (b.dataset.open) {
+        sylOpen.has(b.dataset.open) ? sylOpen.delete(b.dataset.open) : sylOpen.add(b.dataset.open);
+        saveSylOpen(); renderSyllabus(); return;
+    }
+    if (b.dataset.st) {
+        const k = b.dataset.st, v = ((sy.status[k] || 0) + 1) % 3;
+        if (v) sy.status[k] = v; else delete sy.status[k];
+        // 熟練了就自動從重點複習拿掉
+        if (v === 2 && sy.flags.includes(k)) { sy.flags = sy.flags.filter(f => f !== k); toast('熟練了！已從重點複習移除'); }
+        sylSave(); return;
+    }
+    if (b.dataset.flag) {
+        const k = b.dataset.flag;
+        if (sy.flags.includes(k)) sy.flags = sy.flags.filter(f => f !== k);
+        else { sy.flags.push(k); toast('已加入重點複習'); }
+        sylSave(); return;
+    }
+    if (b.dataset.goto) {   // 點重點複習的單元：展開那一科並捲過去
+        const g = b.dataset.goto.split('/')[0];
+        sylOpen.add(SYL_GROUP[g].subj); saveSylOpen(); renderSyllabus();
+        const row = [...document.querySelectorAll('.syl-unit')].find(r => r.dataset.k === b.dataset.goto);
+        if (row) { row.scrollIntoView({ block: 'center', behavior: 'smooth' }); row.classList.add('flash'); setTimeout(() => row.classList.remove('flash'), 1400); }
+        return;
+    }
+    if (b.dataset.del) {
+        const k = b.dataset.del, [g, ...rest] = k.split('/'), u = rest.join('/');
+        const list = sylUnits(g).slice(), idx = list.indexOf(u);
+        if (idx < 0) return;
+        const prev = { list: sy.custom[g], st: sy.status[k], fl: sy.flags.includes(k) };
+        list.splice(idx, 1);
+        sy.custom[g] = list; delete sy.status[k]; sy.flags = sy.flags.filter(f => f !== k);
+        sylSave();
+        toast(`已刪除「${u}」`, { label: '復原', fn: () => {
+            if (prev.list) sy.custom[g] = prev.list; else delete sy.custom[g];
+            if (prev.st) sy.status[k] = prev.st;
+            if (prev.fl) sy.flags.push(k);
+            sylSave();
+        } });
+        return;
+    }
+    if (b.dataset.addbtn) { sylAdd(b.dataset.addbtn); return; }
+    if (b.dataset.reset) {
+        const g = b.dataset.reset;
+        if (!confirm(`把「${g}」的單元恢復成預設？自己新增或改名的單元會不見。`)) return;
+        delete sy.custom[g]; sylSave(); return;
+    }
+});
+function sylAdd(g) {
+    const inp = document.querySelector(`[data-add="${g}"]`);
+    const name = (inp?.value || '').trim().slice(0, 30);
+    if (!name) { inp?.focus(); return; }
+    const list = sylUnits(g).slice();
+    if (list.includes(name)) { toast('已經有這個單元了'); return; }
+    list.push(name); state.syllabus.custom[g] = list;
+    sylSave();
+    document.querySelector(`[data-add="${g}"]`)?.focus();
+}
+$('sylBody').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    if (e.target.dataset.add) { e.preventDefault(); sylAdd(e.target.dataset.add); }
+    if (e.target.dataset.rename) { e.preventDefault(); e.target.blur(); }
+});
+// 改名：離開輸入框時存，進度和重點複習跟著搬過去
+$('sylBody').addEventListener('change', (e) => {
+    const k = e.target.dataset.rename;
+    if (!k) return;
+    const sy = state.syllabus, [g, ...rest] = k.split('/'), u = rest.join('/');
+    const name = e.target.value.trim().slice(0, 30);
+    const list = sylUnits(g).slice(), idx = list.indexOf(u);
+    if (idx < 0 || !name || name === u) { e.target.value = u; return; }
+    if (list.includes(name)) { toast('已經有這個單元了'); e.target.value = u; return; }
+    list[idx] = name; sy.custom[g] = list;
+    const nk = sylKey(g, name);
+    if (sy.status[k]) { sy.status[nk] = sy.status[k]; delete sy.status[k]; }
+    sy.flags = sy.flags.map(f => f === k ? nk : f);
+    sylSave();
+});
+
+/* --- 選科目 --- */
+let sylPickDraft = [];
+const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+function renderSylPick() {
+    $('sylPickBody').innerHTML = SYL.map(x => `<div class="syl-pgrp">
+        <b><i style="background:var(--s${x.s})"></i>${x.name}${x.pickOne ? '<small>選一個</small>' : ''}</b>
+        <div class="syl-pills">${x.groups.map(([g]) => { const on = sylPickDraft.includes(g); return `<button class="syl-pill ${on ? 'on' : ''}" data-pick="${g}" aria-pressed="${on}">${on ? ICON_CHECK : ''}${g.replace(/^數學([AB])$/, '數學 $1')}</button>`; }).join('')}</div>
+    </div>`).join('');
+}
+function openSylPick() {
+    sylPickDraft = state.syllabus.picked ? state.syllabus.picked.slice() : ['國文', '英文', '數學A', '歷史', '地理', '公民', '物理', '化學', '生物', '地科'];
+    $('sylPickSave').textContent = state.syllabus.picked ? '儲存' : '開始使用';
+    renderSylPick();
+    openModal('sylPickModal');
+}
+$('sylPickBody').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pick]');
+    if (!b) return;
+    const g = b.dataset.pick, grp = SYL.find(x => x.groups.some(([n]) => n === g));
+    if (sylPickDraft.includes(g)) sylPickDraft = sylPickDraft.filter(n => n !== g);
+    else {
+        if (grp.pickOne) sylPickDraft = sylPickDraft.filter(n => !grp.groups.some(([o]) => o === n));   // 數學 A、B 只能選一個
+        sylPickDraft.push(g);
+    }
+    renderSylPick();
+});
+$('sylPickSave').addEventListener('click', () => {
+    if (!sylPickDraft.length) { toast('至少選一科'); return; }
+    state.syllabus.picked = sylPickDraft.slice();
+    closeModal('sylPickModal');
+    sylSave();
+});
+
+/* --- 倒數頁「今天」下面：重點複習提醒 --- */
+function renderReviewLine() {
+    const el = $('reviewLine');
+    if (!el) return;
+    const flags = sylFlags();
+    el.hidden = !flags.length;
+    if (!flags.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<span class="rl-label">${ICON_BOOK}重點複習</span>` +
+        flags.slice(0, 3).map(f => `<button class="rl-chip" data-goto="${esc(f.k)}"><i style="background:var(--s${f.s})"></i>${esc(f.u)}</button>`).join('') +
+        (flags.length > 3 ? `<button class="rl-chip more" data-goto="">＋${flags.length - 3}</button>` : '');
+}
+$('reviewLine').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-goto]');
+    if (!b) return;
+    showTab('tab-syllabus');
+    if (b.dataset.goto) setTimeout(() => document.querySelector(`.syl-fchip[data-goto="${CSS.escape(b.dataset.goto)}"]`)?.click(), 60);
+});
+
+/* --- 進度分頁上方：本週進度／學測範圍 --- */
+document.querySelectorAll('.prog-seg').forEach(seg => seg.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-prog]');
+    if (b && document.body.dataset.tab !== b.dataset.prog) showTab(b.dataset.prog);
+}));
+
+/* =====================================================
  * 3. 行事曆
  * ===================================================== */
 let calY = new Date().getFullYear(), calM = new Date().getMonth();
 let selDate = todayStr();
 let editingEventId = null;
 
-const eventsOn = (ds) => state.events.filter(e => e.start === ds).sort((a, b) => (b.important - a.important));
+const evEnd = (e) => e.end || e.start;
+// 這天有哪些行程（連續多天的行程，中間每一天都算）
+const eventsOn = (ds) => state.events.filter(e => e.start <= ds && evEnd(e) >= ds)
+    .sort((a, b) => (b.important - a.important) || (!!b.end - !!a.end) || a.start.localeCompare(b.start));
+const addDaysStr = (ds, n) => { const d = parseYmd(ds); d.setDate(d.getDate() + n); return ymd(d); };
+const spanText = (e) => `${shortDate(e.start)} – ${shortDate(e.end)}，共 ${daysBetween(e.start, e.end) + 1} 天`;
 
 function renderCalendar() {
     const t = todayStr();
@@ -566,14 +1072,23 @@ function renderCalendar() {
     for (let n = 1; n <= total; n++) {
         const ds = `${calY}-${pad(calM + 1)}-${pad(n)}`;
         const evs = eventsOn(ds), exs = examsOn(ds);
-        const cls = ['cal-cell', ds === t ? 'today' : '', ds < t ? 'past' : '', ds === selDate ? 'selected' : '', exs.length ? 'exam' : ''].join(' ');
-        const dots = evs.slice(0, 3).map(e => `<i class="${e.important ? 'imp' : ''}"></i>`).join('');
+        const imp = evs.some(e => e.important);
+        const cls = ['cal-cell', ds === t ? 'today' : '', ds < t ? 'past' : '', ds === selDate ? 'selected' : '', exs.length ? 'exam' : '', imp ? 'imp-day' : ''].join(' ');
+        const singles = evs.filter(e => !e.end), multi = evs.find(e => e.end);
+        const dots = singles.slice(0, 3).map(e => `<i class="${e.important ? 'imp' : ''}"></i>`).join('');
+        // 連續多天：手機在日期下方畫一條連起來的線（每週的頭尾也收成圓角）
+        let bar = '';
+        if (multi) {
+            const col = (offset + n - 1) % 7;
+            const head = ds === multi.start || col === 0 || n === 1, tail = ds === multi.end || col === 6 || n === total;
+            bar = `<span class="cal-bar${multi.important ? ' imp' : ''}${head ? ' head' : ''}${tail ? ' tail' : ''}"></span>`;
+        }
         const titles = [
             ...exs.map(e => `<span class="exam">${esc(e.short)}</span>`),
-            ...evs.map(e => `<span class="${e.important ? 'imp' : ''}">${esc(e.title)}</span>`)
+            ...evs.map(e => `<span class="${e.important ? 'imp' : ''}${e.end ? ' multi' : ''}${e.end && ds !== e.start ? ' cont' : ''}">${esc(e.title)}</span>`)
         ].slice(0, 3).join('');
-        const label = `${calM + 1}月${n}日${exs.length ? '，考試' : ''}${evs.length ? `，${evs.length} 個行程` : ''}`;
-        html += `<button class="${cls}" data-date="${ds}" aria-label="${label}"><span class="cal-num num">${n}</span><span class="cal-dots">${dots}</span><span class="cal-titles">${titles}</span></button>`;
+        const label = `${calM + 1}月${n}日${exs.length ? '，考試' : ''}${imp ? '，有重要行程' : ''}${evs.length ? `，${evs.length} 個行程` : ''}`;
+        html += `<button class="${cls}" data-date="${ds}" aria-label="${label}"><span class="cal-num num">${n}</span><span class="cal-dots">${dots}</span>${bar}<span class="cal-titles">${titles}</span></button>`;
     }
     const rest = (7 - (offset + total) % 7) % 7;
     for (let i = 0; i < rest; i++) html += '<div class="cal-cell blank"></div>';
@@ -606,7 +1121,10 @@ function renderDayList() {
             date: selDate, title: e.name, exam: true,
             sub: e.end ? `第 ${daysBetween(e.date, selDate) + 1} 天，共 ${daysBetween(e.date, e.end) + 1} 天` : ''
         })),
-        ...eventsOn(selDate).map(e => ({ id: e.id, date: e.start, title: e.title, important: e.important }))
+        ...eventsOn(selDate).map(e => ({
+            id: e.id, date: e.start, title: e.title, important: e.important,
+            sub: e.end ? `第 ${daysBetween(e.start, selDate) + 1} 天（${spanText(e)}）` : ''
+        }))
     ];
     $('selDayList').innerHTML = items.length ? items.map(i => eventRowHtml(i, false)).join('') : '<li class="empty">這天沒有行程</li>';
 }
@@ -615,7 +1133,7 @@ function renderUpcoming() {
     const t = todayStr();
     const items = [
         ...examEntries.map(([, e]) => ({ date: e.date, title: e.name, exam: true, sub: e.end ? `${shortDate(e.date)} – ${shortDate(e.end)}，共 ${daysBetween(e.date, e.end) + 1} 天` : '' })),
-        ...state.events.map(e => ({ id: e.id, date: e.start, title: e.title, important: e.important }))
+        ...state.events.map(e => ({ id: e.id, date: e.start, title: e.title, important: e.important, sub: e.end ? spanText(e) : '' }))
     ].filter(i => i.date > t).sort((a, b) => a.date.localeCompare(b.date) || (b.exam ? 1 : 0) - (a.exam ? 1 : 0)).slice(0, 8);
     $('upcomingList').innerHTML = items.length ? items.map(i => eventRowHtml(i, true)).join('') : '<li class="empty">接下來沒有安排</li>';
 }
@@ -675,21 +1193,60 @@ function openEventModal({ id, date }) {
     $('eventTitle').textContent = ev ? '編輯行程' : '新增行程';
     $('eventName').value = ev ? ev.title : '';
     $('eventDate').value = ev ? ev.start : (date || todayStr());
+    $('eventEnd').value = ev && ev.end ? ev.end : '';
+    setEventSpan(!!(ev && ev.end));
     $('eventImportant').checked = ev ? ev.important : false;
     $('deleteEventBtn').style.display = ev ? '' : 'none';
     openModal('eventModal');
     setTimeout(() => { if ($('eventModal').classList.contains('open')) $('eventName').focus(); }, 120);
 }
+// 單日／連續多天
+let eventMulti = false;
+function setEventSpan(multi) {
+    eventMulti = multi;
+    document.querySelectorAll('#eventSpan button').forEach(b => {
+        const on = (b.dataset.span === 'multi') === multi;
+        b.classList.toggle('active', on); b.setAttribute('aria-pressed', on);
+    });
+    $('eventEndWrap').hidden = !multi;
+    document.querySelector('.event-dates').classList.toggle('one', !multi);
+    $('eventDateLabel').textContent = multi ? '開始日期' : '日期';
+    if (multi) {
+        const st = $('eventDate').value || todayStr();
+        if (!$('eventEnd').value || $('eventEnd').value <= st) $('eventEnd').value = addDaysStr(st, 1);
+    }
+    updateSpanNote();
+}
+function updateSpanNote() {
+    const st = $('eventDate').value, en = $('eventEnd').value;
+    const ok = eventMulti && st && en && en > st;
+    $('eventSpanNote').textContent = ok ? `共 ${daysBetween(st, en) + 1} 天` : '';
+    $('eventSpanNote').hidden = !eventMulti;
+}
+$('eventSpan').addEventListener('click', (e) => { const b = e.target.closest('button[data-span]'); if (b) setEventSpan(b.dataset.span === 'multi'); });
+$('eventDate').addEventListener('change', () => {
+    // 開始日期往後調，結束日期跟著往後，保持原本的天數
+    const st = $('eventDate').value, en = $('eventEnd').value;
+    if (eventMulti && st && en && en <= st) $('eventEnd').value = addDaysStr(st, 1);
+    updateSpanNote();
+});
+$('eventEnd').addEventListener('change', updateSpanNote);
+
 function saveEvent() {
     const title = $('eventName').value.trim();
     const start = $('eventDate').value;
     if (!title) { toast('請輸入行程內容'); return; }
     if (!start) { toast('請選擇日期'); return; }
+    const end = eventMulti ? $('eventEnd').value : '';
+    if (eventMulti && (!end || end <= start)) { toast('結束日期要在開始日期之後'); return; }
+    if (eventMulti && daysBetween(start, end) > 365) { toast('連續天數最多一年'); return; }
     const important = $('eventImportant').checked;
     if (editingEventId) {
-        Object.assign(state.events.find(e => e.id === editingEventId), { title, start, important });
+        const ev = state.events.find(e => e.id === editingEventId);
+        Object.assign(ev, { title, start, important });
+        if (end) ev.end = end; else delete ev.end;
     } else {
-        state.events.push({ id: uid(), title, start, important });
+        state.events.push({ id: uid(), title, start, important, ...(end ? { end } : {}) });
     }
     selDate = start;
     const d = parseYmd(start); calY = d.getFullYear(); calM = d.getMonth();
@@ -1733,13 +2290,25 @@ function buildAiPrompt() {
         const scope = (aiPref.scope[ex.key] || '').trim();
         if (scope) lines.push(`這場考試的範圍：${scope.slice(0, 300)}`);
     }
+    // 學測範圍清單：還沒熟練的單元、重點複習
+    if (state.syllabus.picked) {
+        const all = sylAll();
+        const notYet = SUBJECTS.map((n, i) => {
+            const us = all.filter(x => x.s === i && (state.syllabus.status[x.k] || 0) < 2).map(x => x.u + ((state.syllabus.status[x.k] || 0) === 1 ? '(讀過)' : ''));
+            return us.length ? `${n}：${us.slice(0, 15).join('、')}` : '';
+        }).filter(Boolean);
+        if (notYet.length) lines.push(`學測範圍中還沒熟練的單元（沒標記的是還沒讀）：${notYet.join('；')}`.slice(0, 900));
+        const fl = sylFlags();
+        if (fl.length) lines.push(`學生標記要重點複習的單元：${fl.map(f => `${SUBJECTS[f.s]} ${f.u}`).join('、').slice(0, 300)}`);
+    }
     lines.push(
         '規則：',
         '1. analysis 寫 2 到 4 點觀察和建議，每點一句話，要具體引用上面的數字。',
         '2. plan 要涵蓋每一個要排的日期，每天 1 到 5 項，每項 minutes 介於 20 到 120，每天總分鐘數接近可讀書時間。',
         '3. 自評弱、最近讀得少的科目要多排；考試當天只排輕鬆的複習或不排。',
         '4. task 寫具體要做的事（例如「數A 3-1 指數 例題」），不超過 18 個字，不要寫分鐘數。',
-        '5. 同一天同一科最多 2 項。'
+        '5. 同一天同一科最多 2 項。',
+        '6. 如果有重點複習的單元，這週要優先安排；還沒讀的單元可以排進 task 裡。'
     );
     return lines.join('\n');
 }
@@ -2847,7 +3416,7 @@ setTimeout(() => {
 /* =====================================================
  * 帳號畫面
  * ===================================================== */
-const ACCENT_NAME = { amber: '琥珀', mint: '薄荷', violet: '霧紫', sakura: '櫻花' };
+const ACCENT_NAME = { amber: '琥珀', mint: '薄荷', violet: '霧紫', sakura: '櫻花', ocean: '海藍', coral: '珊瑚', matcha: '抹茶', moon: '月光銀' };
 function renderAccount(statusText) {
     const u = currentUser;
     $('avatarImg').src = u?.photoURL || defaultAvatar();
@@ -2975,6 +3544,7 @@ function onAuthChanged(user) {
         if (first && snap.metadata.fromCache && !snap.exists()) return; // 本機沒快取，等雲端回應
         const cloud = snap.exists() ? normalize(snap.data()) : null;
         const dupes = removedDupes;
+        if (snap.exists()) applyCloudPrefs(snap.data().prefs);
         if (first) {
             first = false;
             cloudReady = true;
