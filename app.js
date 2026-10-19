@@ -45,6 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
+const APP_VERSION = 'v24';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
 const RECAPTCHA_SITE_KEY = '6LeR9vQtAAAAAKsbIXmqZCd4sHONdH-mvcTx_qtJ';
@@ -1812,13 +1813,19 @@ async function generatePlan() {
     } catch (e) {
         console.error('AI 產生失敗：', e);
         const msg = String(e?.message || e);
-        aiErrorCode = String(e?.code || '') + ' ' + msg.slice(0, 120);
-        // 學校、公共 Wi‑Fi 常會擋 Google 的驗證服務，所以先提示換網路
-        aiError = /app-check|appCheck|App Check|recaptcha/i.test(msg) ? 'AI 的安全驗證（App Check）沒有通過。可以先換個網路再試；如果換網路也不行，請把下面的錯誤代碼傳給開發者。'
-            : /network|fetch|Failed to fetch|unavailable|timeout/i.test(msg) ? '連不上 AI 服務。如果你在學校或公共 Wi‑Fi，可能是網路擋住了，換成手機行動網路再試試。'
-            : /quota|429|RESOURCE_EXHAUSTED/i.test(msg) ? '今天的免費額度用完了，晚點再試。'
-            : /not enabled|PERMISSION_DENIED|403|api-not-enabled/i.test(msg) ? 'Firebase 專案還沒開啟 AI Logic，請照說明到 Firebase 主控台開啟。'
-            : msg === 'empty' ? 'AI 這次沒有排出內容，請再試一次。'
+        // firebase-ai 的 HTTP 錯誤也叫 fetch-error，要看狀態碼才知道真正原因
+        const m = msg.match(/\[(\d{3})[^\]]*\]/);
+        const st = Number(e?.customErrorData?.status) || (m ? Number(m[1]) : 0);
+        const detail = msg.replace(/Error fetching from \S+:\s*/i, '').replace(/https?:\/\/\S+/g, '').trim();
+        aiErrorCode = [e?.code, st || '', detail.slice(0, 300)].filter(Boolean).join(' ');
+        aiError = msg === 'empty' ? 'AI 這次沒有排出內容，請再試一次。'
+            : (st === 401 || /app-check|appCheck|App Check|recaptcha/i.test(msg)) ? 'AI 的安全驗證（App Check）沒有通過。請把下面的錯誤代碼傳給開發者。'
+            : (st === 429 || /quota|RESOURCE_EXHAUSTED/i.test(msg)) ? '目前 AI 的免費額度用完了，晚點再試。'
+            : st === 404 ? 'AI 模型找不到（可能模型名稱有變），請把下面的錯誤代碼傳給開發者。'
+            : (st === 403 || /not enabled|PERMISSION_DENIED|api-not-enabled/i.test(msg)) ? 'AI 服務沒有權限（可能是 Firebase AI Logic 或 API 金鑰設定），請把下面的錯誤代碼傳給開發者。'
+            : st >= 500 ? 'AI 服務暫時忙碌，過幾分鐘再試一次。'
+            : st ? '產生失敗，請把下面的錯誤代碼傳給開發者。'
+            : /network|Failed to fetch|Load failed|NetworkError|timeout|unavailable/i.test(msg) ? '連不上 AI 服務。如果你在學校或公共 Wi‑Fi，可能是網路擋住了，換成手機行動網路再試試。'
             : '產生失敗，請檢查網路後再試一次。';
     }
     aiBusy = false;
@@ -2880,6 +2887,7 @@ onScroll();
 /* =====================================================
  * 啟動：先用本機資料畫出畫面
  * ===================================================== */
+{ const v = $('appVersion'); if (v) v.textContent = `目前版本 ${APP_VERSION}`; }
 state = loadLocal();
 if (removedDupes) saveLocal();
 renderExamChips();

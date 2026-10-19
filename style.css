@@ -1031,6 +1031,7 @@ button.acct-row:hover { background: var(--surface-2); }
 .acct-chev { width: 18px; height: 18px; color: var(--faint); flex-shrink: 0; }
 .acct-group .accent-grid { padding: 4px 14px 14px; }
 .acct-login { margin-top: 6px; min-height: 50px; border-radius: 25px; }
+.acct-ver { margin: 14px 0 0; text-align: center; font-size: 11.5px; color: var(--faint); letter-spacing: .04em; }
 .btn-logout { color: var(--exam-text); border-color: color-mix(in srgb, var(--exam) 55%, transparent); background: var(--exam-soft); font-weight: 700; }
 
 /* --- 簡易導覽（第一次打開） --- */
