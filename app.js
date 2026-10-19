@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v31';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v33';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
 const RECAPTCHA_SITE_KEY = '6LeR9vQtAAAAAKsbIXmqZCd4sHONdH-mvcTx_qtJ';
@@ -2873,7 +2873,7 @@ function renderRoom(errMsg) {
         const last = [...cm].reverse().find(m => !m.recalled);
         const unread = unreadOf(r.id);
         const chatBtn = `<button class="chat-entry" data-chat="${r.id}">
-                <span class="ce-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/></svg></span>
+                <span class="ce-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.14 13.4A8.5 6.8 0 1 1 6.91 16.16L3.4 18.2z"/><path d="M18.57 12.14A5.6 4.4 0 0 1 21.25 18.4L22.4 21.6L19.37 19.93A5.6 4.4 0 0 1 10.85 16.79"/><g fill="currentColor" stroke="none"><circle cx="7.2" cy="10" r="1.1"/><circle cx="10.5" cy="10" r="1.1"/><circle cx="13.8" cy="10" r="1.1"/></g></svg></span>
                 <span class="ce-tx"><b>聊天室</b><small>${last ? esc(`${last.uid === meUid ? '你' : (last.name || '同學')}：${last.img ? '傳了一張照片' : last.text}`) : '與朋友聊聊'}</small></span>
                 ${unread ? `<span class="seg-n">${unread > 99 ? '99+' : unread}</span>` : ''}
                 <svg class="go-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>

@@ -1014,7 +1014,7 @@ body:has(.tab.active .sticky-cta) .toast, body:has(.tab.active .chat-bar) .toast
 }
 .chat-entry:active { transform: scale(0.98); }
 .ce-ic { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: rgba(var(--accent-rgb), 0.2); color: var(--accent-text); flex-shrink: 0; }
-.ce-ic svg { width: 21px; height: 21px; }
+.ce-ic svg { width: 23px; height: 23px; }
 .ce-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ce-tx b { font-size: 15px; }
 .ce-tx small { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
