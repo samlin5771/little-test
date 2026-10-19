@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v38';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v39';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -3146,6 +3146,7 @@ function renderRoom(errMsg) {
                     <span class="sc num" data-clock="${m.u}">${memberClock(m.s)}</span>
                 </div>`;
             }).join('')}</div>
+            ${chatBtn}
             <section class="stats-sec">
                 <div class="sec-head"><h3>今天排行</h3><span>嗶嗶啵啵嗶</span></div>
                 ${rank.map((m, i) => `<div class="rank-row ${m.u === meUid ? 'me' : ''}">
@@ -3156,7 +3157,6 @@ function renderRoom(errMsg) {
                 </div>`).join('')}
             </section>
             <p class="hint" style="margin-top:16px">房間裡的人看得到你的暱稱、正在讀的科目和今天的時數</p>
-            ${chatBtn}
             <div class="sticky-cta room-cta"><button class="btn btn-accent btn-wide" data-room="focus"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>${timer.phase === 'focus' ? '回到計時' : '開始讀書'}</button></div>
             ${roomHistoryHtml(ms, now)}
         </div>`);
@@ -3877,6 +3877,66 @@ window.addEventListener('orientationchange', nudgeSoon);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') nudgeSoon(); });
 window.visualViewport?.addEventListener('resize', () => { if (!isTyping(document.activeElement)) nudgeSoon(); });
 
+/* =====================================================
+ * 自動更新：切回 App 時檢查有沒有新版本，有的話不跳訊息、找適當的時機悄悄套用
+ *   - App 在背景時：直接重新載入（使用者看不到）
+ *   - 剛切回來、沒在打字或操作視窗：馬上重新載入，回到原本的分頁
+ *   - 正在打字、聊天、AI 產生中：先不動，等下次離開 App 或閒下來再更新
+ * ===================================================== */
+let updateReady = false, lastUpdateCheck = 0;
+function checkForUpdate() {
+    if (!navigator.serviceWorker?.getRegistration || !navigator.onLine) return;
+    if (Date.now() - lastUpdateCheck < 30000) return;   // 30 秒內不重複檢查
+    lastUpdateCheck = Date.now();
+    navigator.serviceWorker.getRegistration().then(reg => reg && reg.update()).catch(() => {});
+}
+function appBusy() {
+    const a = document.activeElement;
+    if (isTyping(a) && a.type !== 'checkbox') return true;
+    if (document.querySelector('.modal.open') || $('guideScreen').classList.contains('open')) return true;
+    if (chatRoom && ($('chatInput').value.trim() || chatTyping())) return true;
+    if (typeof aiBusy !== 'undefined' && aiBusy) return true;
+    // 頁面上有打到一半還沒送出的文字（待辦、聊天、新增單元…），也先不要重整
+    return [...document.querySelectorAll('input[type="text"], input:not([type]), textarea')]
+        .some(el => el.value.trim() && !el.closest('.modal') && el.getClientRects().length);
+}
+function applyUpdate() {
+    if (!updateReady) return;
+    if (!document.hidden && appBusy()) return;   // 使用中先不打擾
+    try {
+        sessionStorage.setItem('study_resume', JSON.stringify({ tab: document.body.dataset.tab, room: roomView || null, chat: chatRoom || null, y: window.scrollY }));
+    } catch (e) {}
+    updateReady = false;
+    location.reload();
+}
+if (navigator.serviceWorker) {
+    // 新版的 Service Worker 接手了＝有新檔案可以用
+    let hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController) { hadController = true; return; }   // 第一次安裝不用重整
+        updateReady = true;
+        applyUpdate();
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') checkForUpdate();
+        else applyUpdate();   // 離開 App 時悄悄更新
+    });
+    window.addEventListener('focus', checkForUpdate);
+    // 閒下來（關掉視窗、離開輸入框）時，再看看有沒有等著套用的更新
+    document.addEventListener('focusout', () => setTimeout(applyUpdate, 400));
+    setInterval(() => { if (updateReady) applyUpdate(); else if (!document.hidden) checkForUpdate(); }, 5 * 60000);
+}
+// 更新後回到原本的地方（分頁、房間、聊天室、捲動位置）
+function resumeAfterUpdate() {
+    let r = null;
+    try { r = JSON.parse(sessionStorage.getItem('study_resume') || 'null'); sessionStorage.removeItem('study_resume'); } catch (e) {}
+    if (!r) return;
+    if (r.tab) showTab(r.tab);
+    if (r.room) { roomView = r.room; if (r.tab === 'tab-room') renderRoom(); }
+    if (r.chat) setTimeout(() => { if (myRooms.some(x => x.id === r.chat)) openChat(r.chat); }, 1500);
+    if (r.y) setTimeout(() => window.scrollTo(0, r.y), 60);
+}
+
 // 往下捲動時頂部列才出現底色
 const topbar = document.querySelector('.topbar');
 const onScroll = () => topbar.classList.toggle('scrolled', window.scrollY > 4);
@@ -3898,6 +3958,7 @@ tick();
 setInterval(() => { tick(); timerTick(); roomTick(); }, 1000);
 renderAll();
 renderAccount();
+resumeAfterUpdate();
 showTab(localStorage.getItem(LS.tab) || 'tab-countdown');
 
 // ⑩ 開啟畫面淡出

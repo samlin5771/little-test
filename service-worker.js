@@ -1,6 +1,6 @@
 // 快取版本號：以後更新 index.html、style.css、app.js 任何一個時，把這個數字改一下（例如 v11, v12...）
 // 才能讓使用者的手機抓到新版本並清掉舊快取
-const CACHE_NAME = 'study-countdown-v38';
+const CACHE_NAME = 'study-countdown-v39';
 
 // 開啟時要預先快取的本機檔案
 const PRECACHE_URLS = [
@@ -48,8 +48,12 @@ self.addEventListener('fetch', (event) => {
   // 其他外部請求（Firestore 連線、Google 登入、YouTube）直接交給瀏覽器
   if (!isSameOrigin && !isCdn) return;
 
+  // 網站自己的檔案：每次都問伺服器有沒有變（沒變只回「沒變」，幾乎不花流量），
+  // 不吃瀏覽器的 10 分鐘暫存，所以重開 App 一定拿到最新版
+  // （打開 App 的那個「頁面請求」不能用 new Request 複製，所以改用網址重新發一次）
+  const netFetch = isSameOrigin ? fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : fetch(req);
   event.respondWith(
-    fetch(req)
+    netFetch
       .then((response) => {
         if (response && (response.ok || response.type === 'opaque')) {
           const clone = response.clone();
