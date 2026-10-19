@@ -1679,7 +1679,7 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 /* iPhone（Safari 排版）的中文字會比電腦上低一點點，只在 iPhone 上把文字往上提 1px，兩邊看起來都在正中間 */
 @supports (-webkit-touch-callout: none) {
     .np-t { top: -1px; }
-    .np-av, .np-n, .nb-av { padding-bottom: 1px; }
+    .np-n { padding-bottom: 1px; }
 }
 .np-n { min-width: 22px; height: 22px; padding: 0 6px; line-height: 1; border-radius: 11px; background: var(--accent); color: var(--on-accent); font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-family: 'Manrope', sans-serif; }
 .np-exp { opacity: 0; padding: 2px 8px 0; display: flex; flex-direction: column; gap: 9px; transition: opacity 0.2s; font-family: 'Noto Sans TC', sans-serif; }
@@ -1740,3 +1740,75 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 .me-preview { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; }
 .me-preview .av { width: 46px; height: 46px; border-radius: 23px; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 19px; font-weight: 700; font-family: 'Noto Sans TC', sans-serif; }
 .me-preview b { font-size: 15px; font-family: 'Noto Sans TC', sans-serif; }
+
+/* =====================================================
+ * 讀書房間：讀書紀錄（開始讀書下面）
+ * ===================================================== */
+.room-cta { position: static; margin: 18px 0 0; padding: 0; }   /* 下面還有讀書紀錄，按鈕不要黏在底部擋住列表 */
+.rh { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); }
+.rh-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rh-head h3 { margin: 0; font-size: 17px; font-family: 'Noto Sans TC', sans-serif; white-space: nowrap; }
+.rh-seg { display: inline-grid; grid-auto-flow: column; padding: 3px; gap: 2px; border-radius: 14px; background: var(--surface-2); flex-shrink: 0; }
+.rh-seg button { border: none; background: transparent; border-radius: 11px; padding: 6px 11px; font-size: 12.5px; font-weight: 600; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
+.rh-seg button.active { background: var(--modal-bg); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14); font-weight: 700; }
+.rh-custom { margin-top: 12px; padding: 12px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); }
+.rh-custom .field-row { margin: 0; }
+.rh-custom .field { margin-bottom: 0; }
+.rh-quick { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.rh-quick button { border: 1px solid var(--line); background: transparent; border-radius: 13px; padding: 4px 11px; font-size: 12px; font-weight: 600; font-family: 'Noto Sans TC', sans-serif; }
+.rh-quick button.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
+/* 大時間＋右邊的期間，永遠排成一行 */
+.rh-sum { display: flex; align-items: baseline; gap: 10px; margin: 16px 0 2px; white-space: nowrap; min-width: 0; }
+.rh-sum b { font-size: 28px; font-weight: 800; flex-shrink: 0; }
+.rh-sum b small { font-size: 14px; font-weight: 600; margin: 0 2px; font-family: 'Noto Sans TC', sans-serif; }
+.rh-sum span { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; min-width: 0; font-family: 'Noto Sans TC', sans-serif; }
+.rh-chart { display: flex; align-items: flex-end; gap: 3px; height: 72px; margin: 12px 0 4px; }
+.rh-chart i { flex: 1; min-height: 2px; border-radius: 3px 3px 1px 1px; background: rgba(var(--accent-rgb), 0.5); }
+.rh-chart i.today { background: var(--accent); }
+.rh-chart i.future { background: var(--surface-2); }
+.rh-axis { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--faint); margin-bottom: 6px; }
+.rh-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.rh-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.rh-row:first-child { border-top: none; }
+.rh-rk { width: 18px; text-align: center; font-size: 12.5px; font-weight: 800; color: var(--muted); flex-shrink: 0; }
+.rh-av { width: 38px; height: 38px; border-radius: 19px; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; position: relative; flex-shrink: 0; font-family: 'Noto Sans TC', sans-serif; }
+.rh-row.first .rh-av { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 0 0 4px #F5C02B; }
+/* 皇冠：斜斜地戴在頭像左上角 */
+/* 顏色和陰影都是固定的，不跟主題變，每個主題看起來都一樣 */
+.rh-crown { position: absolute; left: -13px; top: -9px; width: 26px; height: 16px; transform: rotate(-28deg); filter: drop-shadow(0 1.5px 1.2px rgba(120, 80, 0, 0.38)); pointer-events: none; overflow: visible; }
+.rh-mid { flex: 1; min-width: 0; display: block; }
+.rh-name { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-family: 'Noto Sans TC', sans-serif; }
+.rh-name b { font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rh-name small { font-size: 11.5px; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+.rh-track { display: block; height: 7px; border-radius: 4px; background: var(--surface-2); margin-top: 7px; overflow: hidden; }
+/* 進度條下面：左邊時間、右邊讀了幾天（淡灰色小字） */
+.rh-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 5px; font-size: 12px; color: var(--muted); white-space: nowrap; font-family: 'Noto Sans TC', sans-serif; }
+.rh-meta .num { font-weight: 600; }
+.rh-track i { display: block; height: 100%; border-radius: 4px; transition: width 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.rh-t { font-size: 13.5px; font-weight: 800; white-space: nowrap; flex-shrink: 0; }
+.rh-empty { text-align: center; color: var(--muted); font-size: 13px; padding: 18px 0 4px; font-family: 'Noto Sans TC', sans-serif; }
+.rh-note { margin: 12px 0 0; text-align: center; font-size: 11.5px; color: var(--faint); font-family: 'Noto Sans TC', sans-serif; }
+
+/* 網站導覽：讀書紀錄示意 */
+.g-rh { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.g-rh-head { display: flex; align-items: center; justify-content: space-between; }
+.g-rh-head b { font-size: 11.5px; }
+.g-rh-seg { display: inline-flex; gap: 1px; padding: 2px; border-radius: 8px; background: var(--surface-2); }
+.g-rh-seg i { font-style: normal; font-size: 9px; padding: 2px 5px; border-radius: 6px; color: var(--muted); }
+.g-rh-seg i.on { background: var(--modal-bg); color: var(--text); font-weight: 700; }
+.g-rh-sum { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.g-rh-sum b { font-size: 15px; font-weight: 800; }
+.g-rh-sum b small { font-size: 9px; margin: 0 1px; }
+.g-rh-sum span { font-size: 9.5px; color: var(--muted); }
+.g-rh-row { display: flex; align-items: center; gap: 7px; font-size: 10.5px; }
+.g-rh-row b { flex: 1; }
+.g-rh-row em { font-style: normal; font-weight: 800; }
+.g-rh-av { width: 20px; height: 20px; border-radius: 10px; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; position: relative; flex-shrink: 0; }
+.g-rh-row:nth-child(3) .g-rh-av { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.9), 0 0 0 2.5px #F5C02B; }
+.g-rh-crown { position: absolute; left: -8px; top: -6px; width: 15px; height: 10px; transform: rotate(-28deg); }
+
+.g-rh-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.g-rh-mid b { font-size: 10.5px; }
+.g-rh-bar { display: block; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.g-rh-bar i { display: block; height: 100%; border-radius: 2px; }
+.g-rh-meta { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); }

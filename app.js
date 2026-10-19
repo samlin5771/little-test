@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v35';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v37';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
 const RECAPTCHA_SITE_KEY = '6LeR9vQtAAAAAKsbIXmqZCd4sHONdH-mvcTx_qtJ';
@@ -2791,6 +2791,17 @@ function roomLiveCount() {
 }
 
 // 把自己的計時狀態寫到 profiles（只有用過讀書房間才會寫）
+// 最近 n 天每天的讀書分鐘數 { '2026-10-20': 125, ... }（0 分的日子不放，資料比較小）
+function recentDays(n) {
+    const from = new Date(); from.setDate(from.getDate() - n + 1);
+    const fromStr = ymd(from), out = {};
+    for (const x of state.sessions) {
+        const d = sessionDay(x);
+        if (d >= fromStr) out[d] = (out[d] || 0) + x.minutes;
+    }
+    Object.keys(out).forEach(k => { out[k] = Math.round(out[k]); if (!out[k]) delete out[k]; });
+    return out;
+}
 function publishProfile(force) {
     if (!currentUser || !fb || !roomPref.enabled) return;
     const t = todayStr();
@@ -2805,7 +2816,8 @@ function publishProfile(force) {
         duration: !hide && timer.phase === 'focus' ? (timer.duration || 0) : 0,
         breakStart: !hide && timer.phase === 'break' ? timer.breakStart : null,
         breakLen: !hide && timer.phase === 'break' ? timer.breakLen : 0,
-        todayMin: Math.round(dayMinutes(t)), todayDate: t
+        todayMin: Math.round(dayMinutes(t)), todayDate: t,
+        days: recentDays(92)   // 最近 3 個月每天讀了幾分鐘（只有總時數），房間的讀書紀錄用
     };
     const sig = JSON.stringify(data);
     if (!force && sig === lastProfile) return;
@@ -2851,7 +2863,7 @@ function watchProfiles(uids) {
                 if (ch.type === 'removed') delete profiles[ch.doc.id];
                 else profiles[ch.doc.id] = ch.doc.data();
             });
-            renderRoom();
+            renderRoomSoon();
         }, (err) => console.warn('成員狀態讀取失敗：', err)));
     }
 }
@@ -2932,6 +2944,92 @@ async function shareRoom(code) {
 }
 
 const MEDAL = ['#E9B154', '#C9CED6', '#C98A5A'];
+
+/* --- 房間的讀書紀錄：日／週／月／自訂 --- */
+let rhMode = 'w', rhFrom = '', rhTo = '';
+const CROWN_SVG = '<svg class="rh-crown" viewBox="0 0 26 16" aria-hidden="true"><g fill="#FFC928" stroke="#FFC928" stroke-width="1" stroke-linejoin="round"><path d="M2.6 10.6 L4.1 4.4 L8.7 7.7 L13 2.6 L17.3 7.7 L21.9 4.4 L23.4 10.6 Z"/><circle cx="4" cy="3.7" r="1.5"/><circle cx="13" cy="2" r="1.6"/><circle cx="22" cy="3.7" r="1.5"/><rect x="2.4" y="12" width="21.2" height="2.6" rx="1"/></g></svg>';
+function rhRange() {
+    const t = todayStr(), d = new Date();
+    if (rhMode === 'd') return { from: t, to: t, label: '今天' };
+    if (rhMode === 'w') {
+        const mon = new Date(d); mon.setDate(d.getDate() - (d.getDay() + 6) % 7);
+        const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+        return { from: ymd(mon), to: ymd(sun), label: '本週' };
+    }
+    if (rhMode === 'm') return { from: ymd(new Date(d.getFullYear(), d.getMonth(), 1)), to: ymd(new Date(d.getFullYear(), d.getMonth() + 1, 0)), label: '本月' };
+    let f = rhFrom || ymd(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 6)), e = rhTo || t;
+    if (f > e) [f, e] = [e, f];
+    return { from: f, to: e, label: '自訂' };
+}
+function roomHistoryHtml(ms, now) {
+    const t = todayStr(), r = rhRange();
+    const days = [];
+    for (let d = parseYmd(r.from); ymd(d) <= r.to && days.length < 400; d.setDate(d.getDate() + 1)) days.push(ymd(d));
+    // 每個人每天的分鐘數：今天用即時的（正在讀的那一輪也算），其他天用他分享的每日紀錄
+    const minOf = (m, ds) => {
+        if (ds === t) return Math.round(m.s.min + (m.s.phase === 'focus' ? m.s.el / 60000 : 0));
+        return Number(m.p?.days?.[ds]) || 0;
+    };
+    const rows = ms.map(m => {
+        const per = days.map(ds => ds > t ? 0 : minOf(m, ds));
+        return { m, total: per.reduce((a, v) => a + v, 0), active: per.filter(v => v > 0).length };
+    }).sort((a, b) => b.total - a.total);
+    const sum = rows.reduce((a, x) => a + x.total, 0), max = Math.max(1, rows[0]?.total || 0);
+    const perDay = days.map(ds => ds > t ? -1 : rows.reduce((a, x) => a + minOf(x.m, ds), 0));
+    const pmax = Math.max(1, ...perDay);
+    const hm = (m) => m >= 60 ? `${Math.floor(m / 60)}<small>時</small>${m % 60}<small>分</small>` : `${m}<small>分</small>`;
+    const period = r.from === r.to ? `${shortDate(r.from)}（${WEEK_ZH[parseYmd(r.from).getDay()]}）` : `${shortDate(r.from)} – ${shortDate(r.to)}`;
+    const seg = [['d', '日'], ['w', '週'], ['m', '月'], ['c', '自訂']].map(([k, n]) => `<button class="${rhMode === k ? 'active' : ''}" data-rh="${k}" aria-pressed="${rhMode === k}">${n}</button>`).join('');
+    const custom = rhMode !== 'c' ? '' : `<div class="rh-custom">
+        <div class="field-row">
+            <div><label class="field-label" for="rhFrom">從</label><input type="date" class="field" id="rhFrom" value="${r.from}" max="${t}"></div>
+            <div><label class="field-label" for="rhTo">到</label><input type="date" class="field" id="rhTo" value="${r.to}" max="${t}"></div>
+        </div>
+        <div class="rh-quick">${[7, 14, 30, 90].map(n => { const f = new Date(); f.setDate(f.getDate() - n + 1); const on = r.from === ymd(f) && r.to === t; return `<button class="${on ? 'active' : ''}" data-rhq="${n}">近 ${n} 天</button>`; }).join('')}</div>
+    </div>`;
+    const chart = days.length > 1 && days.length <= 92 ? `<div class="rh-chart" aria-hidden="true">${perDay.map((v, i) => `<i class="${v < 0 ? 'future' : days[i] === t ? 'today' : ''}" style="height:${v < 0 ? 4 : Math.max(3, v / pmax * 100)}%"></i>`).join('')}</div>
+        <div class="rh-axis num"><span>${shortDate(r.from)}</span><span>${shortDate(r.to)}</span></div>` : '';
+    const list = rows.map((x, i) => {
+        const first = i === 0 && x.total > 0;
+        return `<li class="rh-row ${first ? 'first' : ''}">
+            <span class="rh-rk num">${i + 1}</span>
+            <span class="rh-av" style="background:${avColor(x.m.u)}">${first ? CROWN_SVG : ''}${esc(firstGlyph(memberName(x.m)))}</span>
+            <span class="rh-mid"><span class="rh-name"><b>${esc(memberName(x.m))}</b></span>
+                <span class="rh-track"><i style="width:${x.total ? Math.max(3, x.total / max * 100).toFixed(1) : 0}%;background:${avColor(x.m.u)}"></i></span>
+                <span class="rh-meta"><span class="num">${fmtHM(x.total)}</span>${days.length > 1 ? `<span>讀了 ${x.active} 天</span>` : ''}</span></span>
+        </li>`;
+    }).join('');
+    return `<section class="rh" id="roomHistory">
+        <div class="rh-head"><h3>讀書紀錄</h3><div class="rh-seg" role="group" aria-label="期間">${seg}</div></div>
+        ${custom}
+        <div class="rh-sum"><b class="num">${hm(sum)}</b><span>${r.label} · ${period}</span></div>
+        ${chart}
+        <ol class="rh-list">${list}</ol>
+        <p class="rh-note">換成新版後才會有以前的紀錄；還沒更新的同學只會顯示今天</p>
+    </section>`;
+}
+// 切換期間只重畫讀書紀錄這一塊（不會整頁跳動）
+function rerenderHistory() {
+    const el = $('roomHistory');
+    if (!el || !roomView) { renderRoom(); return; }
+    const r = myRooms.find(x => x.id === roomView);
+    if (!r) return;
+    const now = Date.now();
+    const ms = (r.members || []).map(u => ({ u, p: profiles[u], s: liveStatus(profiles[u], now) }));
+    el.outerHTML = roomHistoryHtml(ms, now);
+    $('tab-room')._html = null;   // 畫面已經改了，下次整頁重畫要重新比對
+}
+$('tab-room').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rh], [data-rhq]');
+    if (!b) return;
+    if (b.dataset.rh) rhMode = b.dataset.rh;
+    if (b.dataset.rhq) { const f = new Date(); f.setDate(f.getDate() - Number(b.dataset.rhq) + 1); rhFrom = ymd(f); rhTo = todayStr(); }
+    rerenderHistory();
+});
+$('tab-room').addEventListener('change', (e) => {
+    if (e.target.id === 'rhFrom') { rhFrom = e.target.value; rerenderHistory(); }
+    if (e.target.id === 'rhTo') { rhTo = e.target.value; rerenderHistory(); }
+});
 const SEAT_C = 2 * Math.PI * 31;
 function seatSub(s) {
     if (s.phase === 'focus') return s.subject != null ? `<span class="ss" style="color:var(--s${s.subject})">${SUBJECTS[s.subject]}${s.paused ? ' · 暫停' : ''}</span>` : `<span class="ss on">${s.paused ? '暫停中' : '專注中'}</span>`;
@@ -2953,6 +3051,17 @@ const ticketAvs = (ms) => `<span class="avatars">${ms.slice(0, 4).map(u => avHtm
 const codeBoxes = (v) => Array.from({ length: 6 }, (_, i) => `<span class="cb ${i === Math.min(v.length, 5) ? 'cur' : ''}">${esc(v[i] || '')}</span>`).join('');
 let codeDraft = '';
 
+// 房間成員的狀態常常一次更新好幾個：合併成一次重畫，捲動和打字都比較順
+let roomRenderTimer = 0;
+function renderRoomSoon() {
+    if (roomRenderTimer) return;
+    roomRenderTimer = setTimeout(() => { roomRenderTimer = 0; requestAnimationFrame(() => renderRoom()); }, 120);
+}
+// 內容跟上次一樣就不動畫面（不重新排版），只有真的變了才更新
+function setRoomHtml(el, html) {
+    if (el._html === html) return;
+    el.innerHTML = html; el._html = html;
+}
 function renderRoom(errMsg) {
     const el = $('tab-room');
     if (!el || document.body.dataset.tab !== 'tab-room') return;
@@ -2960,15 +3069,15 @@ function renderRoom(errMsg) {
     if (!currentUser) {
         setTopExtra('tab-room', '');
         el.dataset.view = '';
-        el.innerHTML = `<div class="sub-wrap">
+        setRoomHtml(el, `<div class="sub-wrap">
             <div class="room-empty"><p class="zh" style="font-size:18px;font-weight:700;margin:0">和朋友一起讀書</p>
             <p class="empty">建立房間、分享邀請碼，就能看到大家正在讀什麼、今天讀了多久。<br>需要先登入 Google 帳號。</p>
-            <button class="btn btn-accent" data-room="login">登入</button></div></div>`;
+            <button class="btn btn-accent" data-room="login">登入</button></div></div>`);
         return;
     }
     if (!roomsLoaded) {
         el.dataset.view = '';
-        el.innerHTML = `<div class="sub-wrap"><p class="ai-loading" style="margin-top:30px">${errMsg ? esc(errMsg) : roomSlow ? '連不上雲端資料庫。如果你在學校或公共 Wi‑Fi，可能是網路擋住了，換成手機行動網路再試試。' : '<span class="ai-spin"></span>載入房間中…'}</p></div>`;
+        setRoomHtml(el, `<div class="sub-wrap"><p class="ai-loading" style="margin-top:30px">${errMsg ? esc(errMsg) : roomSlow ? '連不上雲端資料庫。如果你在學校或公共 Wi‑Fi，可能是網路擋住了，換成手機行動網路再試試。' : '<span class="ai-spin"></span>載入房間中…'}</p></div>`);
         return;
     }
     const now = Date.now();
@@ -2976,7 +3085,7 @@ function renderRoom(errMsg) {
     if (roomView) {
         const r = myRooms.find(x => x.id === roomView);
         if (!r) {
-            if (roomView === pendingRoom) { el.dataset.view = ''; el.innerHTML = `<div class="sub-wrap"><p class="ai-loading" style="margin-top:30px"><span class="ai-spin"></span>進入房間中…</p></div>`; return; }
+            if (roomView === pendingRoom) { el.dataset.view = ''; setRoomHtml(el, `<div class="sub-wrap"><p class="ai-loading" style="margin-top:30px"><span class="ai-spin"></span>進入房間中…</p></div>`); return; }
             roomView = null; return renderRoom();
         }
         $('pageTitle').textContent = r.name;
@@ -2998,7 +3107,7 @@ function renderRoom(errMsg) {
                 <svg class="go-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
             </button>`;
         el.dataset.view = 'people:' + r.id;
-        el.innerHTML = `<div class="sub-wrap">
+        setRoomHtml(el, `<div class="sub-wrap">
             <div class="room-status">
                 ${studying ? `<span class="tag ok"><span class="live-dot"></span>${studying} 人在讀</span>` : '<span class="tag mute">目前沒人在讀</span>'}
                 <span class="muted">${ms.length} 位成員</span>
@@ -3026,8 +3135,9 @@ function renderRoom(errMsg) {
             </section>
             <p class="hint" style="margin-top:16px">房間裡的人看得到你的暱稱、正在讀的科目和今天的時數</p>
             ${chatBtn}
-            <div class="sticky-cta"><button class="btn btn-accent btn-wide" data-room="focus"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>${timer.phase === 'focus' ? '回到計時' : '開始讀書'}</button></div>
-        </div>`;
+            <div class="sticky-cta room-cta"><button class="btn btn-accent btn-wide" data-room="focus"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>${timer.phase === 'focus' ? '回到計時' : '開始讀書'}</button></div>
+            ${roomHistoryHtml(ms, now)}
+        </div>`);
         return;
     }
     setTopExtra('tab-room', `<button class="me-chip" data-top="me" aria-label="我的暱稱、頭像顏色與隱身設定"><span class="av" style="background:${avColor(meUid)}">${esc(firstGlyph(myName()))}</span><span class="zh">${esc(myName())}</span></button>`);
@@ -3043,9 +3153,9 @@ function renderRoom(errMsg) {
                 <span class="tk-stub"><small>邀請碼</small><b class="num">${r.id}</b>${unreadOf(r.id) ? `<span class="seg-n tk-unread">${unreadOf(r.id)}</span>` : ''}</span>
             </button>`;
         }).join('') : '<p class="empty">還沒有房間，建立一個或用邀請碼加入</p>'}`;
-    if (el.dataset.view === 'lobby' && $('ticketList')) { $('ticketList').innerHTML = tickets; return; }
+    if (el.dataset.view === 'lobby' && $('ticketList')) { $('ticketList').innerHTML = tickets; el._html = null; return; }
     el.dataset.view = 'lobby';
-    el.innerHTML = `<div class="sub-wrap">
+    setRoomHtml(el, `<div class="sub-wrap">
         <div id="ticketList">${tickets}</div>
         <section class="stats-sec">
             <div class="sec-head"><h3>輸入邀請碼加入</h3></div>
@@ -3058,7 +3168,7 @@ function renderRoom(errMsg) {
                 <button class="text-link" data-room="create"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>建立新房間</button>
             </div>
         </section>
-    </div>`;
+    </div>`);
 }
 /* --- 聊天室：rooms/{邀請碼}/messages、rooms/{邀請碼}/reads/{uid} ---
  * 每個房間都會監聽最近的訊息（才能顯示未讀和提醒）；打開聊天室時是全螢幕畫面 */
@@ -3495,7 +3605,10 @@ function roomTick() {
     const now = Date.now();
     document.querySelectorAll('#tab-room [data-clock]').forEach(n => {
         const st = liveStatus(profiles[n.dataset.clock], now);
-        n.textContent = memberClock(st);
+        const txt = memberClock(st);
+        if (n.textContent === txt) return;   // 沒變就不碰畫面
+        n.textContent = txt;
+        $('tab-room')._html = null;          // 時鐘是直接改畫面的，下次整頁重畫要重新比對
         const bar = n.parentElement.querySelector('.st-bar');
         if (bar) bar.setAttribute('stroke-dashoffset', (SEAT_C * (1 - seatFrac(st))).toFixed(1));
     });
@@ -3554,7 +3667,7 @@ $('tab-room').addEventListener('keydown', (e) => {
 $('tab-room').addEventListener('input', (e) => {
     if (e.target.id === 'roomCodeInput') {
         e.target.value = codeDraft = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-        $('codeBoxes').innerHTML = codeBoxes(codeDraft);
+        $('codeBoxes').innerHTML = codeBoxes(codeDraft); $('tab-room')._html = null;
     }
 });
 // 我的暱稱、隱身模式（房間列表右上角）
