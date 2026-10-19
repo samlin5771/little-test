@@ -3005,7 +3005,7 @@ function roomHistoryHtml(ms, now) {
         <div class="rh-sum"><b class="num">${hm(sum)}</b><span>${r.label} · ${period}</span></div>
         ${chart}
         <ol class="rh-list">${list}</ol>
-        <p class="rh-note">換成新版後才會有以前的紀錄；還沒更新的同學只會顯示今天</p>
+        <p class="rh-note">更新為新版後才會顯示先前紀錄;如果資料有誤請關閉網頁即會自動更新</p>
     </section>`;
 }
 // 切換期間只重畫讀書紀錄這一塊（不會整頁跳動）
