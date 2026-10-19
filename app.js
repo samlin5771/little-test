@@ -2897,7 +2897,7 @@ function renderRoom(errMsg) {
                 </div>`;
             }).join('')}</div>
             <section class="stats-sec">
-                <div class="sec-head"><h3>今天排行</h3><span>正在讀的那一輪也算</span></div>
+                <div class="sec-head"><h3>今天排行</h3><span>嗶嗶啵啵嗶</span></div>
                 ${rank.map((m, i) => `<div class="rank-row ${m.u === meUid ? 'me' : ''}">
                     <span class="rk num" ${i < 3 && total(m) ? `style="background:${MEDAL[i]};color:#050608"` : ''}>${i + 1}</span>
                     <span class="nm">${esc(memberName(m))}</span>
