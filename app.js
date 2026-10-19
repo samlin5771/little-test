@@ -1764,7 +1764,7 @@ async function getAiModel() {
             })
         }
     });
-    const ai = aiM.getAI(fb.app, { backend: new aiM.GoogleAIBackend() });
+    const ai = aiM.getAI(fb.app, { backend: new aiM.GoogleAIBackend(), useLimitedUseAppCheckTokens: true });
     aiModel = aiM.getGenerativeModel(ai, {
         model: AI_MODEL,
         generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0.6 }
