@@ -1811,7 +1811,9 @@ async function generatePlan() {
     } catch (e) {
         console.error('AI 產生失敗：', e);
         const msg = String(e?.message || e);
-        aiError = /app-check|appCheck|App Check/i.test(msg) ? 'App Check 驗證失敗，請確認 reCAPTCHA 網站金鑰設定正確。'
+        // 學校、公共 Wi‑Fi 常會擋 Google 的驗證服務，所以先提示換網路
+        aiError = /app-check|appCheck|App Check|recaptcha/i.test(msg) ? '連不上 Google 的安全驗證。如果你在學校或公共 Wi‑Fi，可能是網路擋住了，換成手機行動網路再試試。'
+            : /network|fetch|Failed to fetch|unavailable|timeout/i.test(msg) ? '連不上 AI 服務。如果你在學校或公共 Wi‑Fi，可能是網路擋住了，換成手機行動網路再試試。'
             : /quota|429|RESOURCE_EXHAUSTED/i.test(msg) ? '今天的免費額度用完了，晚點再試。'
             : /not enabled|PERMISSION_DENIED|403|api-not-enabled/i.test(msg) ? 'Firebase 專案還沒開啟 AI Logic，請照說明到 Firebase 主控台開啟。'
             : msg === 'empty' ? 'AI 這次沒有排出內容，請再試一次。'
@@ -1954,6 +1956,7 @@ let profiles = {};           // uid → 狀態
 let roomUnsub = null;
 let profUnsubs = [], profKey = '';
 let roomsLoaded = false;
+let roomSlow = false;   // 載入太久（多半是網路擋住）
 let lastProfile = '';
 let profTimer = null;
 
@@ -2016,6 +2019,9 @@ function roomStart() {
     if (!currentUser || !fb || roomUnsub) return;
     const { fs, db } = fb;
     const q = fs.query(fs.collection(db, 'rooms'), fs.where('members', 'array-contains', currentUser.uid));
+    // 10 秒還載不到，多半是網路擋住了雲端資料庫，告訴使用者而不是一直轉圈
+    roomSlow = false;
+    setTimeout(() => { if (roomUnsub && !roomsLoaded) { roomSlow = true; renderRoom(); } }, 10000);
     roomUnsub = fs.onSnapshot(q, (snap) => {
         roomsLoaded = true;
         myRooms = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
@@ -2159,7 +2165,7 @@ function renderRoom(errMsg) {
     }
     if (!roomsLoaded) {
         el.dataset.view = '';
-        el.innerHTML = `<div class="sub-wrap"><p class="ai-loading" style="margin-top:30px">${errMsg ? esc(errMsg) : '<span class="ai-spin"></span>載入房間中…'}</p></div>`;
+        el.innerHTML = `<div class="sub-wrap"><p class="ai-loading" style="margin-top:30px">${errMsg ? esc(errMsg) : roomSlow ? '連不上雲端資料庫。如果你在學校或公共 Wi‑Fi，可能是網路擋住了，換成手機行動網路再試試。' : '<span class="ai-spin"></span>載入房間中…'}</p></div>`;
         return;
     }
     const now = Date.now();
