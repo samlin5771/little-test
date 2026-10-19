@@ -44,6 +44,7 @@
     --exam-soft: rgba(217, 45, 45, 0.1);
     --nav-bg: rgba(247, 246, 242, 0.97);
     --modal-bg: #FFFFFF;
+    --card-rgb: 255, 255, 255;
     --shadow: 0 20px 50px rgba(22, 20, 15, 0.18);
     --mark-green-bg: rgba(16, 185, 129, 0.16);  --mark-green: #047857;
     --mark-blue-bg: rgba(59, 130, 246, 0.14);   --mark-blue: #1D4ED8;
@@ -74,6 +75,7 @@
     --exam-soft: rgba(255, 90, 95, 0.16);
     --nav-bg: rgba(5, 6, 8, 0.96);
     --modal-bg: #12131A;
+    --card-rgb: 30, 31, 40;
     --shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
     --mark-green-bg: rgba(16, 185, 129, 0.18);  --mark-green: #34D399;
     --mark-blue-bg: rgba(59, 130, 246, 0.2);    --mark-blue: #7DB2FF;
@@ -1474,7 +1476,9 @@ textarea.field { height: auto; min-height: 96px; resize: vertical; line-height: 
 .palette-item.sel { background: var(--accent-soft); }
 .keys-list { display: flex; flex-direction: column; margin-bottom: 14px; }
 .keys-list > div { display: flex; align-items: center; justify-content: space-between; min-height: 38px; font-size: 14px; border-bottom: 1px solid var(--line); font-family: 'Noto Sans TC', sans-serif; }
-.toast { display: flex; align-items: center; gap: 14px; }
+.toast { display: flex; align-items: center; gap: 14px; width: max-content; max-width: min(92vw, 380px); text-align: left; line-height: 1.5; }
+.toast > span { min-width: 0; }
+.toast-btn { white-space: nowrap; flex-shrink: 0; }   /* 「復原」「查看」不要被擠成直的 */
 .toast.has-action.show { pointer-events: auto; }
 .toast-btn { border: none; background: none; padding: 4px 2px; font-weight: 700; font-size: 14px; color: var(--accent-text); font-family: 'Noto Sans TC', sans-serif; }
 
@@ -1621,3 +1625,118 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 .unit-chip small { font-size: 10.5px; font-weight: 500; color: var(--muted); }
 .unit-chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
 .unit-chip:active { transform: scale(0.95); }
+
+
+/* =====================================================
+ * 聊天訊息通知（個人設定裡選：頂部橫幅／頂部小膠囊）
+ * 收起時：先往上滑出畫面＋淡出，動畫結束才 visibility: hidden，保證不會卡在畫面邊緣
+ * ===================================================== */
+.nbanner, .npill { position: fixed; z-index: 220; top: calc(env(safe-area-inset-top) + 8px); visibility: hidden; opacity: 0; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.nbanner[hidden], .npill[hidden] { display: none; }
+/* A 頂部橫幅 */
+.nbanner {
+    left: max(14px, calc(50% - 200px)); right: max(14px, calc(50% - 200px));
+    display: flex; gap: 12px; align-items: center; padding: 13px 20px 15px 14px; border-radius: 22px;
+    /* 毛玻璃：底色留一點透明，後面的畫面會柔柔地透出來；加上主題色細邊和陰影，維持醒目 */
+    background: rgba(var(--card-rgb), 0.85); backdrop-filter: blur(26px) saturate(1.7); -webkit-backdrop-filter: blur(26px) saturate(1.7);
+    border: 1px solid rgba(var(--accent-rgb), 0.42);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.2), 0 2px 6px rgba(0, 0, 0, 0.06);
+    transform: translate3d(0, calc(-100% - env(safe-area-inset-top) - 24px), 0);
+    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s, visibility 0s 0.42s;
+}
+[data-theme="dark"] .nbanner { background: rgba(var(--card-rgb), 0.8); border-color: rgba(var(--accent-rgb), 0.5); box-shadow: 0 14px 36px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.08) inset; }
+.nbanner.show { transform: translate3d(0, 0, 0); opacity: 1; visibility: visible; transition: transform 0.48s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s, visibility 0s; }
+.nbanner.dragging { transition: none; }
+.nb-av { width: 38px; height: 38px; border-radius: 19px; align-self: center; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0; position: relative; font-family: 'Noto Sans TC', sans-serif; }
+.nb-av .nb-room { position: absolute; right: -4px; bottom: -4px; width: 17px; height: 17px; border-radius: 9px; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px rgb(var(--card-rgb)); }
+.nb-av .nb-room svg { width: 11px; height: 11px; }
+.nb-tx { flex: 1; min-width: 0; font-family: 'Noto Sans TC', sans-serif; }
+.nb-hd { display: flex; align-items: baseline; gap: 6px; font-size: 14px; line-height: 1.35; font-weight: 700; min-width: 0; }
+.nb-hd b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-hd small { font-size: 11px; font-weight: 500; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.nb-hd em { margin-left: auto; font-style: normal; font-size: 10.5px; color: var(--muted); flex-shrink: 0; font-family: 'Manrope', sans-serif; }
+.nb-msg { margin-top: 2px; font-size: 13.5px; line-height: 1.5; padding-right: 6px; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+.nb-more { margin-top: 4px; font-size: 11.5px; font-weight: 700; color: var(--accent-text); }
+.nb-grab { position: absolute; left: 50%; bottom: 5px; width: 28px; height: 3px; border-radius: 2px; background: var(--line); transform: translateX(-50%); }
+/* C 頂部小膠囊 */
+.npill {
+    left: 50%; width: 240px; max-width: calc(100vw - 28px); height: 42px; border-radius: 21px; padding: 0 9px 0 8px; overflow: hidden;
+    /* 深色毛玻璃（不是死黑）：淺色主題時柔和一點，不會像一塊黑色貼紙 */
+    background: rgba(28, 28, 36, 0.84); backdrop-filter: blur(22px) saturate(1.6); -webkit-backdrop-filter: blur(22px) saturate(1.6);
+    color: #F2F0E9; border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28), 0 1px 0 rgba(255, 255, 255, 0.1) inset;
+    transform: translate3d(-50%, calc(-100% - env(safe-area-inset-top) - 24px), 0);
+    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s, visibility 0s 0.42s, width 0.38s cubic-bezier(0.22, 1, 0.36, 1), height 0.38s cubic-bezier(0.22, 1, 0.36, 1), border-radius 0.38s;
+}
+/* 深色主題：膠囊改成亮一點的灰，再加一圈主題色細邊，才不會和黑色背景混在一起 */
+[data-theme="dark"] .npill { background: rgba(58, 59, 72, 0.8); border-color: rgba(var(--accent-rgb), 0.5); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.12) inset; }
+.npill.show { transform: translate3d(-50%, 0, 0); opacity: 1; visibility: visible; transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s, visibility 0s, width 0.38s cubic-bezier(0.22, 1, 0.36, 1), height 0.38s cubic-bezier(0.22, 1, 0.36, 1), border-radius 0.38s; }
+.npill.dragging { transition: none; }
+.np-row { display: flex; align-items: center; gap: 9px; height: 40px; }
+.np-av { width: 26px; height: 26px; border-radius: 13px; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; flex-shrink: 0; font-family: 'Noto Sans TC', sans-serif; line-height: 1; }
+.np-t { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: 'Noto Sans TC', sans-serif;
+    line-height: 20px; position: relative; }
+/* iPhone（Safari 排版）的中文字會比電腦上低一點點，只在 iPhone 上把文字往上提 1px，兩邊看起來都在正中間 */
+@supports (-webkit-touch-callout: none) {
+    .np-t { top: -1px; }
+    .np-av, .np-n, .nb-av { padding-bottom: 1px; }
+}
+.np-n { min-width: 22px; height: 22px; padding: 0 6px; line-height: 1; border-radius: 11px; background: var(--accent); color: var(--on-accent); font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-family: 'Manrope', sans-serif; }
+.np-exp { opacity: 0; padding: 2px 8px 0; display: flex; flex-direction: column; gap: 9px; transition: opacity 0.2s; font-family: 'Noto Sans TC', sans-serif; }
+.np-exp p { margin: 0; font-size: 13px; line-height: 1.45; color: rgba(242, 240, 233, 0.92); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+.np-exp small { font-size: 11px; color: rgba(242, 240, 233, 0.55); }
+.np-btns { display: flex; gap: 7px; }
+.np-btns button { flex: 1; height: 34px; border-radius: 17px; border: none; font-size: 12.5px; font-weight: 700; background: rgba(242, 240, 233, 0.12); color: #F2F0E9; font-family: 'Noto Sans TC', sans-serif; }
+.np-btns button.go { background: var(--accent); color: var(--on-accent); }
+.npill.open { width: min(400px, calc(100vw - 28px)); height: 166px; border-radius: 28px; padding: 2px 12px 0; cursor: default; }
+.npill.open .np-t { white-space: nowrap; }
+.npill.open .np-exp { opacity: 1; transition-delay: 0.12s; }
+@media (prefers-reduced-motion: reduce) {
+    .nbanner, .npill, .nbanner.show, .npill.show { transition: opacity 0.2s, visibility 0s 0.2s; transform: translate3d(0, 0, 0); }
+    .npill, .npill.show { transform: translate3d(-50%, 0, 0); }
+    .nbanner.show, .npill.show { transition: opacity 0.2s, visibility 0s; }
+}
+/* 個人設定：訊息通知樣式 */
+.notify-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 4px 14px 10px; }
+.notify-opt { border: 1px solid var(--line); border-radius: 16px; background: transparent; padding: 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; font-family: 'Noto Sans TC', sans-serif; }
+.notify-opt.active { border: 1.5px solid var(--accent); background: var(--accent-soft); }
+.notify-opt:active { transform: scale(0.97); }
+.nt-th { width: 100%; height: 64px; border-radius: 10px; background: var(--surface-2); position: relative; overflow: hidden; margin-bottom: 6px; }
+.nt-banner { position: absolute; left: 7px; right: 7px; top: 7px; height: 26px; border-radius: 8px; background: var(--modal-bg); border: 1px solid rgba(var(--accent-rgb), 0.5); display: flex; align-items: center; gap: 5px; padding: 0 6px; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12); }
+.nt-banner i, .nt-pill i { width: 13px; height: 13px; border-radius: 7px; background: var(--accent); flex-shrink: 0; }
+.nt-banner > span { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.nt-banner b, .nt-banner em { display: block; height: 3px; border-radius: 2px; background: var(--faint); }
+.nt-banner b { width: 40%; background: var(--muted); }
+.nt-banner em.s { width: 70%; }
+.nt-pill { position: absolute; left: 50%; top: 7px; transform: translateX(-50%); width: 62%; height: 16px; border-radius: 8px; background: rgba(28, 28, 36, 0.85); display: flex; align-items: center; gap: 4px; padding: 0 3px; }
+[data-theme="dark"] .nt-pill { background: rgba(70, 71, 86, 0.9); box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.5); }
+.nt-pill i { width: 10px; height: 10px; }
+.nt-pill em { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.5); }
+.nt-pill u { width: 9px; height: 9px; border-radius: 5px; background: var(--accent); }
+.nt-name { font-size: 13.5px; font-weight: 700; }
+.notify-opt.active .nt-name { color: var(--accent-text); }
+.nt-sub { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+.nt-try { display: block; margin: 0 14px 14px auto; border: none; background: none; color: var(--accent-text); font-size: 13px; font-weight: 700; padding: 4px 2px; font-family: 'Noto Sans TC', sans-serif; }
+
+.g-chat-entry { display: flex; align-items: center; gap: 7px; padding: 7px 8px; border-radius: 12px; border: 1px solid rgba(var(--accent-rgb), 0.45); background: var(--accent-soft); margin-top: 2px; }
+.g-chat-entry .ic { width: 22px; height: 22px; border-radius: 7px; background: rgba(var(--accent-rgb), 0.2); color: var(--accent-text); display: flex; align-items: center; justify-content: center; }
+.g-chat-entry .ic svg { width: 15px; height: 15px; }
+.g-chat-entry b { font-size: 11px; }
+.g-chat-entry small { font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* 網站導覽：通知示意 */
+.g-notice { display: flex; align-items: center; gap: 8px; padding: 8px 12px 9px 9px; border-radius: 14px; background: var(--modal-bg); border: 1px solid rgba(var(--accent-rgb), 0.45); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12); margin-bottom: 4px; }
+.g-notice > i { width: 24px; height: 24px; border-radius: 12px; color: #fff; font-style: normal; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.g-notice b { display: block; font-size: 10.5px; }
+.g-notice b small { font-weight: 500; color: var(--muted); margin-left: 4px; }
+.g-notice span { font-size: 10px; color: var(--muted); }
+
+/* 我在房間裡的樣子：頭像顏色 */
+.me-colors { display: flex; flex-wrap: wrap; gap: 10px; margin: 2px 0 16px; }
+.me-color { width: 34px; height: 34px; border-radius: 17px; border: none; color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; font-family: 'Noto Sans TC', sans-serif; box-shadow: 0 0 0 2px var(--modal-bg), 0 0 0 3px transparent; transition: box-shadow 0.2s, transform 0.15s; }
+.me-color.auto { background: conic-gradient(var(--s0), var(--s1), var(--s2), var(--s3), var(--s4), var(--s0)); font-size: 10px; }
+.me-color.active { box-shadow: 0 0 0 2px var(--modal-bg), 0 0 0 4px var(--text); }
+.me-color:active { transform: scale(0.92); }
+.me-preview { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; }
+.me-preview .av { width: 46px; height: 46px; border-radius: 23px; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 19px; font-weight: 700; font-family: 'Noto Sans TC', sans-serif; }
+.me-preview b { font-size: 15px; font-family: 'Noto Sans TC', sans-serif; }

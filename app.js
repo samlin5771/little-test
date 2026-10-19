@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v33';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v35';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
 const RECAPTCHA_SITE_KEY = '6LeR9vQtAAAAAKsbIXmqZCd4sHONdH-mvcTx_qtJ';
@@ -56,6 +56,7 @@ const LS = {
     sessions: 'study_sessions', timer: 'study_timer', tpref: 'study_timer_pref',
     aiPref: 'study_ai_pref', aiCount: 'study_ai_count', room: 'study_room',
     bg: 'study_bg', syllabus: 'study_syllabus',
+    notify: 'study_notify',
     install: 'study_install_seen', tour: 'study_tour_seen', chatSeen: 'study_chat_seen', photoCount: 'study_photo_count'
 };
 // 沒有頭像時的預設圖（顏色跟著主題色）
@@ -214,7 +215,7 @@ function setFold(row, fold, open) {
     $(fold).inert = !open;
     $(row).setAttribute('aria-expanded', open);
 }
-function closeFolds() { setFold('accentRow', 'accentFold', false); setFold('bgRow', 'bgFold', false); }
+function closeFolds() { setFold('accentRow', 'accentFold', false); setFold('bgRow', 'bgFold', false); setFold('notifyRow', 'notifyFold', false); }
 $('accentRow').addEventListener('click', () => setFold('accentRow', 'accentFold', !$('accentFold').classList.contains('open')));
 
 $('themeBtn').addEventListener('click', () => {
@@ -422,7 +423,7 @@ function savePrefs() {
     clearTimeout(prefsTimer);
     prefsTimer = setTimeout(() => {
         fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), {
-            prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow' }
+            prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow', notify: localStorage.getItem(LS.notify) || 'banner' }
         }, { mergeFields: ['prefs'] }).catch(e => console.warn('設定同步失敗：', e));
     }, 400);
 }
@@ -432,7 +433,119 @@ function applyCloudPrefs(p) {
         applyAccent(p.accent); lsSet(LS.accent, p.accent); bgFx.refresh();
     }
     if (BG_NAME[p.bg] && p.bg !== (localStorage.getItem(LS.bg) || 'glow')) { applyBg(p.bg); lsSet(LS.bg, p.bg); }
+    if (NOTIFY_NAME[p.notify] && p.notify !== notifyStyle) { applyNotify(p.notify); }
 }
+
+/* =====================================================
+ * 聊天訊息通知：頂部橫幅（預設）或頂部小膠囊，在個人設定裡選
+ * 收起時先滑出畫面，動畫跑完才真的隱藏，不會卡在邊緣露出一條
+ * ===================================================== */
+const NOTIFY_NAME = { banner: '頂部橫幅', pill: '頂部小膠囊' };
+let notifyStyle = NOTIFY_NAME[localStorage.getItem(LS.notify)] ? localStorage.getItem(LS.notify) : 'banner';
+function applyNotify(k) {
+    notifyStyle = NOTIFY_NAME[k] ? k : 'banner';
+    lsSet(LS.notify, notifyStyle);
+    document.querySelectorAll('.notify-opt').forEach(b => { const on = b.dataset.notify === notifyStyle; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on); });
+    $('notifyName').textContent = NOTIFY_NAME[notifyStyle];
+}
+applyNotify(notifyStyle);
+$('notifyRow').addEventListener('click', () => setFold('notifyRow', 'notifyFold', !$('notifyFold').classList.contains('open')));
+$('notifyGrid').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-notify]');
+    if (!b) return;
+    applyNotify(b.dataset.notify); savePrefs(); demoNotice();
+});
+$('notifyTry').addEventListener('click', demoNotice);
+function demoNotice() {
+    showChatNotice({ code: null, uid: 'demo', name: '同學', room: '讀書房間', text: '這是訊息通知的樣子，點一下就會打開聊天室；往上滑可以關掉。', count: 2 });
+}
+
+// 聊天室圖示（兩個對話泡泡）：房間裡的聊天室入口、網站導覽、通知上的小標記都用這一個
+const CHAT_PATHS = '<path d="M3.14 13.4A8.5 6.8 0 1 1 6.91 16.16L3.4 18.2z"/><path d="M18.57 12.14A5.6 4.4 0 0 1 21.25 18.4L22.4 21.6L19.37 19.93A5.6 4.4 0 0 1 10.85 16.79"/>';
+const ICON_CHAT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CHAT_PATHS}<g fill="currentColor" stroke="none"><circle cx="7.2" cy="10" r="1.1"/><circle cx="10.5" cy="10" r="1.1"/><circle cx="13.8" cy="10" r="1.1"/></g></svg>`;
+const ICON_CHAT_SM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CHAT_PATHS}</svg>`;
+const notice = { el: null, timer: 0, hideTimer: 0, data: null };
+function hideNotice(immediate) {
+    const el = notice.el;
+    clearTimeout(notice.timer);
+    if (!el) return;
+    el.classList.remove('show', 'open', 'dragging');
+    el.style.transform = '';
+    clearTimeout(notice.hideTimer);
+    // 等滑出動畫跑完才設成 hidden；中途又有新通知就不會被藏起來
+    notice.hideTimer = setTimeout(() => { if (!el.classList.contains('show')) el.hidden = true; }, immediate ? 0 : 520);
+    notice.el = null;
+}
+function armNotice(ms) { clearTimeout(notice.timer); notice.timer = setTimeout(() => hideNotice(), ms); }
+function showChatNotice(d) {
+    const other = notifyStyle === 'pill' ? $('nBanner') : $('nPill');
+    if (notice.el === other) hideNotice(true);
+    const el = notifyStyle === 'pill' ? $('nPill') : $('nBanner');
+    const av = `background:${avColor(d.uid)}`;
+    const g = esc(firstGlyph(d.name || '同學'));
+    const more = d.count > 1 ? d.count - 1 : 0;
+    if (notifyStyle === 'pill') {
+        el.innerHTML = `<div class="np-row"><span class="np-av" style="${av}">${g}</span><span class="np-t">${esc(d.name || '同學')}：${esc(d.text)}</span>${d.count > 0 ? `<span class="np-n">${d.count > 99 ? '99+' : d.count}</span>` : ''}</div>
+            <div class="np-exp"><small>${esc(d.room || '')} · 剛剛</small><p>${esc(d.text)}</p>
+            <div class="np-btns"><button data-np="later">稍後</button><button class="go" data-np="open">打開聊天室</button></div></div>`;
+        el.setAttribute('aria-label', `${d.name}：${d.text}`);
+    } else {
+        el.innerHTML = `<span class="nb-av" style="${av}">${g}<span class="nb-room">${ICON_CHAT_SM}</span></span>
+            <div class="nb-tx"><div class="nb-hd"><b>${esc(d.name || '同學')}</b><small>${esc(d.room || '')}</small><em>剛剛</em></div>
+            <div class="nb-msg">${esc(d.text)}</div>${more ? `<div class="nb-more">還有 ${more} 則新訊息</div>` : ''}</div><span class="nb-grab"></span>`;
+    }
+    notice.data = d;
+    clearTimeout(notice.hideTimer);
+    el.classList.remove('open', 'dragging'); el.style.transform = '';
+    const wasShown = el.classList.contains('show');
+    el.hidden = false;
+    if (!wasShown) { void el.offsetWidth; }   // 先畫出收起的位置，再加 show 才會有滑下來的動畫
+    el.classList.add('show');
+    notice.el = el;
+    armNotice(notifyStyle === 'pill' ? 5000 : 4200);
+}
+function openNoticeChat() {
+    const code = notice.data?.code;
+    hideNotice();
+    if (code) openChat(code);
+}
+// 手勢：點一下＝打開（膠囊是展開），往上滑＝關掉；按著的時候不會自動收起
+(function () {
+    ['nBanner', 'nPill'].forEach(id => {
+        const el = $(id);
+        let y0 = 0, dy = 0, down = false, moved = false;
+        const base = () => id === 'nPill' ? 'translate3d(-50%, ' : 'translate3d(0, ';
+        el.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('button')) return;
+            down = true; moved = false; y0 = e.clientY; dy = 0;
+            clearTimeout(notice.timer);
+            el.setPointerCapture?.(e.pointerId);
+        });
+        el.addEventListener('pointermove', (e) => {
+            if (!down) return;
+            dy = Math.min(0, e.clientY - y0);
+            if (Math.abs(e.clientY - y0) > 6) { moved = true; el.classList.add('dragging'); el.style.transform = `${base()}${dy}px, 0)`; }
+        });
+        const up = () => {
+            if (!down) return;
+            down = false; el.classList.remove('dragging');
+            if (moved && dy < -28) { hideNotice(); return; }
+            el.style.transform = '';
+            if (!moved) {
+                if (id === 'nPill' && !el.classList.contains('open')) { el.classList.add('open'); armNotice(6500); return; }
+                if (id === 'nBanner') { openNoticeChat(); return; }
+            }
+            armNotice(el.classList.contains('open') ? 6500 : 3000);
+        };
+        el.addEventListener('pointerup', up);
+        el.addEventListener('pointercancel', up);
+    });
+    $('nPill').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-np]');
+        if (!b) return;
+        if (b.dataset.np === 'open') openNoticeChat(); else hideNotice();
+    });
+})();
 
 /* =====================================================
  * 分頁
@@ -2652,7 +2765,13 @@ function liveStatus(p, now = Date.now()) {
     }
     return { phase: 'idle', min: today };
 }
-const avColor = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return `var(--s${h % 5})`; };
+// 頭像顏色：自己選過的優先（存在 profiles/uid.color，房間裡大家都看得到），沒選就依帳號自動配色
+const AV_COLORS = ['#E5484D', '#F76B15', '#E2A400', '#30A46C', '#12A594', '#2A78D6', '#6E56CF', '#D6409F', '#E87BA4', '#7A7A73'];
+const avColor = (s) => {
+    const pick = (s === currentUser?.uid && roomPref.color) || profiles[s]?.color;
+    if (AV_COLORS.includes(pick)) return pick;
+    let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return `var(--s${h % 5})`;
+};
 // 頭像上的第一個字：用「字素」切，表情符號（🍚、👍🏻、👨‍👩‍👧）才不會被切成一半變成方框
 const graphemer = (() => { try { return new Intl.Segmenter('zh-Hant', { granularity: 'grapheme' }); } catch (e) { return null; } })();
 function firstGlyph(str) {
@@ -2677,7 +2796,7 @@ function publishProfile(force) {
     const t = todayStr();
     const hide = roomPref.hidden;
     const data = {
-        name: myName(), hidden: !!hide,
+        name: myName(), hidden: !!hide, color: AV_COLORS.includes(roomPref.color) ? roomPref.color : null,
         status: hide ? 'idle' : timer.phase,
         subject: !hide && timer.phase !== 'idle' ? (timer.subject ?? null) : null,
         startAt: !hide && timer.phase === 'focus' ? timer.startAt : null,
@@ -2873,7 +2992,7 @@ function renderRoom(errMsg) {
         const last = [...cm].reverse().find(m => !m.recalled);
         const unread = unreadOf(r.id);
         const chatBtn = `<button class="chat-entry" data-chat="${r.id}">
-                <span class="ce-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.14 13.4A8.5 6.8 0 1 1 6.91 16.16L3.4 18.2z"/><path d="M18.57 12.14A5.6 4.4 0 0 1 21.25 18.4L22.4 21.6L19.37 19.93A5.6 4.4 0 0 1 10.85 16.79"/><g fill="currentColor" stroke="none"><circle cx="7.2" cy="10" r="1.1"/><circle cx="10.5" cy="10" r="1.1"/><circle cx="13.8" cy="10" r="1.1"/></g></svg></span>
+                <span class="ce-ic">${ICON_CHAT}</span>
                 <span class="ce-tx"><b>聊天室</b><small>${last ? esc(`${last.uid === meUid ? '你' : (last.name || '同學')}：${last.img ? '傳了一張照片' : last.text}`) : '與朋友聊聊'}</small></span>
                 ${unread ? `<span class="seg-n">${unread > 99 ? '99+' : unread}</span>` : ''}
                 <svg class="go-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
@@ -2911,7 +3030,7 @@ function renderRoom(errMsg) {
         </div>`;
         return;
     }
-    setTopExtra('tab-room', `<button class="me-chip" data-top="me" aria-label="我的暱稱與隱身設定"><span class="av" style="background:${avColor(meUid)}">${esc(firstGlyph(myName()))}</span><span class="zh">${esc(myName())}</span></button>`);
+    setTopExtra('tab-room', `<button class="me-chip" data-top="me" aria-label="我的暱稱、頭像顏色與隱身設定"><span class="av" style="background:${avColor(meUid)}">${esc(firstGlyph(myName()))}</span><span class="zh">${esc(myName())}</span></button>`);
     const tickets = `<div class="sec-head" style="margin:6px 0 14px"><h3>我的房間</h3><span>${myRooms.length ? myRooms.length + ' 間' : ''}</span></div>
         ${myRooms.length ? myRooms.map(r => {
             const ms = (r.members || []);
@@ -3003,7 +3122,7 @@ function onChatUpdate(code, fresh) {
     const room = myRooms.find(x => x.id === code);
     const body = m.img ? '傳了一張照片' : m.text;
     if (document.visibilityState === 'visible') {
-        toast(`${m.name || '同學'}：${body}`.slice(0, 40), { label: '查看', fn: () => openChat(code) });
+        showChatNotice({ code, uid: m.uid, name: m.name || '同學', room: room?.name || '讀書房間', text: body, count: unreadOf(code) });
         try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
     } else {
         document.title = `(${totalUnread()}) ${room?.name || BASE_TITLE}`;
@@ -3035,7 +3154,8 @@ navigator.serviceWorker?.addEventListener('message', (e) => {
 function openChat(code) {
     const r = myRooms.find(x => x.id === code);
     if (!r || !fb || !currentUser) return;
-    chatRoom = code; lastReadSent = 0; chatReads = {}; lastFit = '';
+    chatRoom = code; lastReadSent = 0; chatReads = {}; lastFit = ''; chatStick = true; chatUserScrollAt = 0;
+    if (notice.data?.code === code) hideNotice();
     chatSavedScroll = window.scrollY; window.scrollTo(0, 0);
     if (!chats[code]) chatListen(code);
     $('chatTitle').textContent = r.name;
@@ -3108,6 +3228,23 @@ function fitChatSoon() {   // 鍵盤動畫大約 0.3～0.5 秒，這段時間內
 }
 window.visualViewport?.addEventListener('resize', fitChat);
 window.visualViewport?.addEventListener('scroll', fitChat);
+// 打開聊天室時「黏在最新訊息」：訊息晚一點才載入、照片後來才顯示，都會自動捲到最下面；
+// 使用者自己往上滑看舊訊息時才放開，滑回底部又會重新黏住
+let chatStick = false, chatUserScrollAt = 0;
+(function () {
+    const box = $('chatList');
+    const mark = () => { chatUserScrollAt = Date.now(); };
+    box.addEventListener('touchmove', mark, { passive: true });
+    box.addEventListener('wheel', mark, { passive: true });
+    box.addEventListener('pointerdown', mark, { passive: true });
+    box.addEventListener('scroll', () => {
+        if (Date.now() - chatUserScrollAt > 900) return;   // 程式自己捲的不算
+        chatStick = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    }, { passive: true });
+    // 照片載入後高度變了：還黏著的話就再捲到底
+    box.addEventListener('load', (e) => { if (e.target.tagName === 'IMG' && chatStick) box.scrollTop = box.scrollHeight; }, true);
+    if (window.ResizeObserver) new ResizeObserver(() => { if (chatStick && chatRoom) box.scrollTop = box.scrollHeight; }).observe(box);
+})();
 function scrollChatEnd(smooth) {
     const box = $('chatList');
     requestAnimationFrame(() => box.scrollTo({ top: box.scrollHeight, behavior: smooth ? 'smooth' : 'auto' }));
@@ -3168,7 +3305,7 @@ function renderChatList(toEnd) {
     if (!box || !chatRoom) return;
     const me = currentUser?.uid;
     const msgs = chats[chatRoom]?.msgs || [];
-    const nearEnd = toEnd || box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+    const nearEnd = toEnd || chatStick || box.scrollHeight - box.scrollTop - box.clientHeight < 120;
     if (!msgs.length) {
         box.innerHTML = `<div class="chat-empty"><p>還沒有訊息</p><span>跟大家打聲招呼，或約好一起開始下一輪 ✏️</span></div>`;
         return;
@@ -3210,7 +3347,7 @@ async function sendChat(text, img) {
         if (img) { data.img = img; data.expireAt = new Date(Date.now() + PHOTO_KEEP); }
         await fb.fs.addDoc(fb.fs.collection(fb.db, 'rooms', chatRoom, 'messages'), data);
         enableRoom();
-        scrollChatEnd(true);
+        chatStick = true; scrollChatEnd(true);
         return true;
     } catch (e) {
         console.error('傳送失敗：', e);
@@ -3421,20 +3558,39 @@ $('tab-room').addEventListener('input', (e) => {
     }
 });
 // 我的暱稱、隱身模式（房間列表右上角）
+let meColorDraft = '';
+function renderMeColors() {
+    const g = esc(firstGlyph($('meName').value.trim() || myName()));
+    $('meColors').innerHTML = `<button class="me-color auto ${!meColorDraft ? 'active' : ''}" data-color="" aria-label="自動" aria-pressed="${!meColorDraft}">自動</button>` +
+        AV_COLORS.map(c => `<button class="me-color ${meColorDraft === c ? 'active' : ''}" data-color="${c}" style="background:${c}" aria-label="頭像顏色" aria-pressed="${meColorDraft === c}">${g}</button>`).join('');
+    const pv = $('mePreviewAv');
+    pv.textContent = firstGlyph($('meName').value.trim() || myName());
+    pv.style.background = meColorDraft || (() => { let h = 0; for (const c of String(currentUser?.uid || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0; return `var(--s${h % 5})`; })();
+    $('mePreviewName').textContent = $('meName').value.trim() || myName();
+}
 function openMeModal() {
     $('meName').value = myName();
     $('meHidden').checked = !!roomPref.hidden;
+    meColorDraft = AV_COLORS.includes(roomPref.color) ? roomPref.color : '';
+    renderMeColors();
     openModal('meModal');
 }
+$('meColors').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-color]');
+    if (!b) return;
+    meColorDraft = b.dataset.color; renderMeColors();
+});
+$('meName').addEventListener('input', renderMeColors);
 $('saveMeBtn').addEventListener('click', () => {
     const v = $('meName').value.trim().slice(0, 20);
     const hid = $('meHidden').checked;
     const changedHidden = hid !== !!roomPref.hidden;
-    roomPref.name = v; roomPref.hidden = hid; saveRoomPref();
+    const changedColor = meColorDraft !== (roomPref.color || '');
+    roomPref.name = v; roomPref.hidden = hid; roomPref.color = meColorDraft; saveRoomPref();
     closeModal('meModal');
     publishProfile();
     renderRoom();
-    toast(changedHidden ? (hid ? '已開啟隱身模式' : '已關閉隱身模式') : '已更新暱稱');
+    toast(changedHidden ? (hid ? '已開啟隱身模式' : '已關閉隱身模式') : changedColor ? '已更新頭像顏色' : '已更新暱稱');
 });
 onEnter($('meName'), () => $('saveMeBtn').click());
 // 房間內右上角「⋯」
@@ -3460,7 +3616,7 @@ async function loadRoomProfile(user) {
         const snap = await fb.fs.getDoc(fb.fs.doc(fb.db, 'profiles', user.uid));
         if (snap.exists()) {
             const p = snap.data();
-            roomPref = { ...roomPref, enabled: true, name: roomPref.name || p.name || '', hidden: !!p.hidden };
+            roomPref = { ...roomPref, enabled: true, name: roomPref.name || p.name || '', hidden: !!p.hidden, color: roomPref.color || (AV_COLORS.includes(p.color) ? p.color : '') };
             saveRoomPref();
         }
     } catch (e) { /* 離線或規則還沒設定 */ }
