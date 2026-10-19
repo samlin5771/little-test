@@ -1660,6 +1660,7 @@ const saveAiPref = () => lsSet(LS.aiPref, aiPref);
 let aiBusy = false;
 let aiResult = null;   // { analysis: [], days: [{ date, items: [{ subject, task, minutes, on, full }] }] }
 let aiError = '';
+let aiErrorCode = '';   // 顯示在錯誤訊息下面，方便查問題
 let aiModel = null;
 let aiStep = 0;        // 0 讀書時間、1 各科狀況、2 確認計畫
 
@@ -1811,8 +1812,9 @@ async function generatePlan() {
     } catch (e) {
         console.error('AI 產生失敗：', e);
         const msg = String(e?.message || e);
+        aiErrorCode = String(e?.code || '') + ' ' + msg.slice(0, 120);
         // 學校、公共 Wi‑Fi 常會擋 Google 的驗證服務，所以先提示換網路
-        aiError = /app-check|appCheck|App Check|recaptcha/i.test(msg) ? '連不上 Google 的安全驗證。如果你在學校或公共 Wi‑Fi，可能是網路擋住了，換成手機行動網路再試試。'
+        aiError = /app-check|appCheck|App Check|recaptcha/i.test(msg) ? 'AI 的安全驗證（App Check）沒有通過。可以先換個網路再試；如果換網路也不行，請把下面的錯誤代碼傳給開發者。'
             : /network|fetch|Failed to fetch|unavailable|timeout/i.test(msg) ? '連不上 AI 服務。如果你在學校或公共 Wi‑Fi，可能是網路擋住了，換成手機行動網路再試試。'
             : /quota|429|RESOURCE_EXHAUSTED/i.test(msg) ? '今天的免費額度用完了，晚點再試。'
             : /not enabled|PERMISSION_DENIED|403|api-not-enabled/i.test(msg) ? 'Firebase 專案還沒開啟 AI Logic，請照說明到 Firebase 主控台開啟。'
@@ -1887,7 +1889,7 @@ function renderAI() {
     } else {
         let result = '';
         if (aiBusy) result = `<p class="ai-loading"><span class="ai-spin"></span>AI 正在看你的紀錄、排計畫…</p>`;
-        else if (aiError) result = `<p class="ai-error">${esc(aiError)}</p>
+        else if (aiError) result = `<p class="ai-error">${esc(aiError)}</p><p class="ai-code">錯誤代碼：${esc(aiErrorCode.trim())}</p>
             <div class="sticky-cta row2"><button class="btn" data-ai="prev">上一步</button><button class="btn btn-accent" data-ai="gen" style="flex:1">${ICON_SPARK}再試一次</button></div>`;
         else if (aiResult) {
             const onCount = aiResult.days.reduce((a, d) => a + d.items.filter(i => i.on).length, 0);

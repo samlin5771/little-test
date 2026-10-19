@@ -660,7 +660,8 @@ body.sub #themeBtn, body.sub #accountBtn { display: none; }
 }
 .sticky-cta .btn { min-height: 52px; border-radius: 26px; font-size: 15px; }
 .sticky-cta .btn[disabled] { opacity: 0.5; }
-@media (min-width: 900px) { .sticky-cta { bottom: 0; } }
+/* 寬螢幕（iPad 橫放、電腦）：按鈕不用固定在底部，也不要畫出一塊深色底（會看起來像破圖） */
+@media (min-width: 900px) { .sticky-cta { position: static; margin: 22px 0 0; padding: 0; background: none; } }
 /* 下方滑出的面板（手機） */
 .grabber { width: 40px; height: 5px; border-radius: 3px; background: var(--faint); margin: -8px auto 16px; cursor: pointer; }
 @media (max-width: 899px) {
@@ -1358,3 +1359,5 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 .event-list, .todo-list, .seats { contain: layout paint; }
 @media (max-width: 899px) { .bg-glow { animation-duration: 20s; } }
 @media (prefers-reduced-motion: reduce) { .bg-glow { animation: none; } }
+
+.ai-code { margin: -8px 0 6px; text-align: center; font-size: 11px; color: var(--faint); word-break: break-all; font-family: 'Manrope', monospace; }
