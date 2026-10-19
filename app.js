@@ -45,8 +45,9 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v37';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v38';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
+const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
 const RECAPTCHA_SITE_KEY = '6LeR9vQtAAAAAKsbIXmqZCd4sHONdH-mvcTx_qtJ';
 
@@ -2431,7 +2432,8 @@ let aiBusy = false;
 let aiResult = null;   // { analysis: [], days: [{ date, items: [{ subject, task, minutes, on, full }] }] }
 let aiError = '';
 let aiErrorCode = '';   // 顯示在錯誤訊息下面，方便查問題
-let aiModel = null;
+let aiModel = null;   // { 模型名稱: 模型 }
+let aiRetryNote = '';  // 重試時顯示在讀取畫面上
 let aiStep = 0;        // 0 讀書時間、1 各科狀況、2 確認計畫
 
 function aiUsedToday() {
@@ -2525,8 +2527,8 @@ function buildAiPrompt() {
     return lines.join('\n');
 }
 
-async function getAiModel() {
-    if (aiModel) return aiModel;
+async function getAiModel(name = AI_MODEL) {
+    if (aiModel?.[name]) return aiModel[name];
     const aiM = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-ai.js`);
     const { Schema } = aiM;
     const schema = Schema.object({
@@ -2547,11 +2549,12 @@ async function getAiModel() {
         }
     });
     const ai = aiM.getAI(fb.app, { backend: new aiM.GoogleAIBackend(), useLimitedUseAppCheckTokens: true });
-    aiModel = aiM.getGenerativeModel(ai, {
-        model: AI_MODEL,
+    aiModel = aiModel || {};
+    aiModel[name] = aiM.getGenerativeModel(ai, {
+        model: name,
         generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0.6 }
     });
-    return aiModel;
+    return aiModel[name];
 }
 
 // 檢查 AI 回傳的內容，只留下合理的部分
@@ -2585,13 +2588,32 @@ async function generatePlan() {
     if (aiUsedToday() >= AI_DAILY_LIMIT) { toast(`今天已經產生 ${AI_DAILY_LIMIT} 次了，明天再來`); return; }
     aiBusy = true; aiError = ''; aiStep = 2; renderAI();
     try {
-        const model = await getAiModel();
-        const res = await model.generateContent(buildAiPrompt());
+        // Google 那邊太忙（500／503）或這個模型額度滿了（429）時，自動等一下重試，
+        // 再不行就換成備用的輕量模型；失敗的次數不會算進每天 5 次
+        const prompt = buildAiPrompt();
+        const tries = [[AI_MODEL, 0], [AI_MODEL, 2500], [AI_FALLBACK_MODEL, 0], [AI_FALLBACK_MODEL, 3000]];
+        let res = null, lastErr = null;
+        for (const [name, wait] of tries) {
+            if (wait) await new Promise(r => setTimeout(r, wait));
+            try {
+                res = await (await getAiModel(name)).generateContent(prompt);
+                break;
+            } catch (err) {
+                lastErr = err;
+                const st = Number(err?.customErrorData?.status) || Number((String(err?.message).match(/\[(\d{3})/) || [])[1]) || 0;
+                if (!(st >= 500 || st === 429)) throw err;   // 其他錯誤（App Check、設定）重試也沒用
+                aiRetryNote = name === AI_MODEL ? 'AI 有點忙，正在重試…' : '主要的 AI 很忙，改用備用的 AI…';
+                renderAI();
+            }
+        }
+        aiRetryNote = '';
+        if (!res) throw lastErr;
         const text = res.response.text();
         aiResult = cleanAiResult(JSON.parse(text));
         if (!aiResult.days.some(d => d.items.length)) throw new Error('empty');
         aiCountUp();
     } catch (e) {
+        aiRetryNote = '';
         console.error('AI 產生失敗：', e);
         const msg = String(e?.message || e);
         // firebase-ai 的 HTTP 錯誤也叫 fetch-error，要看狀態碼才知道真正原因
@@ -2604,7 +2626,7 @@ async function generatePlan() {
             : (st === 429 || /quota|RESOURCE_EXHAUSTED/i.test(msg)) ? '目前 AI 的免費額度用完了，晚點再試。'
             : st === 404 ? 'AI 模型找不到（可能模型名稱有變），請把下面的錯誤代碼傳給開發者。'
             : (st === 403 || /not enabled|PERMISSION_DENIED|api-not-enabled/i.test(msg)) ? 'AI 服務沒有權限（可能是 Firebase AI Logic 或 API 金鑰設定），請把下面的錯誤代碼傳給開發者。'
-            : st >= 500 ? 'AI 服務暫時忙碌，過幾分鐘再試一次。'
+            : st >= 500 ? 'Google 的 AI 現在使用的人太多，已經自動重試和換備用 AI 了還是忙碌。過幾分鐘再按一次就好，這次不會扣次數。'
             : st ? '產生失敗，請把下面的錯誤代碼傳給開發者。'
             : /network|Failed to fetch|Load failed|NetworkError|timeout|unavailable/i.test(msg) ? '連不上 AI 服務。如果你在學校或公共 Wi‑Fi，可能是網路擋住了，換成手機行動網路再試試。'
             : '產生失敗，請檢查網路後再試一次。';
@@ -2676,7 +2698,7 @@ function renderAI() {
         </div>`;
     } else {
         let result = '';
-        if (aiBusy) result = `<p class="ai-loading"><span class="ai-spin"></span>AI 正在看你的紀錄、排計畫…</p>`;
+        if (aiBusy) result = `<p class="ai-loading"><span class="ai-spin"></span>${aiRetryNote ? esc(aiRetryNote) : 'AI 正在看你的紀錄、排計畫…'}</p>`;
         else if (aiError) result = `<p class="ai-error">${esc(aiError)}</p><p class="ai-code">錯誤代碼：${esc(aiErrorCode.trim())}</p>
             <div class="sticky-cta row2"><button class="btn" data-ai="prev">上一步</button><button class="btn btn-accent" data-ai="gen" style="flex:1">${ICON_SPARK}再試一次</button></div>`;
         else if (aiResult) {
@@ -3005,7 +3027,7 @@ function roomHistoryHtml(ms, now) {
         <div class="rh-sum"><b class="num">${hm(sum)}</b><span>${r.label} · ${period}</span></div>
         ${chart}
         <ol class="rh-list">${list}</ol>
-        <p class="rh-note">更新為新版後才會顯示先前紀錄;如果資料有誤請關閉網頁即會自動更新</p>
+        <p class="rh-note">更新為新版後才會顯示先前紀錄；如果資料有誤，請關閉網頁再打開就會自動更新</p>
     </section>`;
 }
 // 切換期間只重畫讀書紀錄這一塊（不會整頁跳動）

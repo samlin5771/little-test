@@ -1,6 +1,6 @@
 // 快取版本號：以後更新 index.html、style.css、app.js 任何一個時，把這個數字改一下（例如 v11, v12...）
 // 才能讓使用者的手機抓到新版本並清掉舊快取
-const CACHE_NAME = 'study-countdown-v37';
+const CACHE_NAME = 'study-countdown-v38';
 
 // 開啟時要預先快取的本機檔案
 const PRECACHE_URLS = [
