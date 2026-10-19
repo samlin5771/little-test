@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v28';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v29';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
 const RECAPTCHA_SITE_KEY = '6LeR9vQtAAAAAKsbIXmqZCd4sHONdH-mvcTx_qtJ';
@@ -208,11 +208,14 @@ $('accentGrid').addEventListener('click', (e) => {
     savePrefs();
 });
 // 個人設定：點「主題色」展開／收起顏色選項
-$('accentRow').addEventListener('click', () => {
-    const g = $('accentGrid'), open = g.hidden;
-    g.hidden = !open;
-    $('accentRow').setAttribute('aria-expanded', open);
-});
+// 展開／收起（有動畫）；收起時 inert，鍵盤和報讀軟體不會跑進去
+function setFold(row, fold, open) {
+    $(fold).classList.toggle('open', open);
+    $(fold).inert = !open;
+    $(row).setAttribute('aria-expanded', open);
+}
+function closeFolds() { setFold('accentRow', 'accentFold', false); setFold('bgRow', 'bgFold', false); }
+$('accentRow').addEventListener('click', () => setFold('accentRow', 'accentFold', !$('accentFold').classList.contains('open')));
 
 $('themeBtn').addEventListener('click', () => {
     const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -411,11 +414,7 @@ $('bgGrid').addEventListener('click', (e) => {
     if (!b) return;
     applyBg(b.dataset.bg); lsSet(LS.bg, b.dataset.bg); savePrefs();
 });
-$('bgRow').addEventListener('click', () => {
-    const g = $('bgGrid'), open = g.hidden;
-    g.hidden = !open;
-    $('bgRow').setAttribute('aria-expanded', open);
-});
+$('bgRow').addEventListener('click', () => setFold('bgRow', 'bgFold', !$('bgFold').classList.contains('open')));
 // 主題色和背景跟著帳號同步（深淺色每台裝置各自決定）
 let prefsTimer = 0;
 function savePrefs() {
@@ -495,6 +494,8 @@ function closeModal(id) {
     if (document.activeElement && $(id).contains(document.activeElement)) document.activeElement.blur();
     syncScrollLock();
     if (id === 'rouletteModal') stopSpin();
+    // 個人設定關掉後，主題色、背景的展開也收起來（等視窗淡出後再收，不會看到跳動）
+    if (id === 'accountModal') setTimeout(() => { if (!$('accountModal').classList.contains('open')) closeFolds(); }, 220);
 }
 document.querySelectorAll('.modal').forEach(m => {
     // data-locked 的視窗（加到主畫面教學）只能按裡面的按鈕關閉
@@ -2652,7 +2653,14 @@ function liveStatus(p, now = Date.now()) {
     return { phase: 'idle', min: today };
 }
 const avColor = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return `var(--s${h % 5})`; };
-const avHtml = (p, uidv) => `<span class="av" style="background:${avColor(uidv)}">${esc((p?.name || '?').slice(0, 1))}</span>`;
+// 頭像上的第一個字：用「字素」切，表情符號（🍚、👍🏻、👨‍👩‍👧）才不會被切成一半變成方框
+const graphemer = (() => { try { return new Intl.Segmenter('zh-Hant', { granularity: 'grapheme' }); } catch (e) { return null; } })();
+function firstGlyph(str) {
+    const s = String(str || '').trim() || '?';
+    if (graphemer) { const it = graphemer.segment(s)[Symbol.iterator]().next(); if (it.value) return it.value.segment; }
+    return Array.from(s)[0];
+}
+const avHtml = (p, uidv) => `<span class="av" style="background:${avColor(uidv)}">${esc(firstGlyph(p?.name || '?'))}</span>`;
 const myName = () => (roomPref.name || currentUser?.displayName || '同學').slice(0, 20);
 // 計時頁顯示：所有房間裡正在讀的人數（沒用過房間時回傳 null）
 function roomLiveCount() {
@@ -2814,7 +2822,7 @@ function seatSub(s) {
 function memberClock(s) {
     if (s.phase === 'focus') return fmtClock(s.left != null ? Math.max(0, s.left) : s.el);
     if (s.phase === 'break') return '休息 ' + fmtClock(s.el);
-    return '今天 ' + fmtHM(s.min);
+    return fmtHM(s.min);
 }
 function seatFrac(s) {
     if (s.phase !== 'focus') return 0;
@@ -2878,12 +2886,11 @@ function renderRoom(errMsg) {
                 <span class="grow"></span>
                 <button class="code-stub" data-room="share" aria-label="分享邀請碼 ${r.id}"><span class="num">${r.id}</span><span class="cs-r"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>邀請</span></button>
             </div>
-            ${chatBtn}
             <div class="seats">${seats.map(m => {
                 const fr = seatFrac(m.s);
                 return `<div class="seat ${m.s.phase}${m.s.phase === 'idle' && m.s.min > 0 ? ' rested' : ''}" data-seat="${m.u}">
                     <div class="seat-av"><svg viewBox="0 0 68 68" aria-hidden="true"><circle class="st-track" cx="34" cy="34" r="31"/><circle class="st-bar" cx="34" cy="34" r="31" stroke-dasharray="${SEAT_C.toFixed(1)}" stroke-dashoffset="${(SEAT_C * (1 - fr)).toFixed(1)}"/></svg>
-                        <span class="seat-face" style="background:${avColor(m.u)}">${esc(memberName(m).slice(0, 1))}</span></div>
+                        <span class="seat-face" style="background:${avColor(m.u)}">${esc(firstGlyph(memberName(m)))}</span></div>
                     <b class="sn">${esc(memberName(m))}${m.u === meUid ? '<small>（你）</small>' : ''}</b>
                     ${seatSub(m.s)}
                     <span class="sc num" data-clock="${m.u}">${memberClock(m.s)}</span>
@@ -2899,11 +2906,12 @@ function renderRoom(errMsg) {
                 </div>`).join('')}
             </section>
             <p class="hint" style="margin-top:16px">房間裡的人看得到你的暱稱、正在讀的科目和今天的時數</p>
+            ${chatBtn}
             <div class="sticky-cta"><button class="btn btn-accent btn-wide" data-room="focus"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>${timer.phase === 'focus' ? '回到計時' : '開始讀書'}</button></div>
         </div>`;
         return;
     }
-    setTopExtra('tab-room', `<button class="me-chip" data-top="me" aria-label="我的暱稱與隱身設定"><span class="av" style="background:${avColor(meUid)}">${esc(myName().slice(0, 1))}</span><span class="zh">${esc(myName())}</span></button>`);
+    setTopExtra('tab-room', `<button class="me-chip" data-top="me" aria-label="我的暱稱與隱身設定"><span class="av" style="background:${avColor(meUid)}">${esc(firstGlyph(myName()))}</span><span class="zh">${esc(myName())}</span></button>`);
     const tickets = `<div class="sec-head" style="margin:6px 0 14px"><h3>我的房間</h3><span>${myRooms.length ? myRooms.length + ' 間' : ''}</span></div>
         ${myRooms.length ? myRooms.map(r => {
             const ms = (r.members || []);
@@ -2947,12 +2955,22 @@ const msgTime = (v) => !v ? 0 : typeof v === 'number' ? v : v.toMillis ? v.toMil
 function chatSync() {
     if (!fb || !currentUser) return;
     const ids = new Set(myRooms.map(r => r.id));
-    Object.keys(chats).forEach(c => { if (!ids.has(c)) { chats[c].unsub && chats[c].unsub(); delete chats[c]; } });
+    Object.keys(chats).forEach(c => { if (!ids.has(c)) { chats[c].unsub && chats[c].unsub(); chats[c].readUnsub && chats[c].readUnsub(); delete chats[c]; } });
     myRooms.forEach(r => { if (!chats[r.id]) chatListen(r.id); });
 }
 function chatListen(code) {
-    const c = chats[code] = { msgs: [], first: true, unsub: null };
+    const c = chats[code] = { msgs: [], first: true, unsub: null, readUnsub: null };
     const { fs, db } = fb;
+    // 已讀位置存在雲端（rooms/房號/reads/我的uid），重新登入、換裝置或 Safari 和主畫面 App 之間都會同步，
+    // 讀過的訊息不會又跳紅點
+    if (currentUser) c.readUnsub = fs.onSnapshot(fs.doc(db, 'rooms', code, 'reads', currentUser.uid), (snap) => {
+        const at = snap.exists() ? Number(snap.data().at) || 0 : 0;
+        if (at > (chatSeen[code] || 0)) {
+            chatSeen[code] = at; lsSet(LS.chatSeen, chatSeen);
+            updateChatBadges();
+            if (document.body.dataset.tab === 'tab-room') renderRoom();
+        }
+    }, () => {});
     const q = fs.query(fs.collection(db, 'rooms', code, 'messages'), fs.orderBy('at', 'desc'), fs.limit(CHAT_LIMIT));
     c.unsub = fs.onSnapshot(q, (snap) => {
         const prevIds = new Set(c.msgs.map(m => m.id));
@@ -2966,7 +2984,7 @@ function chatListen(code) {
     });
 }
 function chatStopAll() {
-    Object.keys(chats).forEach(c => { chats[c].unsub && chats[c].unsub(); delete chats[c]; });
+    Object.keys(chats).forEach(c => { chats[c].unsub && chats[c].unsub(); chats[c].readUnsub && chats[c].readUnsub(); delete chats[c]; });
 }
 function unreadOf(code) {
     const seen = chatSeen[code] || 0, me = currentUser?.uid;
@@ -3043,7 +3061,8 @@ function closeChat() {
     $('chatInput').blur();
     const el = $('chatScreen');
     el.classList.remove('open', 'kb-open');
-    el.style.paddingTop = ''; el.style.paddingBottom = '';
+    el.style.top = ''; el.style.height = ''; el.style.bottom = '';
+    fitTimers.forEach(clearTimeout);
     document.body.classList.remove('chat-open');
     window.scrollTo(0, chatSavedScroll);
     document.title = BASE_TITLE;
@@ -3056,31 +3075,36 @@ function renderChatHead() {
     const html = `${(r.members || []).length} 位成員${n ? ` · <span class="live-dot"></span>${n} 人在讀` : ''}`;
     if ($('chatSub').dataset.h !== html) { $('chatSub').dataset.h = html; $('chatSub').innerHTML = html; }
 }
-// iPhone 鍵盤跳出來時，聊天室跟著可見範圍縮小，輸入框不會被蓋住
-// 鍵盤打開時：聊天室仍然蓋滿整個畫面，只用上下留白把標題和輸入框放進「看得到的範圍」
-// 每一格動畫最多算一次，數值沒變就不動畫面（避免卡頓）
-let fitRaf = 0, lastFit = '', chatSavedScroll = 0;
+// iPhone 鍵盤：聊天室直接對齊「看得到的範圍」（visualViewport 的位置和高度），輸入框貼在鍵盤正上方
+// 只有輸入框有焦點時才當作鍵盤打開；一失去焦點就馬上還原，不等系統通知（iOS 有時候收起鍵盤後不會再通知，
+// 輸入框就會卡在半空中）。鍵盤動畫期間多量幾次，確保最後的位置是對的。
+let fitRaf = 0, lastFit = '', chatSavedScroll = 0, fitTimers = [];
+const chatTyping = () => document.activeElement === $('chatInput');
 function fitChat() {
     cancelAnimationFrame(fitRaf);
     fitRaf = requestAnimationFrame(() => {
         const vv = window.visualViewport, el = $('chatScreen');
-        if (!vv || !el.classList.contains('open') || matchMedia('(min-width: 900px)').matches) return;
-        const H = window.innerHeight;
-        const top = Math.max(0, Math.round(vv.offsetTop));
-        const bottom = Math.max(0, Math.round(H - vv.height - vv.offsetTop));   // 鍵盤（含上方工具列）的高度
-        const kb = bottom > 80 || H - vv.height > 120;
-        const key = `${top},${bottom},${kb}`;
+        if (!el.classList.contains('open') || matchMedia('(min-width: 900px)').matches) return;
+        const kb = !!vv && chatTyping() && window.innerHeight - vv.height > 80;
+        const top = kb ? Math.max(0, Math.round(vv.offsetTop)) : 0;
+        const h = kb ? Math.round(vv.height) : 0;
+        const key = `${kb},${top},${h}`;
         if (key === lastFit) return;
         lastFit = key;
         const box = $('chatList');
         const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
-        el.style.paddingTop = top ? top + 'px' : '';
-        el.style.paddingBottom = bottom ? bottom + 'px' : '';
+        el.style.top = kb ? top + 'px' : '';
+        el.style.height = kb ? h + 'px' : '';
+        el.style.bottom = kb ? 'auto' : '';
         el.classList.toggle('kb-open', kb);
         // 鍵盤收起後，iPhone 有時會讓整頁停在往上捲的位置，把它拉回來
         if (!kb && (window.scrollY || document.documentElement.scrollTop)) window.scrollTo(0, 0);
         if (atEnd) box.scrollTop = box.scrollHeight;
     });
+}
+function fitChatSoon() {   // 鍵盤動畫大約 0.3～0.5 秒，這段時間內多量幾次
+    fitTimers.forEach(clearTimeout);
+    fitTimers = [0, 80, 180, 320, 520, 800].map(t => setTimeout(fitChat, t));
 }
 window.visualViewport?.addEventListener('resize', fitChat);
 window.visualViewport?.addEventListener('scroll', fitChat);
@@ -3167,7 +3191,7 @@ function renderChatList(toEnd) {
         items.push([m.id, mine
             ? `<div class="msg mine ${grouped ? 'grouped' : ''}">${meta}${msgBody(m)}</div>`
             : `<div class="msg them ${grouped ? 'grouped' : ''}">
-                ${grouped ? '<span class="chat-av-sp"></span>' : `<span class="chat-av" style="background:${avColor(m.uid)}">${esc((m.name || '?').slice(0, 1))}</span>`}
+                ${grouped ? '<span class="chat-av-sp"></span>' : `<span class="chat-av" style="background:${avColor(m.uid)}">${esc(firstGlyph(m.name || '?'))}</span>`}
                 <div class="msg-col">${grouped ? '' : `<p class="chat-who">${esc(m.name || '同學')}</p>`}<div class="msg-line">${msgBody(m)}${meta}</div></div>
             </div>`]);
         prev = m;
@@ -3274,7 +3298,8 @@ $('chatInput').addEventListener('keydown', (e) => {
     // 電腦：Enter 傳送、Shift+Enter 換行；手機按鍵盤上的換行
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && matchMedia('(pointer: fine)').matches) { e.preventDefault(); $('chatForm').requestSubmit(); }
 });
-$('chatInput').addEventListener('blur', () => setTimeout(fitChat, 60));
+$('chatInput').addEventListener('focus', fitChatSoon);
+$('chatInput').addEventListener('blur', () => { lastFit = ''; fitChat(); fitChatSoon(); });
 $('chatFile').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     e.target.value = '';
@@ -3531,7 +3556,7 @@ function renderAccount(statusText) {
     $('loginBtn').classList.toggle('btn-accent', !u);
     $('loginBtn').classList.toggle('btn-logout', !!u);
 }
-$('accountBtn').addEventListener('click', () => { $('installState').textContent = isStandalone() ? '已加入 ✓' : '教學'; $('accentGrid').hidden = true; $('accentRow').setAttribute('aria-expanded', false); openModal('accountModal'); });
+$('accountBtn').addEventListener('click', () => { $('installState').textContent = isStandalone() ? '已加入 ✓' : '教學'; closeFolds(); openModal('accountModal'); });
 $('guideRow').addEventListener('click', () => { closeModal('accountModal'); openGuide(); });
 $('installRow').addEventListener('click', () => { closeModal('accountModal'); openInstall(false); });
 
@@ -3544,6 +3569,22 @@ document.addEventListener('wheel', (e) => { if (e.ctrlKey || e.metaKey) e.preven
 document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && ['+', '-', '=', '0'].includes(e.key)) e.preventDefault();
 });
+
+// iPhone 加到主畫面的 App：收起鍵盤或從背景回來後，固定在底部的選單列偶爾會「浮在半空中」
+// （系統還在用鍵盤打開時的畫面高度）。這些時機輕推一下捲動位置，讓系統重新計算。
+function nudgeViewport() {
+    if (isTyping(document.activeElement)) return;
+    const y = window.scrollY;
+    window.scrollTo(0, y + 1); window.scrollTo(0, y);
+    const tb = document.querySelector('.tabbar');
+    if (tb) { tb.style.transform = 'translateZ(0)'; requestAnimationFrame(() => { tb.style.transform = ''; }); }
+}
+const nudgeSoon = () => [60, 350, 700].forEach(t => setTimeout(nudgeViewport, t));
+document.addEventListener('focusout', (e) => { if (isTyping(e.target)) nudgeSoon(); });
+window.addEventListener('pageshow', nudgeSoon);
+window.addEventListener('orientationchange', nudgeSoon);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') nudgeSoon(); });
+window.visualViewport?.addEventListener('resize', () => { if (!isTyping(document.activeElement)) nudgeSoon(); });
 
 // 往下捲動時頂部列才出現底色
 const topbar = document.querySelector('.topbar');

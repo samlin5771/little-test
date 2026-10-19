@@ -1024,7 +1024,7 @@ body.chat-open { overflow: hidden; }
 }
 .chat-head {
     display: flex; align-items: center; gap: 6px; flex-shrink: 0;
-    padding: calc(10px + env(safe-area-inset-top)) 14px 10px; border-bottom: 1px solid var(--line); background: var(--bg);
+    padding: calc(16px + env(safe-area-inset-top)) 14px 10px; border-bottom: 1px solid var(--line); background: var(--bg);
 }
 .chat-head .icon-btn.ghost { margin-left: -6px; }
 .chat-head-tx { flex: 1; min-width: 0; }
@@ -1109,7 +1109,16 @@ button.acct-row:hover { background: var(--surface-2); }
 .acct-swatch { width: 26px; height: 26px; border-radius: 13px; background: var(--accent); box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--line); flex-shrink: 0; }
 .acct-chev { width: 18px; height: 18px; color: var(--faint); flex-shrink: 0; }
 .acct-group .accent-grid { padding: 4px 14px 14px; }
-.accent-grid + .acct-row, .bg-grid + .acct-row, .acct-row + .bg-grid + .acct-row { border-top: 1px solid var(--line); }
+.acct-fold + .acct-row { border-top: 1px solid var(--line); }
+/* 主題色、背景：展開／收起動畫（高度用 grid 0fr → 1fr，內容淡入） */
+.acct-fold { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.34s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.acct-fold.open { grid-template-rows: 1fr; }
+.acct-fold-in { min-height: 0; overflow: hidden; }
+.acct-fold-in > * { opacity: 0; transform: translateY(-8px); transition: opacity 0.2s, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.acct-fold.open .acct-fold-in > * { opacity: 1; transform: none; transition-delay: 0.06s; }
+.acct-fold-chev { width: 18px; height: 18px; color: var(--faint); flex-shrink: 0; transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.acct-row[aria-expanded="true"] .acct-fold-chev { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .acct-fold, .acct-fold-in > *, .acct-fold-chev { transition: none; } }
 /* 背景選擇：小縮圖 */
 .bg-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 8px; padding: 4px 14px 14px; }
 .bg-opt { border: none; background: none; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
