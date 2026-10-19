@@ -876,8 +876,20 @@ body.sub #themeBtn, body.sub #accountBtn { display: none; }
 .tk-main b { font-size: 16.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tk-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tk-stub { width: 86px; flex-shrink: 0; position: relative; border: 1px solid var(--tk-bd); border-left: 2px dashed var(--tk-bd); border-radius: 0 18px 18px 0; background: var(--tk-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
-.tk-stub::before, .tk-stub::after { content: ''; position: absolute; left: -9px; width: 16px; height: 16px; border-radius: 8px; background: var(--bg); }
-.tk-stub::before { top: -9px; } .tk-stub::after { bottom: -9px; }
+/* 票根的半圓缺口：用遮罩真的挖空（看得到後面的背景），不再疊一個底色圓點，
+   換背景或主題時不會出現多餘的白點 */
+.tk-main {
+    -webkit-mask: radial-gradient(circle at 100% 0, transparent 9px, #000 9.5px) top / 100% 51% no-repeat,
+                  radial-gradient(circle at 100% 100%, transparent 9px, #000 9.5px) bottom / 100% 51% no-repeat;
+            mask: radial-gradient(circle at 100% 0, transparent 9px, #000 9.5px) top / 100% 51% no-repeat,
+                  radial-gradient(circle at 100% 100%, transparent 9px, #000 9.5px) bottom / 100% 51% no-repeat;
+}
+.tk-stub {
+    -webkit-mask: radial-gradient(circle at 0 0, transparent 9px, #000 9.5px) top / 100% 51% no-repeat,
+                  radial-gradient(circle at 0 100%, transparent 9px, #000 9.5px) bottom / 100% 51% no-repeat;
+            mask: radial-gradient(circle at 0 0, transparent 9px, #000 9.5px) top / 100% 51% no-repeat,
+                  radial-gradient(circle at 0 100%, transparent 9px, #000 9.5px) bottom / 100% 51% no-repeat;
+}
 .tk-stub small { font-size: 10.5px; letter-spacing: 0.15em; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
 .tk-stub b { font-size: 13px; letter-spacing: 0.08em; }
 .ticket:active { transform: scale(0.99); }
