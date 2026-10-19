@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v26';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v28';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
 const RECAPTCHA_SITE_KEY = '6LeR9vQtAAAAAKsbIXmqZCd4sHONdH-mvcTx_qtJ';
@@ -252,6 +252,8 @@ const bgFx = (() => {
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     let kind = '', cv = null, ctx = null, w = 0, h = 0, parts = [], runs = [], streaks = [], shoot = null;
     let raf = 0, last = 0, t = 0, rgb = '233,177,84', dark = true;
+    let dropLayer = null;   // 雨夜：不會動的小水珠先畫在另一張畫布，之後每格只要貼上去
+    let scrollingUntil = 0; // 捲動中先暫停重畫，讓捲動更順
     const R = Math.random;
     const add = (cls) => { const d = document.createElement('div'); d.className = cls; layer.appendChild(d); return d; };
     function readColors() {
@@ -267,7 +269,7 @@ const bgFx = (() => {
     }
     function seed() {
         const n = Math.min(1.6, (w * h) / (390 * 844));   // 螢幕越大，數量越多（有上限）
-        shoot = null; runs = []; streaks = [];
+        shoot = null; runs = []; streaks = []; dropLayer = null;
         if (kind === 'stars') parts = Array.from({ length: Math.round(110 * n) }, () => ({ x: R() * w, y: R() * h * .88, r: R() < .1 ? 1.3 + R() * .6 : .5 + R() * .7, p: R() * 6.28, s: .6 + R() * 1.6 }));
         if (kind === 'petal') parts = Array.from({ length: Math.round(20 * n) }, () => ({ x: R() * w, y: R() * h, s: 4 + R() * 4, v: .35 + R() * .5, sw: R() * 6.28, rot: R() * 6.28, vr: (R() - .5) * .03 }));
         if (kind === 'rain') {
@@ -277,7 +279,7 @@ const bgFx = (() => {
         }
     }
     function drop(x, y, r) {
-        const c = ctx;
+        const c = ctx;   // 注意：預先畫水珠時 ctx 會暫時換成另一張畫布
         c.fillStyle = dark ? 'rgba(10,14,22,.35)' : 'rgba(120,135,150,.18)';
         c.beginPath(); c.ellipse(x, y + r * .15, r, r * 1.12, 0, 0, 6.283); c.fill();
         c.strokeStyle = dark ? 'rgba(220,230,245,.28)' : 'rgba(255,255,255,.75)'; c.lineWidth = Math.max(.6, r * .28);
@@ -322,7 +324,13 @@ const bgFx = (() => {
                 c.strokeStyle = dark ? `rgba(190,205,225,${d.a})` : `rgba(80,100,125,${d.a})`;
                 c.beginPath(); c.moveTo(d.x, d.y); c.lineTo(d.x + d.l * .12, d.y - d.l); c.stroke();
             }
-            for (const d of parts) drop(d.x, d.y, d.r);   // 玻璃上的小水珠
+            if (!dropLayer) {   // 玻璃上的小水珠（只畫一次）
+                dropLayer = document.createElement('canvas'); dropLayer.width = cv.width; dropLayer.height = cv.height;
+                const real = ctx; ctx = dropLayer.getContext('2d'); ctx.setTransform(real.getTransform());
+                for (const d of parts) drop(d.x, d.y, d.r);
+                ctx = real;
+            }
+            c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(dropLayer, 0, 0); c.restore();
             for (const d of runs) {   // 慢慢滑下來的水珠，留下一條水痕
                 if (d.wait > 0) d.wait -= dt; else { d.v = Math.min(2.2, d.v + .03 * f); d.y += d.v * f; d.x += Math.sin(d.y * .05) * .15; }
                 if (dt) { d.trail.push([d.x, d.y]); if (d.trail.length > 40) d.trail.shift(); }
@@ -340,7 +348,8 @@ const bgFx = (() => {
         raf = 0;
         if (!cv || still()) return;
         const dt = Math.min(60, now - last);
-        if (dt >= 32) { last = now; draw(dt); }   // 約 30 fps 就夠順，比較省電
+        if (now < scrollingUntil) last = now;              // 捲動中：先不畫，把時間留給捲動
+        else if (dt >= 32) { last = now; draw(dt); }       // 約 30 fps 就夠順，比較省電
         raf = requestAnimationFrame(loop);
     }
     function update() {   // 依狀態決定要不要動
@@ -365,7 +374,7 @@ const bgFx = (() => {
             // 窗外模糊的燈：主題色、暖黃、冷藍
             [[18, 72, 52, 'rgba(var(--accent-rgb),.6)'], [72, 80, 70, 'rgba(255,170,90,.55)'], [84, 56, 40, 'rgba(110,160,255,.45)'],
              [38, 90, 44, 'rgba(255,214,140,.45)'], [8, 50, 30, 'rgba(110,160,255,.35)'], [56, 64, 28, 'rgba(var(--accent-rgb),.4)']]
-                .forEach(([x, y, r, c], i) => { const d = add('b-bokeh'); d.style.cssText = `left:${x}%;top:${y}%;width:${r * 2}px;height:${r * 2}px;margin:-${r}px;background:${c};animation-delay:-${i * 1.7}s`; });
+                .forEach(([x, y, r, c], i) => { r = Math.round(r * 1.5); const d = add('b-bokeh'); d.style.cssText = `left:${x}%;top:${y}%;width:${r * 2}px;height:${r * 2}px;margin:-${r}px;background:radial-gradient(closest-side, ${c}, ${c.replace(/[\d.]+\)$/, '0.18)')} 60%, transparent);animation-delay:-${i * 1.7}s`; });
             add('b-fog');
         }
         if (k === 'stars' || k === 'rain' || k === 'petal') {
@@ -380,7 +389,16 @@ const bgFx = (() => {
     reduce?.addEventListener?.('change', update);
     // body 的 class 變了（進入專注、打開聊天室）就重新判斷
     new MutationObserver(update).observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    return { set, update, get kind() { return kind; }, refresh() { readColors(); if (cv) draw(0); } };
+    // 顆粒質感：一次產生一小塊雜訊圖重複貼（取代整頁的 SVG 濾鏡，比較省）
+    try {
+        const g = document.createElement('canvas'); g.width = g.height = 160;
+        const gx = g.getContext('2d'), img = gx.createImageData(160, 160);
+        for (let i = 0; i < img.data.length; i += 4) { const v = Math.random() * 255 | 0; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+        gx.putImageData(img, 0, 0);
+        document.documentElement.style.setProperty('--grain', `url(${g.toDataURL('image/png')})`);
+    } catch (e) {}
+    window.addEventListener('scroll', () => { scrollingUntil = performance.now() + 180; }, { passive: true });
+    return { set, update, get kind() { return kind; }, refresh() { readColors(); dropLayer = null; if (cv) draw(0); } };
 })();
 function applyBg(k) {
     bgFx.set(k);
@@ -586,7 +604,7 @@ function renderToday() {
     $('todayCount').textContent = items.length ? `${items.length} 項 · 完成 ${done} 項` : '';
     const min = Math.round(dayMinutes(t)), goal = tpref.goal;
     const left = goal - min;
-    $('todayTime').innerHTML = `${hmHtml(min)}<span class="goal-of">／ 目標 ${goal / 60} 小時</span>`;
+    $('todayTime').innerHTML = `${hmHtml(min)}<button class="goal-of goal-btn" id="goalBtn" aria-label="每日目標 ${goal / 60} 小時，點一下修改">／ 目標 ${goal / 60} 小時<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>`;
     $('todayTag').className = 'tag ' + (left <= 0 ? 'ok' : 'warn');
     $('todayTag').textContent = left <= 0 ? '今天達標了' : `還差 ${fmtHM(left)}`;
     $('todayBar').style.width = Math.min(100, min / goal * 100) + '%';
@@ -602,7 +620,22 @@ $('todayList').addEventListener('change', (e) => {
     const key = e.target.dataset.key;
     if (!key || !state.weekly[key]) return;
     state.weekly[key].done = e.target.checked;
+    if (e.target.checked) weeklyUnitDone(key);
     save(); renderToday(); renderWeek();
+});
+// 倒數頁：點「目標 3 小時」直接改每日目標
+$('todayTime').addEventListener('click', (e) => {
+    if (!e.target.closest('#goalBtn')) return;
+    $('goalGrid').innerHTML = GOALS.map(g => `<button class="goal-opt ${g === tpref.goal ? 'active' : ''}" data-goal="${g}" aria-pressed="${g === tpref.goal}"><b class="num">${g / 60}</b>小時</button>`).join('');
+    openModal('goalModal');
+});
+$('goalGrid').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-goal]');
+    if (!b) return;
+    tpref.goal = Number(b.dataset.goal); saveTpref();
+    renderStats(); renderTimer(); renderToday();
+    closeModal('goalModal');
+    toast(`每日目標改成 ${tpref.goal / 60} 小時`);
 });
 $('todayList').addEventListener('click', (e) => {
     if (e.target.id === 'goWeekBtn') { weekMonday = getMonday(new Date()); selectedDayIdx = null; renderWeek(); showTab('tab-weekly'); }
@@ -740,6 +773,8 @@ function openWeeklyModal(key, title) {
     $('weeklyText').value = d.text || '';
     $('weeklyDone').checked = !!d.done;
     pickColor(d.color || '');
+    weeklyUnit = d.unit || null;
+    renderUnitSug();
     openModal('weeklyModal');
     setTimeout(() => { if ($('weeklyModal').classList.contains('open')) $('weeklyText').focus(); }, 120);
 }
@@ -749,11 +784,72 @@ $('weeklyText').addEventListener('keydown', (e) => {
 $('saveWeeklyBtn').addEventListener('click', () => {
     const text = $('weeklyText').value.trim();
     const done = $('weeklyDone').checked;
+    const wasDone = !!state.weekly[editingKey]?.done;
     if (!text && !done && !pickedColor) delete state.weekly[editingKey];
-    else state.weekly[editingKey] = { text, done, color: pickedColor };
+    else {
+        state.weekly[editingKey] = { text, done, color: pickedColor };
+        // 從學測範圍選的單元：文字裡還有這個單元名稱才保留連結
+        const u = weeklyUnit && weeklyUnit.split('/').slice(1).join('/');
+        if (u && text.includes(u)) state.weekly[editingKey].unit = weeklyUnit;
+    }
+    if (done && !wasDone) weeklyUnitDone(editingKey);
     save(); renderWeek(); renderToday();
     closeModal('weeklyModal');
 });
+
+/* --- 每週進度 × 學測範圍 ---
+ * 編輯格子時，下面列出這一科的學測單元（重點複習排最前面、熟練的不列），點一下就填進去
+ * 打勾完成時，如果這格是某個單元而且還是「未讀」，自動改成「讀過」 */
+let weeklyUnit = null;
+function unitsForSubject(s) {
+    if (!state.syllabus.picked) return [];
+    const sy = state.syllabus, all = sylAll().filter(x => x.s === s && (sy.status[x.k] || 0) < 2);
+    return [...all.filter(x => sy.flags.includes(x.k)), ...all.filter(x => !sy.flags.includes(x.k))];
+}
+function renderUnitSug() {
+    const s = Number(String(editingKey || '').split('_')[1]);
+    const list = Number.isInteger(s) ? unitsForSubject(s) : [];
+    const el = $('unitSug');
+    el.hidden = !list.length;
+    if (!list.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<span class="field-label">從學測範圍選</span><div class="unit-chips">${list.slice(0, 24).map(x => {
+        const on = weeklyUnit === x.k, fl = state.syllabus.flags.includes(x.k), st = state.syllabus.status[x.k] || 0;
+        return `<button class="unit-chip ${on ? 'on' : ''} ${fl ? 'flag' : ''}" data-unit="${esc(x.k)}" aria-pressed="${on}">${fl ? ICON_BOOK : ''}${esc(x.u)}${st === 1 ? '<small>讀過</small>' : ''}</button>`;
+    }).join('')}</div>`;
+}
+$('unitSug').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-unit]');
+    if (!b) return;
+    const k = b.dataset.unit, u = k.split('/').slice(1).join('/'), ta = $('weeklyText');
+    if (weeklyUnit === k) {   // 再點一次：取消
+        if (ta.value.trim() === u) ta.value = '';
+        weeklyUnit = null;
+    } else {
+        const prev = weeklyUnit && weeklyUnit.split('/').slice(1).join('/');
+        // 原本是空的或只有上一個單元名稱 → 換成這個；否則加在前面
+        ta.value = !ta.value.trim() || ta.value.trim() === prev ? u + ' ' : `${u} ${ta.value.replace(prev ? prev + ' ' : '', '').trim()}`;
+        weeklyUnit = k;
+        ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+    renderUnitSug();
+});
+// 回傳提示文字（給計時頁合併成一則訊息），quiet=false 時自己跳提示
+function weeklyUnitDone(key, quiet) {
+    const d = state.weekly[key];
+    if (!d || !state.syllabus.picked) return '';
+    let k = d.unit;
+    if (!k) {   // 沒有連結的話，用文字比對這一科的單元（取最長、唯一的那個）
+        const s = Number(key.split('_')[1]);
+        const hits = sylAll().filter(x => x.s === s && x.u.length >= 2 && (d.text || '').includes(x.u)).sort((a, b) => b.u.length - a.u.length);
+        if (hits.length && (hits.length === 1 || hits[0].u.length > hits[1].u.length)) k = hits[0].k;
+    }
+    if (!k || !sylAll().some(x => x.k === k) || (state.syllabus.status[k] || 0) > 0) return '';
+    state.syllabus.status[k] = 1;
+    renderSyllabus();
+    const msg = `「${k.split('/').slice(1).join('/')}」標成讀過了`;
+    if (!quiet) toast(`學測範圍：${msg}`, { label: '復原', fn: () => { delete state.syllabus.status[k]; save(); renderSyllabus(); } });
+    return msg;
+}
 $('clearWeeklyBtn').addEventListener('click', () => {
     const key = editingKey, old = state.weekly[key];
     delete state.weekly[key];
@@ -1691,8 +1787,9 @@ $('tab-timer').addEventListener('change', (e) => {
     const key = e.target.dataset.task;
     if (!key || !state.weekly[key]) return;
     state.weekly[key].done = e.target.checked;
+    const unitMsg = e.target.checked ? weeklyUnitDone(key, true) : '';
     save(); renderToday(); renderWeek();
-    if (e.target.checked) toast('已在進度表打勾');
+    if (e.target.checked) toast(unitMsg ? `已在進度表打勾，${unitMsg}` : '已在進度表打勾');
 });
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
@@ -2034,10 +2131,11 @@ function buildPalette(q) {
     const go = [['倒數', 'countdown'], ['進度', 'weekly'], ['計時', 'timer'], ['行事曆', 'calendar'], ['待辦', 'todo']];
     go.forEach(([n, id], i) => { if (match(n, id, '前往')) items.push({ group: '前往', label: n, key: String(i + 1), run: () => showTab('tab-' + id) }); });
     if (match('AI', '讀書計畫', '計畫', 'plan')) items.push({ group: '前往', label: 'AI 讀書計畫', run: () => showTab('tab-ai') });
+    if (match('學測範圍', '範圍', '單元', '重點複習', 'syllabus')) items.push({ group: '前往', label: '學測範圍', run: () => showTab('tab-syllabus') });
     if (match('房間', '讀書房間', '朋友', 'room')) items.push({ group: '前往', label: '讀書房間', run: () => { roomView = null; showTab('tab-room'); } });
     if (match('統計', 'stats')) items.push({ group: '前往', label: '讀書統計', run: () => { statOffset = 0; statSel = null; renderStats(); showTab('tab-stats'); } });
     if (match('深色', '淺色', '主題', 'theme', 'dark', 'light')) items.push({ group: '設定', label: '切換深淺色', key: 'T', run: () => $('themeBtn').click() });
-    if (match('主題色', '顏色', '帳號', '登入', 'account')) items.push({ group: '設定', label: '帳號與主題色', run: () => openModal('accountModal') });
+    if (match('主題色', '顏色', '背景', '外觀', '帳號', '登入', 'account')) items.push({ group: '設定', label: '個人設定（主題色、背景、外觀）', run: () => openModal('accountModal') });
     if (match('快捷鍵', 'shortcut', 'keys')) items.push({ group: '設定', label: '鍵盤快捷鍵', key: '?', run: () => openModal('keysModal') });
     return items;
 }

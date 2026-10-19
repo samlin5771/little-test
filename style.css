@@ -164,7 +164,7 @@ button { cursor: pointer; }
     50% { opacity: 1; }
     100% { transform: translate(8%, 6%) scale(1.16); opacity: 0.85; }
 }
-.bg-grain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.045; }
+.bg-grain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.045; background-image: var(--grain, none); background-size: 160px 160px; }
 [data-theme="light"] .bg-grain { opacity: 0.03; }
 
 /* ⑨ 背景（個人設定裡選）：呼吸光是原本的樣子，其他背景由 JS 放進 .bg-layer */
@@ -179,20 +179,21 @@ html.bg-still .bg-fx *, html.bg-still .bg-fx *::before, html.bg-still .bg-fx *::
 .b-sky { inset: 0; background: linear-gradient(180deg, #E9EEF7 0%, #F6F1EA 60%, var(--bg) 100%); }
 [data-theme="dark"] .b-sky { background: radial-gradient(120% 60% at 50% 0%, #121A33 0%, #080B16 55%, #050608 100%); }
 /* 極光 */
-.b-au { width: 140%; height: 46%; left: -20%; border-radius: 50%; filter: blur(48px); opacity: .55; will-change: transform; }
-.b-au.a1 { top: -14%; background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), .9), transparent); animation: au1 18s ease-in-out infinite alternate; }
-.b-au.a2 { top: 2%; background: linear-gradient(90deg, transparent, #46D7C2, transparent); opacity: .38; animation: au2 23s ease-in-out infinite alternate; }
-.b-au.a3 { top: -4%; background: linear-gradient(90deg, transparent, #8C7CF0, transparent); opacity: .32; animation: au3 27s ease-in-out infinite alternate; }
+/* 不用 filter: blur（手機很吃效能），改用本身就很柔的放射漸層 */
+.b-au { width: 170%; height: 42%; left: -35%; opacity: .6; will-change: transform; }
+.b-au.a1 { top: -22%; background: radial-gradient(closest-side, rgba(var(--accent-rgb), .85), rgba(var(--accent-rgb), .25) 55%, transparent); animation: au1 18s ease-in-out infinite alternate; }
+.b-au.a2 { top: -6%; background: radial-gradient(closest-side, rgba(70, 215, 194, .8), rgba(70, 215, 194, .2) 55%, transparent); opacity: .4; animation: au2 23s ease-in-out infinite alternate; }
+.b-au.a3 { top: -14%; background: radial-gradient(closest-side, rgba(140, 124, 240, .8), rgba(140, 124, 240, .2) 55%, transparent); opacity: .34; animation: au3 27s ease-in-out infinite alternate; }
 [data-theme="light"] .b-au { opacity: .28; }
 [data-theme="light"] .b-au.a2, [data-theme="light"] .b-au.a3 { opacity: .2; }
 @keyframes au1 { to { transform: translate(12%, 10%) rotate(-8deg) scaleY(1.3); } }
 @keyframes au2 { to { transform: translate(-14%, 6%) rotate(7deg) scaleY(.8); } }
 @keyframes au3 { to { transform: translate(8%, 14%) rotate(-4deg) scaleX(1.2); } }
 /* 晨霧：幾團柔和的色塊慢慢飄 */
-.b-mist { width: 75vmax; height: 75vmax; border-radius: 50%; filter: blur(60px); opacity: .5; will-change: transform; }
-.b-mist.m1 { left: -20vmax; top: -15vmax; background: rgba(var(--accent-rgb), .75); animation: mist1 20s ease-in-out infinite alternate; }
-.b-mist.m2 { right: -30vmax; top: 15vh; background: #9FD3F0; animation: mist2 24s ease-in-out infinite alternate; }
-.b-mist.m3 { left: -5vmax; bottom: -30vmax; background: #F3C9DA; animation: mist3 28s ease-in-out infinite alternate; }
+.b-mist { width: 95vmax; height: 95vmax; opacity: .55; will-change: transform; }
+.b-mist.m1 { left: -35vmax; top: -30vmax; background: radial-gradient(closest-side, rgba(var(--accent-rgb), .8), rgba(var(--accent-rgb), .3) 50%, transparent); animation: mist1 20s ease-in-out infinite alternate; }
+.b-mist.m2 { right: -45vmax; top: 0; background: radial-gradient(closest-side, rgba(159, 211, 240, .9), rgba(159, 211, 240, .3) 50%, transparent); animation: mist2 24s ease-in-out infinite alternate; }
+.b-mist.m3 { left: -20vmax; bottom: -45vmax; background: radial-gradient(closest-side, rgba(243, 201, 218, .95), rgba(243, 201, 218, .3) 50%, transparent); animation: mist3 28s ease-in-out infinite alternate; }
 [data-theme="dark"] .b-mist { opacity: .3; }
 [data-theme="dark"] .b-mist.m1 { opacity: .42; }
 @keyframes mist1 { to { transform: translate(30%, 20%) scale(1.15); } }
@@ -208,8 +209,8 @@ html.bg-still .bg-fx *, html.bg-still .bg-fx *::before, html.bg-still .bg-fx *::
 /* 雨夜：隔著玻璃窗，外面是模糊的城市燈光 */
 .b-rain-sky { inset: 0; background: linear-gradient(180deg, #DCE3EA 0%, #E9ECEE 55%, #F2F1EE 100%); }
 [data-theme="dark"] .b-rain-sky { background: linear-gradient(180deg, #0B1220 0%, #0A0E18 50%, #07080C 100%); }
-.b-bokeh { border-radius: 50%; filter: blur(18px); animation: bokeh 9s ease-in-out infinite alternate; }
-[data-theme="light"] .b-bokeh { opacity: .45; filter: blur(22px); }
+.b-bokeh { border-radius: 50%; animation: bokeh 9s ease-in-out infinite alternate; will-change: transform, opacity; }
+[data-theme="light"] .b-bokeh { opacity: .45; }
 @keyframes bokeh { 0% { opacity: .55; transform: scale(1); } 100% { opacity: 1; transform: scale(1.08); } }
 .b-fog { inset: 0; background: linear-gradient(180deg, rgba(255, 255, 255, .05), transparent 30%, transparent 70%, rgba(255, 255, 255, .04)); }
 [data-theme="light"] .b-fog { background: linear-gradient(180deg, rgba(255, 255, 255, .35), transparent 40%); }
@@ -1051,10 +1052,10 @@ body.chat-open { overflow: hidden; }
 /* --- 長按訊息：訊息卡片浮起來（像 IG） --- */
 .msg-pop {
     position: fixed; inset: 0; z-index: 150; display: flex; align-items: center; justify-content: center; padding: 24px;
-    background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
-    opacity: 0; pointer-events: none; transition: opacity 0.18s;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0; pointer-events: none; visibility: hidden; transition: opacity 0.18s, visibility 0s 0.18s;
 }
-.msg-pop.open { opacity: 1; pointer-events: auto; }
+.msg-pop.open { opacity: 1; pointer-events: auto; visibility: visible; transition: opacity 0.18s; backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); }
 .pop-inner { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .msg-pop.mine .pop-inner { align-items: flex-end; }
 .pop-msg { max-width: 100%; display: flex; flex-direction: column; gap: 4px; transform: scale(0.9); transition: transform 0.25s cubic-bezier(0.3, 1.5, 0.5, 1); }
@@ -1342,11 +1343,12 @@ body.guide-open { overflow: hidden; }
 
 .modal {
     position: fixed; inset: 0; z-index: 100;
-    background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.55);
     display: flex; align-items: center; justify-content: center; padding: 20px;
-    opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    opacity: 0; pointer-events: none; visibility: hidden; transition: opacity 0.2s, visibility 0s 0.2s;
 }
-.modal.open { opacity: 1; pointer-events: auto; }
+/* 模糊背景只在打開時才加：關著的視窗如果也有 backdrop-filter，捲動時每一格畫面都要重算，手機會卡 */
+.modal.open { opacity: 1; pointer-events: auto; visibility: visible; transition: opacity 0.2s; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 body.modal-open { overflow: hidden; }
 .modal { overscroll-behavior: contain; }
 .sheet {
@@ -1567,3 +1569,27 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 .g-bgs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 6px; }
 .g-bgs .th { aspect-ratio: 3 / 4; border-radius: 6px; border: 1px solid var(--line); position: relative; overflow: hidden; }
 .g-acct-row .sw i { width: 10px; height: 10px; border-radius: 5px; }
+
+/* --- 倒數頁：點目標直接改 --- */
+.goal-btn { border: none; background: none; padding: 4px 6px; margin-left: 4px; border-radius: 10px; display: inline-flex; align-items: center; gap: 2px; cursor: pointer; }
+.goal-btn svg { width: 14px; height: 14px; opacity: .7; }
+.goal-btn:hover { background: var(--surface-2); }
+.goal-btn:active { transform: scale(0.95); }
+.goal-sheet { max-width: 360px; }
+.goal-sheet h2 { margin-bottom: 4px; }
+.goal-sub { margin: 0 0 16px; font-size: 13px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
+.goal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+.goal-opt { min-height: 62px; border-radius: 16px; border: 1px solid var(--line); background: transparent; display: flex; align-items: baseline; justify-content: center; gap: 3px; font-size: 13px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; padding-top: 16px; }
+.goal-opt b { font-size: 22px; color: var(--text); }
+.goal-opt.active { border: 1.5px solid var(--accent); background: var(--accent-soft); color: var(--accent-text); }
+.goal-opt.active b { color: var(--accent-text); }
+.goal-opt:active { transform: scale(0.95); }
+/* --- 每週進度：從學測範圍選單元 --- */
+.unit-sug { margin: -4px 0 14px; }
+.unit-chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.unit-chips::-webkit-scrollbar { display: none; }
+.unit-chip { flex-shrink: 0; border: 1px solid var(--line); background: transparent; border-radius: 15px; min-height: 32px; padding: 0 12px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; font-family: 'Noto Sans TC', sans-serif; white-space: nowrap; }
+.unit-chip svg { width: 13px; height: 13px; fill: currentColor; color: var(--accent-text); }
+.unit-chip small { font-size: 10.5px; font-weight: 500; color: var(--muted); }
+.unit-chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
+.unit-chip:active { transform: scale(0.95); }

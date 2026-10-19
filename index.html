@@ -68,10 +68,7 @@
     <!-- 會呼吸的背景光＋顆粒質感 -->
     <div class="bg-fx" aria-hidden="true">
         <div class="bg-glow"></div>
-        <svg class="bg-grain" xmlns="http://www.w3.org/2000/svg">
-            <filter id="grainFilter"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/></filter>
-            <rect width="100%" height="100%" filter="url(#grainFilter)"/>
-        </svg>
+        <div class="bg-grain"></div>
         <div class="bg-layer" id="bgLayer"></div>
     </div>
 
@@ -290,6 +287,16 @@
         </div>
     </div>
 
+    <!-- 每日目標（倒數頁點「目標」打開） -->
+    <div class="modal" id="goalModal" role="dialog" aria-modal="true" aria-labelledby="goalTitle">
+        <div class="sheet goal-sheet">
+            <h2 id="goalTitle">每天想讀多久？</h2>
+            <p class="goal-sub">倒數、計時和統計頁會一起用這個目標。</p>
+            <div class="goal-grid" id="goalGrid"></div>
+            <div class="sheet-btns"><button class="btn" data-close style="flex:1">取消</button></div>
+        </div>
+    </div>
+
     <!-- 學測範圍：選科目 -->
     <div class="modal" id="sylPickModal" role="dialog" aria-modal="true" aria-labelledby="sylPickTitle">
         <div class="sheet syl-pick">
@@ -309,6 +316,7 @@
             <h2 id="weeklyTitle">編輯進度</h2>
             <label class="field-label" for="weeklyText">讀書進度</label>
             <textarea class="field" id="weeklyText" placeholder="例如：第三章習題 p.42–48"></textarea>
+            <div class="unit-sug" id="unitSug" hidden></div>
             <span class="field-label">標記顏色</span>
             <div class="colors" id="colorPicker">
                 <button class="color-dot" data-color="" aria-label="無顏色"></button>
@@ -587,7 +595,7 @@
   <div class="g-check"><span></span>社會 第二冊 1-2 課</div>
   <div class="g-btn">現在要讀什麼？</div>
 </div></figure>
-                <ul class="g-points"><li>上方切換<b>模考一、二、三和學測</b>；已經考完的會變淡。</li><li>大數字是剩下的天數，下面是時分秒，還有考試日期和「下一場」還有幾天。</li><li><b>今天</b>區顯示今天讀了多久、離每日目標還差多少，進度條滿了就是達標。</li><li>每週進度表裡「今天」的項目會列在這裡，可以直接打勾。</li><li>不知道讀什麼？按<b>現在要讀什麼？</b>，轉盤幫你隨機選一科。</li></ul>
+                <ul class="g-points"><li>上方切換<b>模考一、二、三和學測</b>；已經考完的會變淡。</li><li>大數字是剩下的天數，下面是時分秒，還有考試日期和「下一場」還有幾天。</li><li><b>今天</b>區顯示今天讀了多久、離每日目標還差多少，進度條滿了就是達標。點<b>「目標 3 小時」</b>可以直接改每日目標。</li><li>有標重點複習的單元時，「今天」下面會提醒你，點一下就跳到學測範圍。</li><li>每週進度表裡「今天」的項目會列在這裡，可以直接打勾。</li><li>不知道讀什麼？按<b>現在要讀什麼？</b>，轉盤幫你隨機選一科。</li></ul>
                 
             </section>
 
@@ -602,7 +610,7 @@
   <div class="g-subj"><b>社會</b><span class="g-slot c-pink">歷史 1-2</span><span class="g-slot empty">＋</span></div>
   <div class="g-ai"><span>✦</span>AI 排計畫：讀書時間 → 各科狀況 → 確認套用</div>
 </div></figure>
-                <ul class="g-points"><li>上方選星期幾，點格子寫要讀的內容，可以標顏色、讀完打勾。</li><li>最上面顯示本週完成率；左右箭頭切換上一週、下一週。電腦會顯示整週表格。</li><li>按<b>✦ AI 排計畫</b>：① 設定每天能讀多久 → ② 各科自評（弱／普通／強）和考試範圍 → ③ 看 AI 的建議，取消不要的項目再套用。</li><li>AI 只會填進<b>空白格子</b>，不會蓋掉你寫好的；套用後也能按「復原」。每天可以產生 5 次。</li></ul>
+                <ul class="g-points"><li>上方選星期幾，點格子寫要讀的內容，可以標顏色、讀完打勾。</li><li>有設定學測範圍的話，編輯格子時下面會列出這一科的單元（重點複習排最前面），<b>點一下就填進去</b>；之後打勾完成，學測範圍裡那個單元會自動變成「讀過」。</li><li>最上面顯示本週完成率；左右箭頭切換上一週、下一週。電腦會顯示整週表格。</li><li>按<b>✦ AI 排計畫</b>：① 設定每天能讀多久 → ② 各科自評（弱／普通／強）和考試範圍 → ③ 看 AI 的建議，取消不要的項目再套用。</li><li>AI 只會填進<b>空白格子</b>，不會蓋掉你寫好的；套用後也能按「復原」。每天可以產生 5 次。</li></ul>
                 <p class="g-tip"><b>小技巧</b>AI 會參考你最近兩週的讀書紀錄，但不會傳送你的名字和進度表文字。</p>
             </section>
 
