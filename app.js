@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v49';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v50';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -285,8 +285,9 @@ async function flushCloud() {
             return m;
         });
         if (currentUser?.uid !== who) return;
-        cloudBase = merged;
-        if (stateJson(state) === sentJson) { cloudDirty = false; setSyncedState(merged); }
+        cloudBase = cloneState(merged);   // 複製一份：畫面上的資料之後再改，不會連「雲端上次的樣子」一起被改到
+        if (journalRestore(merged, true)) { flushAgain = true; cloudDirty = true; }   // 萬一合併時少了剛記錄的，補回去再送一次
+        if (stateJson(state) === sentJson && !flushAgain) { cloudDirty = false; setSyncedState(merged); }
         else { flushAgain = true; setSyncedState(mergeState(sent, state, merged)); }
         writeCloudCache();
         publishProfile();   // 別台裝置的讀書紀錄合併進來了，房間裡的今日時數也更新
@@ -1860,10 +1861,31 @@ function focusElapsed(now = Date.now()) {
     if (timer.phase !== 'focus') return 0;
     return Math.max(0, (timer.pausedAt || now) - timer.startAt - (timer.pausedTotal || 0));
 }
+/* --- 讀書紀錄保險箱：剛記錄的每一筆先另外存在這台裝置，確定雲端有了才拿掉 ---
+ * 就算同步、合併出了任何問題，這些紀錄也會自動補回去，不會「記了又不見」 */
+const SESS_JOURNAL = 'study_sess_journal';
+const journalGet = () => { const j = lsGet(SESS_JOURNAL, []); return Array.isArray(j) ? j.filter(x => x && x.id && x.start && x.minutes > 0) : []; };
+const journalSet = (j) => { try { j.length ? lsSet(SESS_JOURNAL, j.slice(-200)) : localStorage.removeItem(SESS_JOURNAL); } catch (e) {} };
+const journalUid = () => currentUser?.uid || cachedUid || '';
+// 只有登入時需要（沒登入時資料本來就只存在這台裝置）；記下是哪個帳號的，換帳號不會補錯人
+const journalAdd = (rec) => { const u = journalUid(); if (u) journalSet([...journalGet().filter(x => x.id !== rec.id), { ...rec, at: Date.now(), u }]); };
+const journalDrop = (id) => journalSet(journalGet().filter(x => x.id !== id));
+// 把保險箱裡、但 s 裡沒有的紀錄補進去；confirmed＝這是雲端確認過的資料（裡面已經有的就可以從保險箱拿掉）
+function journalRestore(s, confirmed) {
+    const all = journalGet(), u = journalUid();
+    const j = all.filter(x => x.u === u), others = all.filter(x => x.u !== u);
+    if (!j.length) return false;
+    const have = new Set(s.sessions.map(x => x.id));
+    const missing = j.filter(x => !have.has(x.id));
+    if (missing.length) s.sessions.push(...missing.map(({ at, u: _u, ...x }) => x));
+    if (confirmed) journalSet([...others, ...missing.filter(x => Date.now() - x.at < 30 * 86400000)]);   // 雲端已經有的拿掉（太舊的也清掉）
+    return missing.length > 0;
+}
 function recordSession(subject, start, minutes, pomo) {
     if (minutes < 1) return null;
     const rec = { id: uid(), subject, start, minutes: Math.round(minutes), pomo: !!pomo };
     state.sessions.push(rec);
+    journalAdd(rec);
     if (!cloudReady) earlySessions.push(rec);   // 雲端還沒連上前記錄的，連上後補上傳
     save();
     publishProfile();
@@ -1878,6 +1900,7 @@ function removeSession(id, msg) {
     const idx = state.sessions.findIndex(x => x.id === id);
     if (idx < 0) return;
     const [item] = state.sessions.splice(idx, 1);
+    journalDrop(id);   // 自己刪掉的，不要再被補回來
     afterSessionsChange();
     toast(msg || '已刪除紀錄', { label: '復原', fn: () => { state.sessions.splice(idx, 0, item); afterSessionsChange(); } });
 }
@@ -1951,7 +1974,8 @@ function cancelFocus() {
     if (minutes >= 1) {
         const rec = recordSession(prev.subject, prev.startAt, minutes, false);
         renderTimer(); renderStats();
-        toast(`已記錄 ${fmtHM(minutes)}`, { label: '不要記錄', fn: () => { state.sessions = state.sessions.filter(x => x.id !== rec.id); afterSessionsChange(); } });
+        afterSessionsChange();
+        toast(`已結束，記錄 ${fmtHM(minutes)}`, { label: '不要記錄', fn: () => { journalDrop(rec.id); state.sessions = state.sessions.filter(x => x.id !== rec.id); afterSessionsChange(); } });
     } else {
         renderTimer();
     }
@@ -4931,7 +4955,8 @@ function onAuthChanged(user) {
         } else {
             next = cloudDirty ? mergeState(cloudBase, state, cloud) : cloud;   // 別台改了：這台還沒送出的修改保留
         }
-        cloudBase = cloud;
+        cloudBase = cloneState(cloud);   // 複製一份，不能跟畫面上的資料共用（不然新增的紀錄會被當成雲端已經有、又被合併刪掉）
+        if (journalRestore(next, !snap.metadata.fromCache && !cloudDirty)) cloudDirty = true;   // 剛記錄還沒確認上雲端的，一定保留
         if (dupes && snap.exists()) { cloudDirty = true; toast(`已移除 ${dupes} 個和考試重複的行程`); }
         // 跟畫面上的一樣（打開時已經用副本畫好了）就不用整頁重畫，打開比較順
         setSyncedState(next);
