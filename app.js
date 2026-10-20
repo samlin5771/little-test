@@ -3,8 +3,8 @@
  *
  * 目錄（用編輯器搜尋這些標題就能跳過去）
  *   設定區            ← 考試日期、科目、Firebase 設定都在這裡
- *   小工具
- *   資料與儲存
+ *   小工具（含手機功能 device、切到背景／切回來 onAppShow、onAppHide）
+ *   資料與儲存（含雲端同步：兩台裝置的修改一筆一筆合併）
  *   主題、分頁、彈出視窗
  *   1. 倒數（含轉盤）
  *   2. 每週進度
@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v48';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v49';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -58,8 +58,10 @@ const LS = {
     aiPref: 'study_ai_pref', aiCount: 'study_ai_count', room: 'study_room',
     bg: 'study_bg', syllabus: 'study_syllabus',
     notify: 'study_notify',
-    install: 'study_install_seen', tour: 'study_tour_seen', chatSeen: 'study_chat_seen', photoCount: 'study_photo_count'
-};
+    install: 'study_install_seen', tour: 'study_tour_seen', chatSeen: 'study_chat_seen', photoCount: 'study_photo_count',
+    countdowns: 'study_countdowns', home: 'study_home', progView: 'study_prog_view', sylOpen: 'study_syl_open',
+    lastActive: 'study_last_active', cloud: 'study_cloud_cache'
+};   // 這台裝置存的所有設定都在這裡（改名字會讓舊資料讀不到，不要改）
 // 沒有頭像時的預設圖（顏色跟著主題色）
 function defaultAvatar() {
     const c = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#E9B154';
@@ -81,6 +83,19 @@ const examTime = (date) => new Date(`${date}T00:00:00${TZ}`).getTime();
 const daysBetween = (a, b) => Math.round((parseYmd(b) - parseYmd(a)) / 86400000);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const todayStr = () => ymd(new Date());
+
+// 手機功能（震動）：集中在這裡。之後做成 App 時，只要把這裡換成 App 的原生功能（例如 iPhone 也能震動）
+// 其他會用到手機功能的地方：螢幕常亮 requestWake、系統通知 systemNotify、分享 navigator.share
+const device = {
+    vibrate(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
+};
+
+// App 切到背景／切回來：各功能用 onAppShow、onAppHide 登記，照登記的順序執行（集中在這一個監聽）
+const appShowFns = [], appHideFns = [];
+const onAppShow = (fn) => appShowFns.push(fn), onAppHide = (fn) => appHideFns.push(fn);
+document.addEventListener('visibilitychange', () => {
+    (document.visibilityState === 'visible' ? appShowFns : appHideFns).forEach(fn => { try { fn(); } catch (e) { console.error(e); } });
+});
 
 function lsGet(k, fb) { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fb; } catch { return fb; } }
 function lsSet(k, v) { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch {} }
@@ -152,51 +167,144 @@ function normCountdowns(c) {
     return { items, pins, off };
 }
 const isEmpty = (s) => !s.todos.length && !s.events.length && !Object.keys(s.weekly).length && !s.sessions.length && !s.syllabus.picked && !s.countdowns.items.length && !s.countdowns.pins;
-const loadLocal = () => normalize({ todos: lsGet(LS.todos, []), events: lsGet(LS.events, []), weekly: lsGet(LS.weekly, {}), sessions: lsGet(LS.sessions, []), syllabus: lsGet(LS.syllabus, null), countdowns: lsGet('study_countdowns', null) });
+const loadLocal = () => normalize({ todos: lsGet(LS.todos, []), events: lsGet(LS.events, []), weekly: lsGet(LS.weekly, {}), sessions: lsGet(LS.sessions, []), syllabus: lsGet(LS.syllabus, null), countdowns: lsGet(LS.countdowns, null) });
 function saveLocal() {
-    lsSet(LS.todos, state.todos); lsSet(LS.events, state.events); lsSet(LS.weekly, state.weekly); lsSet(LS.sessions, state.sessions); lsSet(LS.syllabus, state.syllabus); lsSet('study_countdowns', state.countdowns);
+    lsSet(LS.todos, state.todos); lsSet(LS.events, state.events); lsSet(LS.weekly, state.weekly); lsSet(LS.sessions, state.sessions); lsSet(LS.syllabus, state.syllabus); lsSet(LS.countdowns, state.countdowns);
 }
 // 登入後的雲端資料在這台裝置留一份副本：下次打開直接畫出最新資料，不會先閃一下舊的（登出時清掉）
-const CLOUD_CACHE = 'study_cloud_cache';
-const stateJson = (s) => JSON.stringify({ todos: s.todos, events: s.events, weekly: s.weekly, sessions: s.sessions, syllabus: s.syllabus, countdowns: s.countdowns });
+// 副本裡也記著「雲端上次確認的樣子」(base) 和「有沒有還沒送出的修改」(dirty)：離線、剛打開還沒連上時改的東西不會不見
+const CLOUD_CACHE = LS.cloud;
+const SYNC_KEYS = ['todos', 'events', 'weekly', 'sessions', 'syllabus', 'countdowns'];
+const pickSync = (s) => ({ todos: s.todos, events: s.events, weekly: s.weekly, sessions: s.sessions, syllabus: s.syllabus, countdowns: s.countdowns });
+const stateJson = (s) => JSON.stringify(pickSync(s));
+const cloneState = (s) => normalize(JSON.parse(stateJson(s)));
+let cachedUid = null;     // 副本是哪個帳號的
+let authKnown = false;    // 已經知道有沒有登入
+let cloudBase = null;     // 雲端最後一次確認的資料（合併時用來分辨「誰改了什麼」）
+let cloudDirty = false;   // 這台裝置有還沒送上雲端的修改
 let cacheTimer = null;
-function saveCloudCache() {
-    if (!currentUser) return;
+function writeCloudCache() {
+    const id = currentUser?.uid || cachedUid;
+    if (!id) return;
     clearTimeout(cacheTimer);
-    cacheTimer = setTimeout(() => { try { localStorage.setItem(CLOUD_CACHE, JSON.stringify({ uid: currentUser.uid, at: Date.now(), json: stateJson(state) })); } catch (e) {} }, 300);
+    try { localStorage.setItem(CLOUD_CACHE, JSON.stringify({ uid: id, at: Date.now(), json: stateJson(state), base: cloudBase ? stateJson(cloudBase) : null, dirty: cloudDirty })); } catch (e) {}
+}
+function saveCloudCache() {
+    if (!currentUser && !cachedUid) return;
+    clearTimeout(cacheTimer);
+    cacheTimer = setTimeout(writeCloudCache, 300);
 }
 function loadCloudCache() {
     try {
         const c = JSON.parse(localStorage.getItem(CLOUD_CACHE) || 'null');
-        return c && c.uid && c.json ? { uid: c.uid, state: normalize(JSON.parse(c.json)) } : null;
+        if (!(c && c.uid && c.json)) return null;
+        // 舊版副本沒有 base：當成跟雲端一樣、沒有未送出的修改
+        return { uid: c.uid, state: normalize(JSON.parse(c.json)), base: normalize(JSON.parse(c.base || c.json)), dirty: !!c.dirty };
     } catch (e) { return null; }
 }
-const clearCloudCache = () => { try { localStorage.removeItem(CLOUD_CACHE); } catch (e) {} };
+const clearCloudCache = () => { clearTimeout(cacheTimer); try { localStorage.removeItem(CLOUD_CACHE); } catch (e) {} };
+
+/* --- 合併：手機和電腦都改過時，一筆一筆比對（base＝雲端上次的樣子）---
+ * 只有這台改的 → 用這台的；只有別台改的 → 用別台的；兩邊都改了同一筆 → 用這台剛改的
+ * 新增、刪除、修改都看得出來，所以兩台同時用也不會互相蓋掉 */
+const canon = (v) => JSON.stringify(v, (k, x) => x && typeof x === 'object' && !Array.isArray(x)
+    ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : x);
+const same = (a, b) => canon(a) === canon(b);
+const pick3 = (b, l, r) => (same(l, b) ? r : l);   // 這台沒改就用別台的，這台改了就用這台的
+function mergeList(b, l, r) {   // 有 id 的清單：待辦、行程、讀書紀錄、自訂倒數
+    const B = new Map((b || []).map(x => [x.id, x])), L = new Map((l || []).map(x => [x.id, x])), R = new Map((r || []).map(x => [x.id, x]));
+    return [...new Set([...L.keys(), ...R.keys()])].map(id => pick3(B.get(id), L.get(id), R.get(id))).filter(Boolean);
+}
+function mergeMap(b, l, r) {    // 用 key 對應的資料：每週進度、單元進度、自己改過的單元清單
+    b = b || {}; l = l || {}; r = r || {};
+    const out = {};
+    new Set([...Object.keys(l), ...Object.keys(r)]).forEach(k => { const v = pick3(b[k], l[k], r[k]); if (v !== undefined) out[k] = v; });
+    return out;
+}
+function mergeState(b, l, r) {
+    b = b || normalize({});
+    const by = (s) => s.syllabus || {}, bc = (s) => s.countdowns || {};
+    return normalize({
+        todos: mergeList(b.todos, l.todos, r.todos),
+        events: mergeList(b.events, l.events, r.events),
+        sessions: mergeList(b.sessions, l.sessions, r.sessions),
+        weekly: mergeMap(b.weekly, l.weekly, r.weekly),
+        syllabus: {
+            picked: pick3(by(b).picked, by(l).picked, by(r).picked),
+            custom: mergeMap(by(b).custom, by(l).custom, by(r).custom),
+            status: mergeMap(by(b).status, by(l).status, by(r).status),
+            flags: pick3(by(b).flags, by(l).flags, by(r).flags)
+        },
+        countdowns: {
+            items: mergeList(bc(b).items, bc(l).items, bc(r).items),
+            pins: pick3(bc(b).pins, bc(l).pins, bc(r).pins),
+            off: pick3(bc(b).off, bc(l).off, bc(r).off)
+        }
+    });
+}
+// 雲端的新資料換上畫面：內容真的有變才整頁重畫
+function setSyncedState(next) {
+    const before = stateJson(state);
+    state = next;
+    if (stateJson(state) !== before) renderAll();
+}
 
 let cloudTimer;
 let cloudReady = false;
-let savePending = false;
-const earlySessions = [];   // 讀到雲端資料後才允許寫回，避免空資料蓋掉雲端
+const earlySessions = [];   // 讀到雲端資料前記錄的，讀到後確認有補上去
 let unsubscribe = null;
 function save() {
-    if (!currentUser || !fb) { saveLocal(); return; }
-    if (!cloudReady) { toast('還在連線雲端，這次修改可能不會同步'); return; }
-    clearTimeout(cloudTimer);
-    saveCloudCache();
-    savePending = true;   // 還沒送出前，別台裝置的舊資料不要蓋掉剛剛的修改
-    cloudTimer = setTimeout(async () => {
-        savePending = false;
-        try {
-            // mergeFields：只覆蓋這幾個欄位，雲端其他舊資料不受影響
-            await fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), {
-                todos: state.todos, events: state.events, weekly: state.weekly, sessions: state.sessions, syllabus: state.syllabus, countdowns: state.countdowns, updatedAt: Date.now()
-            }, { mergeFields: ['todos', 'events', 'weekly', 'sessions', 'syllabus', 'countdowns', 'updatedAt'] });
-        } catch (e) {
-            console.error('雲端儲存失敗：', e);
-            toast('雲端儲存失敗，請檢查網路');
-        }
-    }, 400);
+    // 登入中（或打開時還在確認登入）：先記在這台的副本，再合併送上雲端
+    if (currentUser || (cachedUid && !authKnown)) {
+        cloudDirty = true;
+        saveCloudCache();
+        scheduleFlush();
+        return;
+    }
+    saveLocal();
 }
+function scheduleFlush(ms = 400) { clearTimeout(cloudTimer); cloudTimer = setTimeout(flushCloud, ms); }
+// 送上雲端：先讀雲端最新的，跟這台的修改合併後再寫回（交易，中途有人改會自動重來）
+let flushing = false, flushAgain = false, flushRetry = 0;
+async function flushCloud() {
+    if (!cloudDirty || !currentUser || !fb || !cloudReady) return;
+    if (flushing) { flushAgain = true; return; }
+    flushing = true; flushAgain = false;
+    clearTimeout(flushRetry);
+    const who = currentUser.uid;
+    const sentJson = stateJson(state), sent = JSON.parse(sentJson);   // 這次送出的內容；送出期間又改的，下一輪再送
+    const base = cloudBase;   // 送出這一刻的「雲端上次的樣子」（送出期間別台的新資料不能算成這台刪掉的）
+    const ref = fb.fs.doc(fb.db, 'users', who);
+    try {
+        const merged = await fb.fs.runTransaction(fb.db, async (tx) => {
+            const snap = await tx.get(ref);
+            const remote = snap.exists() ? normalize(snap.data()) : normalize({});
+            const m = mergeState(base, sent, remote);
+            // mergeFields：只覆蓋這幾個欄位，雲端其他資料（個人設定）不受影響
+            tx.set(ref, { ...pickSync(m), updatedAt: Date.now() }, { mergeFields: [...SYNC_KEYS, 'updatedAt'] });
+            return m;
+        });
+        if (currentUser?.uid !== who) return;
+        cloudBase = merged;
+        if (stateJson(state) === sentJson) { cloudDirty = false; setSyncedState(merged); }
+        else { flushAgain = true; setSyncedState(mergeState(sent, state, merged)); }
+        writeCloudCache();
+        publishProfile();   // 別台裝置的讀書紀錄合併進來了，房間裡的今日時數也更新
+    } catch (e) {
+        console.warn('雲端儲存失敗，連上網路後會自動再送：', e);
+        if (!['unavailable', 'deadline-exceeded', 'aborted', 'failed-precondition', 'cancelled'].includes(e?.code)) toast('雲端儲存失敗，請檢查網路');
+        flushRetry = setTimeout(flushCloud, 20000);
+    } finally {
+        flushing = false;
+        if (cloudDirty && flushAgain) scheduleFlush();
+    }
+}
+window.addEventListener('online', () => { if (cloudDirty) scheduleFlush(1000); });
+// 切到背景、關掉 App：副本馬上存好，還沒送出的修改趕快送
+const syncOnLeave = () => { if (currentUser || cachedUid) writeCloudCache(); if (cloudDirty) flushCloud(); };
+onAppHide(syncOnLeave);
+window.addEventListener('pagehide', syncOnLeave);
+
 
 function renderAll() {
     renderExamChips(); tick();
@@ -477,7 +585,7 @@ function applyCloudPrefs(p) {
     if (NOTIFY_NAME[p.notify] && p.notify !== notifyStyle) { applyNotify(p.notify); }
     if (p.home) {   // 首頁排法也跟著帳號
         const h = normHome(p.home);
-        if (JSON.stringify(h) !== JSON.stringify(homePref)) { homePref = h; lsSet('study_home', h); applyHome(); }
+        if (JSON.stringify(h) !== JSON.stringify(homePref)) { homePref = h; lsSet(LS.home, h); applyHome(); }
     }
 }
 
@@ -612,7 +720,7 @@ function showTab(id) {
     if (id === 'tab-room') { roomStart(); renderRoom(); }
     if (id === 'tab-ai') renderAI();
     if (id === 'tab-syllabus') { renderSyllabus(); if (!state.syllabus.picked) setTimeout(() => { if (document.body.dataset.tab === 'tab-syllabus' && !document.querySelector('.modal.open')) openSylPick(); }, 350); }
-    if (id === 'tab-weekly' || id === 'tab-syllabus') lsSet('study_prog_view', id);
+    if (id === 'tab-weekly' || id === 'tab-syllabus') lsSet(LS.progView, id);
     lsSet(LS.tab, id);
     applyFocusMode();
     window.scrollTo({ top: 0 });
@@ -620,7 +728,7 @@ function showTab(id) {
 // 點「進度」：回到上次看的（本週進度或學測範圍）
 tabBtns.forEach(b => b.addEventListener('click', () => {
     let id = b.dataset.tab;
-    if (id === 'tab-weekly' && document.body.dataset.tab !== 'tab-weekly' && document.body.dataset.tab !== 'tab-syllabus' && localStorage.getItem('study_prog_view') === 'tab-syllabus') id = 'tab-syllabus';
+    if (id === 'tab-weekly' && document.body.dataset.tab !== 'tab-weekly' && document.body.dataset.tab !== 'tab-syllabus' && localStorage.getItem(LS.progView) === 'tab-syllabus') id = 'tab-syllabus';
     showTab(id);
 }));
 // 子頁面右上角的按鈕（分享、⋯ 等），只在那一頁顯示
@@ -729,7 +837,7 @@ function renderExamChips() {
     const outside = !keys.includes(examKey);   // 從「⋯」裡選了沒放在上方的：「⋯」按鈕亮起來，上方三個不動
     setHtml($('examChips'), keys.map(k => getCd(k)).filter(Boolean).map(c => {
         const cls = ['chip', c.key === examKey ? 'active' : '', cdEnded(c, now) ? 'past' : ''].join(' ');
-        return `<button class="${cls}" role="tab" aria-selected="${c.key === examKey}" data-exam="${c.key}">${c.color ? `<i class="cd-dot" style="background:${c.color}"></i>` : ''}${esc(c.short)}</button>`;
+        return `<button class="${cls}" role="tab" aria-selected="${c.key === examKey}" data-exam="${esc(c.key)}">${c.color ? `<i class="cd-dot" style="background:${c.color}"></i>` : ''}${esc(c.short)}</button>`;
     }).join('') + `<button class="chip chip-more ${outside ? 'active' : ''}" data-cdall aria-label="${outside ? `正在看：${esc(cur?.name || '')}，點開全部倒數` : '全部倒數、新增倒數'}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18" cy="12" r="1.8"/></svg></button>`);
 }
 function selectCd(key) {
@@ -829,11 +937,11 @@ function renderToday() {
     $('todayList').innerHTML = total
         ? items.map(i => `
             <li class="check-item ${i.done ? 'done' : ''}">
-                <input type="checkbox" class="checkbox" data-key="${i.key}" ${i.done ? 'checked' : ''} aria-label="完成 ${esc(i.subj)}">
+                <input type="checkbox" class="checkbox" data-key="${esc(i.key)}" ${i.done ? 'checked' : ''} aria-label="完成 ${esc(i.subj)}">
                 <span class="text"><span class="subj" style="color:var(--s${i.s})">${esc(i.subj)}</span>${esc(i.text)}</span>
             </li>`).join('') + tds.map(x => `
             <li class="check-item">
-                <input type="checkbox" class="checkbox" data-todo="${x.id}" aria-label="完成待辦">
+                <input type="checkbox" class="checkbox" data-todo="${esc(x.id)}" aria-label="完成待辦">
                 <span class="text"><span class="subj todo-subj">待辦</span>${esc(x.text)}${x.date < t ? todoDateTag(x.date) : ''}</span>
             </li>`).join('')
         : `<li class="empty">今天還沒安排進度，<button class="btn btn-small" id="goWeekBtn">去安排</button></li>`;
@@ -1142,8 +1250,8 @@ function sylFlags() {
 const sylScore = (k) => (state.syllabus.status[k] || 0) / 2;
 
 let sylEdit = false;
-let sylOpen = new Set(lsGet('study_syl_open', null) || ['國文']);
-function saveSylOpen() { lsSet('study_syl_open', [...sylOpen]); }
+let sylOpen = new Set(lsGet(LS.sylOpen, null) || ['國文']);
+function saveSylOpen() { lsSet(LS.sylOpen, [...sylOpen]); }
 
 function renderSyllabus() {
     const el = $('sylBody');
@@ -1326,7 +1434,7 @@ function openSylPick() {
 $('sylPickBody').addEventListener('click', (e) => {
     const b = e.target.closest('[data-pick]');
     if (!b) return;
-    const g = b.dataset.pick, grp = SYL.find(x => x.groups.some(([n]) => n === g));
+    const g = b.dataset.pick;
     if (sylPickDraft.includes(g)) sylPickDraft = sylPickDraft.filter(n => n !== g);
     else {
         sylPickDraft.push(g);   // 數學 A、B 兩個都要考的人可以都選
@@ -1426,7 +1534,7 @@ function eventRowHtml(item, showRel) {
     const dateBlock = showRel ? `<div class="event-date"><div class="d num">${d.getMonth() + 1}/${d.getDate()}</div><div class="w">週${WEEK_ZH[d.getDay()]}</div></div>` : '';
     const tags = (item.exam ? '<span class="exam-tag" style="margin:0">考試</span>' : '') +
         (item.important ? '<span class="important-tag">重要</span>' : '');
-    return `<li><button class="event-row" ${item.id ? `data-id="${item.id}"` : 'data-exam="1"'} data-title="${esc(item.title)}">
+    return `<li><button class="event-row" ${item.id ? `data-id="${esc(item.id)}"` : 'data-exam="1"'} data-title="${esc(item.title)}">
         ${dateBlock}
         <div class="event-bar ${item.exam ? 'exam' : item.important ? 'imp' : ''}"></div>
         <div class="event-title">${esc(item.title)}${item.sub ? `<div class="event-sub">${esc(item.sub)}</div>` : ''}</div>
@@ -1450,7 +1558,7 @@ function renderDayList() {
     ];
     const tds = todosOn(selDate), cds = cdsOn(selDate);
     $('selDayList').innerHTML = (items.length || tds.length || cds.length)
-        ? cds.map(c => `<li><button class="cd-row" data-cdedit="${c.key}"><span class="cd-row-bar" style="background:${c.color}"></span><span class="cd-row-tx">${esc(c.name)}${c.yearly ? '<small>每年</small>' : c.end ? `<small>${shortDate(c.date)} – ${shortDate(c.end)}</small>` : ''}</span><span class="cd-row-tag" style="--cd-color:${c.color}">倒數</span></button></li>`).join('') + items.map(i => eventRowHtml(i, false)).join('') + tds.map(x => `<li class="cal-todo"><label><input type="checkbox" class="checkbox" data-todo="${x.id}" aria-label="完成待辦"><span class="cal-todo-tag">待辦</span><span class="cal-todo-tx">${esc(x.text)}</span></label></li>`).join('')
+        ? cds.map(c => `<li><button class="cd-row" data-cdedit="${esc(c.key)}"><span class="cd-row-bar" style="background:${c.color}"></span><span class="cd-row-tx">${esc(c.name)}${c.yearly ? '<small>每年</small>' : c.end ? `<small>${shortDate(c.date)} – ${shortDate(c.end)}</small>` : ''}</span><span class="cd-row-tag" style="--cd-color:${c.color}">倒數</span></button></li>`).join('') + items.map(i => eventRowHtml(i, false)).join('') + tds.map(x => `<li class="cal-todo"><label><input type="checkbox" class="checkbox" data-todo="${esc(x.id)}" aria-label="完成待辦"><span class="cal-todo-tag">待辦</span><span class="cal-todo-tx">${esc(x.text)}</span></label></li>`).join('')
         : '<li class="empty">這天沒有行程</li>';
 }
 
@@ -1615,7 +1723,7 @@ const sortedTodos = () => [...state.todos.filter(t => t.date).sort((a, b) => a.d
 function renderTodos() {
     $('todoList').innerHTML = state.todos.length
         ? sortedTodos().map(t => `
-            <li class="check-item swipe-row" data-id="${t.id}">
+            <li class="check-item swipe-row" data-id="${esc(t.id)}">
                 <div class="swipe-bg" aria-hidden="true">
                     <span class="sw-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>完成</span>
                     <span class="sw-del">刪除<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span>
@@ -1785,7 +1893,7 @@ function unlockAudio() {
     try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume && audioCtx.resume(); } catch (e) {}
 }
 function chime() {
-    try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {}
+    device.vibrate([200, 100, 200]);
     if (!audioCtx) return;
     try {
         const t = audioCtx.currentTime;
@@ -1904,8 +2012,8 @@ function renderTimer() {
             <div class="done-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
             <h2 class="break-title">完成一輪，${SUBJECTS[timer.subject]} ${timer.lastMin} 分鐘</h2>
             <p class="break-sub">今天累計 ${fmtHM(dayMinutes(t))}${roundsOn(t) ? ` · 第 ${roundsOn(t)} 輪` : ''}</p>
-            ${timer.lastId && state.sessions.some(x => x.id === timer.lastId) ? `<button class="text-link break-edit" data-edit="${timer.lastId}">${ICON_PEN}修改這一輪的時間或科目</button>` : ''}
-            ${task ? `<label class="task-check"><input type="checkbox" class="checkbox" data-task="${task.key}" ${task.done ? 'checked' : ''}><span class="text">「${esc(task.text)}」讀完了嗎？<small>打勾會同步到進度表</small></span></label>` : ''}
+            ${timer.lastId && state.sessions.some(x => x.id === timer.lastId) ? `<button class="text-link break-edit" data-edit="${esc(timer.lastId)}">${ICON_PEN}修改這一輪的時間或科目</button>` : ''}
+            ${task ? `<label class="task-check"><input type="checkbox" class="checkbox" data-task="${esc(task.key)}" ${task.done ? 'checked' : ''}><span class="text">「${esc(task.text)}」讀完了嗎？<small>打勾會同步到進度表</small></span></label>` : ''}
             <div class="break-time" id="brBox"><p class="label" id="brLabel">休息時間</p><span class="num" id="brTime"></span></div>
             <div class="block">
                 <p class="label" style="margin-bottom:10px">下一輪讀什麼</p>
@@ -1970,7 +2078,7 @@ function todayLogsHtml(t, todayMin) {
     const scale = Math.max(goal, todayMin) || 1;   // 進度條：滿格＝每日目標（超過目標就以總時數為準）
     const bar = [...logs].reverse().map(x => `<i style="width:${(x.minutes / scale * 100).toFixed(2)}%;background:var(--s${x.subject})"></i>`).join('');
     const shown = logsAll ? logs : logs.slice(0, 5);
-    const rows = shown.map(x => `<li><button class="tl-row" data-edit="${x.id}" aria-label="編輯 ${clockOf(x.start)} ${SUBJECTS[x.subject]} ${fmtHM(x.minutes)}">
+    const rows = shown.map(x => `<li><button class="tl-row" data-edit="${esc(x.id)}" aria-label="編輯 ${clockOf(x.start)} ${SUBJECTS[x.subject]} ${fmtHM(x.minutes)}">
             <span class="at num">${clockOf(x.start)}</span><i class="sdot s${x.subject}"></i>
             <span class="nm">${SUBJECTS[x.subject]}${x.edited ? '<em class="tl-edited">已修改</em>' : ''}</span>
             <span class="mn num">${fmtHM(x.minutes)}</span><span class="tl-pen">${ICON_PEN}</span>
@@ -2186,8 +2294,7 @@ $('tab-timer').addEventListener('change', (e) => {
     save(); renderToday(); renderWeek();
     if (e.target.checked) toast(unitMsg ? `已在進度表打勾，${unitMsg}` : '已在進度表打勾');
 });
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible') return;
+onAppShow(() => {
     tick();
     publishProfile(true);
     if (timer.phase === 'focus' && !timer.pausedAt) requestWake();
@@ -2357,7 +2464,7 @@ function renderDaySheet() {
     $('daySplit').innerHTML = sum ? logs.map(x => `<i style="width:${(x.minutes / sum * 100).toFixed(2)}%;background:var(--s${x.subject})"></i>`).join('') : '';
     $('dayLogs').innerHTML = logs.length ? logs.map(x => {
         const d = new Date(x.start);
-        return `<li class="log-row"><button class="log-main" data-edit="${x.id}" aria-label="編輯 ${pad(d.getHours())}:${pad(d.getMinutes())} ${SUBJECTS[x.subject]}"><span class="at">${pad(d.getHours())}:${pad(d.getMinutes())}</span><i class="sdot s${x.subject}"></i><span class="nm">${SUBJECTS[x.subject]}${x.edited ? '<em class="tl-edited">已修改</em>' : ''}</span><span class="mn">${fmtHM(x.minutes)}</span><span class="tl-pen">${ICON_PEN}</span></button><button class="del-btn" data-del="${x.id}" aria-label="刪除這筆紀錄">${ICON_X}</button></li>`;
+        return `<li class="log-row"><button class="log-main" data-edit="${esc(x.id)}" aria-label="編輯 ${pad(d.getHours())}:${pad(d.getMinutes())} ${SUBJECTS[x.subject]}"><span class="at">${pad(d.getHours())}:${pad(d.getMinutes())}</span><i class="sdot s${x.subject}"></i><span class="nm">${SUBJECTS[x.subject]}${x.edited ? '<em class="tl-edited">已修改</em>' : ''}</span><span class="mn">${fmtHM(x.minutes)}</span><span class="tl-pen">${ICON_PEN}</span></button><button class="del-btn" data-del="${esc(x.id)}" aria-label="刪除這筆紀錄">${ICON_X}</button></li>`;
     }).join('') : '<li class="empty">這天沒有讀書紀錄</li>';
 }
 function openDaySheet() { renderDaySheet(); openModal('dayModal'); }
@@ -2421,7 +2528,7 @@ $('saveLogBtn').addEventListener('click', () => {
 /* --- ⑤ 手機按按鈕時輕微震動（Android 支援；iPhone 瀏覽器不支援震動） --- */
 document.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'touch') return;
-    if (e.target.closest('button, .tab-btn, .cal-cell, .slot')) { try { navigator.vibrate && navigator.vibrate(8); } catch (err) {} }
+    if (e.target.closest('button, .tab-btn, .cal-cell, .slot')) { device.vibrate(8); }
 }, { passive: true });
 
 /* --- ⑥ 待辦左右滑：往右完成、往左刪除 --- */
@@ -2457,7 +2564,7 @@ document.addEventListener('pointerdown', (e) => {
         f.classList.add('anim');
         if (Math.abs(dx) > w * 0.35) {
             f.style.transform = `translateX(${dx > 0 ? w : -w}px)`;
-            try { navigator.vibrate && navigator.vibrate(12); } catch (err) {}
+            device.vibrate(12);
             setTimeout(() => removeTodo(r, dx > 0 ? '完成一項，讚！' : '已刪除'), 200);
         } else {
             f.style.transform = '';
@@ -2575,7 +2682,7 @@ $('paletteList').addEventListener('click', (e) => {
 });
 
 /* --- ⑧ 分享卡片（1080 × 1920，IG 限動尺寸） --- */
-let shareBlob = null;
+let shareBlob = null, shareUrl = '';
 function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
@@ -2684,7 +2791,8 @@ async function openShareCard(ds) {
     toast('正在產生卡片…');
     shareBlob = await drawShareCard(ds || todayStr());
     if (!shareBlob) { toast('產生卡片失敗'); return; }
-    const url = URL.createObjectURL(shareBlob);
+    if (shareUrl) URL.revokeObjectURL(shareUrl);   // 上一張卡片的圖用不到了，釋放記憶體
+    const url = shareUrl = URL.createObjectURL(shareBlob);
     $('shareImg').src = url;
     $('shareDownload').href = url;
     $('shareDownload').download = `讀書卡片-${ds}.png`;
@@ -3055,6 +3163,8 @@ let roomSlow = false;   // 載入太久（多半是網路擋住）
 let lastProfile = '';
 let profTimer = null;
 
+// 別人寫的資料不能直接相信：科目只接受 0～4 的整數，其他一律當成沒有
+const safeSubject = (v) => Number.isInteger(v) && v >= 0 && v < SUBJECTS.length ? v : null;
 // 其他人的狀態（已經很久沒更新的視為不在讀）
 function liveStatus(p, now = Date.now()) {
     if (!p) return { phase: 'idle', min: 0 };
@@ -3063,7 +3173,7 @@ function liveStatus(p, now = Date.now()) {
         const el = Math.max(0, (p.pausedAt || now) - p.startAt - (p.pausedTotal || 0));
         const stale = p.pausedAt ? now - p.pausedAt > 2 * 3600000
             : p.duration ? el > p.duration + 10 * 60000 : el > 4 * 3600000;
-        if (!stale) return { phase: 'focus', paused: !!p.pausedAt, el, left: p.duration ? p.duration - el : null, subject: p.subject, min: today };
+        if (!stale) return { phase: 'focus', paused: !!p.pausedAt, el, left: p.duration ? p.duration - el : null, subject: safeSubject(p.subject), min: today };
     }
     if (p.status === 'break' && p.breakStart && now - p.breakStart < (p.breakLen || 0) + 10 * 60000) {
         return { phase: 'break', el: now - p.breakStart, min: today };
@@ -3145,6 +3255,7 @@ function roomStart() {
     roomUnsub = fs.onSnapshot(q, (snap) => {
         roomsLoaded = true;
         setTimeout(handlePendingJoin, 0);
+        setTimeout(handlePendingChat, 0);
         myRooms = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
         if (myRooms.length && !roomPref.enabled) { roomPref.enabled = true; saveRoomPref(); publishProfile(true); }
         if (myRooms.some(r => r.id === pendingRoom)) pendingRoom = null;
@@ -3204,15 +3315,24 @@ async function createRoom(name) {
 }
 /* --- 邀請連結：網址帶 ?join=邀請碼，打開後問要不要加入 --- */
 let joinAsking = false;
+// 點系統通知打開 App 時網址會帶 ?chat=邀請碼：房間載入後直接打開那個聊天室
 (function readJoinLink() {
     try {
         const p = new URLSearchParams(location.search);
-        if (!p.has('join')) return;
-        const c = (p.get('join') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-        if (c.length === 6) sessionStorage.setItem('study_join', c);
+        if (!p.has('join') && !p.has('chat')) return;
+        const code = (k) => (p.get(k) || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (code('join').length === 6) sessionStorage.setItem('study_join', code('join'));
+        if (code('chat').length === 6) sessionStorage.setItem('study_open_chat', code('chat'));
         history.replaceState(null, '', location.pathname + location.hash);   // 網址清乾淨，重新整理不會再問
     } catch (e) {}
 })();
+function handlePendingChat() {
+    let code = '';
+    try { code = sessionStorage.getItem('study_open_chat') || ''; } catch (e) {}
+    if (!code || !myRooms.some(r => r.id === code)) return;
+    try { sessionStorage.removeItem('study_open_chat'); } catch (e) {}
+    roomView = code; showTab('tab-room'); openChat(code);
+}
 const pendingJoinCode = () => { try { return sessionStorage.getItem('study_join') || ''; } catch (e) { return ''; } };
 const clearPendingJoin = () => { try { sessionStorage.removeItem('study_join'); } catch (e) {} };
 let joinLoginHinted = false;
@@ -3455,7 +3575,7 @@ function renderRoom(errMsg) {
         const cm = chats[r.id]?.msgs || [];
         const last = [...cm].reverse().find(m => !m.recalled);
         const unread = unreadOf(r.id);
-        const chatBtn = `<button class="chat-entry" data-chat="${r.id}">
+        const chatBtn = `<button class="chat-entry" data-chat="${esc(r.id)}">
                 <span class="ce-ic">${ICON_CHAT}</span>
                 <span class="ce-tx"><b>聊天室</b><small>${last ? esc(`${last.uid === meUid ? '你' : (last.name || '同學')}：${last.img ? '傳了一張照片' : last.text}`) : '與朋友聊聊'}</small></span>
                 ${unread ? `<span class="seg-n">${unread > 99 ? '99+' : unread}</span>` : ''}
@@ -3467,16 +3587,16 @@ function renderRoom(errMsg) {
                 ${studying ? `<span class="tag ok"><span class="live-dot"></span>${studying} 人在讀</span>` : '<span class="tag mute">目前沒人在讀</span>'}
                 <span class="muted">${ms.length} 位成員</span>
                 <span class="grow"></span>
-                <button class="code-stub" data-room="share" aria-label="分享邀請碼 ${r.id}"><span class="num">${r.id}</span><span class="cs-r"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>邀請</span></button>
+                <button class="code-stub" data-room="share" aria-label="分享邀請碼 ${esc(r.id)}"><span class="num">${esc(r.id)}</span><span class="cs-r"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>邀請</span></button>
             </div>
             <div class="seats">${seats.map(m => {
                 const fr = seatFrac(m.s);
-                return `<div class="seat ${m.s.phase}${m.s.phase === 'idle' && m.s.min > 0 ? ' rested' : ''}" data-seat="${m.u}">
+                return `<div class="seat ${m.s.phase}${m.s.phase === 'idle' && m.s.min > 0 ? ' rested' : ''}" data-seat="${esc(m.u)}">
                     <div class="seat-av"><svg viewBox="0 0 68 68" aria-hidden="true"><circle class="st-track" cx="34" cy="34" r="31"/><circle class="st-bar" cx="34" cy="34" r="31" stroke-dasharray="${SEAT_C.toFixed(1)}" stroke-dashoffset="${(SEAT_C * (1 - fr)).toFixed(1)}"/></svg>
                         <span class="seat-face" style="background:${avColor(m.u)}">${esc(firstGlyph(memberName(m)))}</span></div>
                     <b class="sn">${esc(memberName(m))}${m.u === meUid ? '<small>（你）</small>' : ''}</b>
                     ${seatSub(m.s)}
-                    <span class="sc num" data-clock="${m.u}">${memberClock(m.s)}</span>
+                    <span class="sc num" data-clock="${esc(m.u)}">${memberClock(m.s)}</span>
                 </div>`;
             }).join('')}</div>
             ${chatBtn}
@@ -3500,12 +3620,12 @@ function renderRoom(errMsg) {
         ${myRooms.length ? myRooms.map(r => {
             const ms = (r.members || []);
             const n = ms.filter(u => liveStatus(profiles[u], now).phase === 'focus').length;
-            return `<button class="ticket ${n ? 'hot' : ''}" data-open="${r.id}">
+            return `<button class="ticket ${n ? 'hot' : ''}" data-open="${esc(r.id)}">
                 <span class="tk-main">
                     <b class="zh">${esc(r.name)}</b>
                     <span class="tk-row">${ticketAvs(ms)}${n ? `<span class="tag ok"><span class="live-dot"></span>${n} 人在讀</span>` : '<span class="tag mute">目前沒人在讀</span>'}</span>
                 </span>
-                <span class="tk-stub"><small>邀請碼</small><b class="num">${r.id}</b>${unreadOf(r.id) ? `<span class="seg-n tk-unread">${unreadOf(r.id)}</span>` : ''}</span>
+                <span class="tk-stub"><small>邀請碼</small><b class="num">${esc(r.id)}</b>${unreadOf(r.id) ? `<span class="seg-n tk-unread">${unreadOf(r.id)}</span>` : ''}</span>
             </button>`;
         }).join('') : '<p class="empty">還沒有房間，建立一個或用邀請碼加入</p>'}`;
     if (el.dataset.view === 'lobby' && $('ticketList')) { $('ticketList').innerHTML = tickets; el._html = null; return; }
@@ -3588,7 +3708,7 @@ function onChatUpdate(code, fresh) {
     const body = m.img ? '傳了一張照片' : m.text;
     if (document.visibilityState === 'visible') {
         showChatNotice({ code, uid: m.uid, name: m.name || '同學', room: room?.name || '讀書房間', text: body, count: unreadOf(code) });
-        try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
+        device.vibrate(30);
     } else {
         document.title = `(${totalUnread()}) ${room?.name || BASE_TITLE}`;
         systemNotify(`${m.name || '同學'} · ${room?.name || '讀書房間'}`, body, code);
@@ -3742,10 +3862,13 @@ const chatDayLabel = (t) => {
 };
 // 網址變成可以點的連結
 const linkify = (t) => esc(t).replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`);
+// 照片只接受真的圖片資料（data:image/...;base64,），其他內容一律不顯示、不能儲存
+const isPhoto = (v) => typeof v === 'string' && /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v);
 const photoExpired = (m) => m.img && Date.now() - m.at > PHOTO_KEEP;
 function msgBody(m) {
-    if (m.img) return photoExpired(m) ? `<div class="bubble expired" data-mid="${m.id}">照片已過期</div>` : `<img class="chat-img" src="${esc(m.img)}" alt="照片" data-mid="${m.id}" loading="lazy">`;
-    return `<div class="bubble" data-mid="${m.id}">${linkify(m.text || '')}</div>`;
+    const id = esc(m.id);
+    if (m.img) return photoExpired(m) || !isPhoto(m.img) ? `<div class="bubble expired" data-mid="${id}">${photoExpired(m) ? '照片已過期' : '照片無法顯示'}</div>` : `<img class="chat-img" src="${m.img}" alt="照片" data-mid="${id}" loading="lazy">`;
+    return `<div class="bubble" data-mid="${id}">${linkify(m.text || '')}</div>`;
 }
 // 依 key 比對：只換掉內容有變的節點（新訊息只會新增一個，不會整串重畫）
 const chatCache = new WeakMap();
@@ -3860,13 +3983,13 @@ function openMsgPop(id, srcEl) {
     $('popMsg').className = 'pop-msg ' + (mine ? 'mine' : 'them');
     $('popMsg').innerHTML = `${mine ? '' : `<p class="chat-who">${esc(m.name || '同學')}</p>`}${msgBody(m)}<span class="pop-time num">${chatDayLabel(m.at)}</span>`;
     $('popCopy').hidden = !m.text;
-    $('popSave').hidden = !m.img || photoExpired(m);
+    $('popSave').hidden = !isPhoto(m.img) || photoExpired(m);
     $('popRecall').hidden = !canRecall;
     $('popDelete').hidden = mine || r?.owner !== currentUser?.uid;
     $('popNote').textContent = mine && !canRecall ? '超過 24 小時的訊息不能收回' : canRecall ? '收回後，大家會看到「你收回了一則訊息」' : '';
     $('msgPop').classList.toggle('mine', mine);
     $('msgPop').classList.add('open');
-    try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
+    device.vibrate(12);
 }
 function closeMsgPop() { $('msgPop').classList.remove('open'); menuMsg = null; }
 $('msgPop').addEventListener('click', async (e) => {
@@ -3877,7 +4000,7 @@ $('msgPop').addEventListener('click', async (e) => {
     const ref = fb.fs.doc(fb.db, 'rooms', chatRoom, 'messages', m.id);
     try {
         if (a === 'copy') { await navigator.clipboard.writeText(m.text); toast('已複製'); }
-        else if (a === 'save') { const l = document.createElement('a'); l.href = m.img; l.download = `讀書房間-${ymd(new Date(m.at))}.jpg`; l.click(); }
+        else if (a === 'save') { if (!isPhoto(m.img)) return; const l = document.createElement('a'); l.href = m.img; l.download = `讀書房間-${ymd(new Date(m.at))}.jpg`; l.click(); }
         else if (a === 'recall') { await fb.fs.updateDoc(ref, { recalled: true, text: '', img: '' }); toast('已收回'); }
         else if (a === 'delete') { if (confirm('確定要刪除這則訊息嗎？')) { await fb.fs.deleteDoc(ref); toast('已刪除'); } }
     } catch (err) { console.error(err); toast(a === 'copy' ? '無法複製' : '操作失敗，請檢查網路'); }
@@ -3942,16 +4065,14 @@ chatList.addEventListener('contextmenu', (e) => {
 chatList.addEventListener('click', (e) => {
     if (pressed) { pressed = false; e.preventDefault(); return; }   // 長按放開，不要觸發點擊
     const im = e.target.closest('.chat-img');
-    if (im) { $('imgView').src = im.src; openModal('imgModal'); }
+    if (im && isPhoto(im.getAttribute('src'))) { $('imgView').src = im.getAttribute('src'); openModal('imgModal'); }
 });
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if ($('msgPop').classList.contains('open')) { e.stopImmediatePropagation(); closeMsgPop(); }
     else if (chatRoom && !document.querySelector('.modal.open')) { e.stopImmediatePropagation(); closeChat(); }
 }, true);
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') { document.title = BASE_TITLE; if (chatRoom) { renderChatList(false); markChatSeen(); } }
-});
+onAppShow(() => { document.title = BASE_TITLE; if (chatRoom) { renderChatList(false); markChatSeen(); } });
 
 // 每秒更新房間裡的時鐘（不重畫整頁）
 function roomTick() {
@@ -4006,13 +4127,9 @@ $('tab-room').addEventListener('click', (e) => {
     const open = e.target.closest('[data-open]');
     if (open) { roomView = open.dataset.open; renderRoom(); window.scrollTo({ top: 0 }); return; }
     const act = e.target.closest('[data-room]')?.dataset.room;
-    if (act === 'back') showTab('tab-timer');
-    else if (act === 'lobby') { roomView = null; renderRoom(); }
-    else if (act === 'login') openModal('accountModal');
+    if (act === 'login') openModal('accountModal');
     else if (act === 'join') joinRoom(codeDraft);
     else if (act === 'create') openRoomModal('create');
-    else if (act === 'rename') openRoomModal('rename');
-    else if (act === 'leave') leaveRoom(roomView);
     else if (act === 'share') shareRoom(roomView);
     else if (act === 'focus') showTab('tab-timer');
 });
@@ -4208,7 +4325,7 @@ const nudgeSoon = () => [60, 350, 700].forEach(t => setTimeout(nudgeViewport, t)
 document.addEventListener('focusout', (e) => { if (isTyping(e.target)) nudgeSoon(); });
 window.addEventListener('pageshow', nudgeSoon);
 window.addEventListener('orientationchange', nudgeSoon);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') nudgeSoon(); });
+onAppShow(nudgeSoon);
 window.visualViewport?.addEventListener('resize', () => { if (!isTyping(document.activeElement)) nudgeSoon(); });
 
 /* =====================================================
@@ -4241,6 +4358,7 @@ function applyUpdate() {
         sessionStorage.setItem('study_resume', JSON.stringify({ tab: document.body.dataset.tab, room: roomView || null, chat: chatRoom || null, y: window.scrollY }));
     } catch (e) {}
     updateReady = false;
+    if (currentUser || cachedUid) writeCloudCache();   // 重新載入前，還沒送出的修改先存好
     location.reload();
 }
 if (navigator.serviceWorker) {
@@ -4251,10 +4369,8 @@ if (navigator.serviceWorker) {
         updateReady = true;
         applyUpdate();
     });
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') checkForUpdate();
-        else applyUpdate();   // 離開 App 時悄悄更新
-    });
+    onAppShow(checkForUpdate);
+    onAppHide(applyUpdate);   // 離開 App 時悄悄更新
     window.addEventListener('focus', checkForUpdate);
     // 閒下來（關掉視窗、離開輸入框）時，再看看有沒有等著套用的更新
     document.addEventListener('focusout', () => setTimeout(applyUpdate, 400));
@@ -4320,7 +4436,7 @@ function makeSortable(list, onMove) {
             try { window.getSelection()?.removeAllRanges(); } catch (err) {}
             rows.forEach(r => { r.style.transform = ''; });
             row.classList.remove('dragging');
-            if (to !== from) { onMove(from, to); try { navigator.vibrate && navigator.vibrate(8); } catch (err) {} }
+            if (to !== from) { onMove(from, to); device.vibrate(8); }
         };
         h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
     });
@@ -4355,13 +4471,13 @@ function renderCdManage() {
         const d = parseYmd(c.date);
         const tags = (c.key === CD_FIXED ? '<em class="cdm-tag">固定</em>' : c.builtin ? '<em class="cdm-tag">內建</em>' : '') + (c.yearly ? '<em class="cdm-tag yr">每年</em>' : '') + (cdEnded(c) ? '<em class="cdm-tag">已結束</em>' : '');
         const fixed = c.key === CD_FIXED;
-        return `<li class="cdm-row ${cdEnded(c) ? 'ended' : ''} ${c.key === examKey ? 'cur' : ''} ${fixed ? 'fixed' : ''}" ${pinned && !fixed ? `data-sort="${c.key}"` : ''}>
-            ${fixed ? `<span class="cdm-pin on lock" title="學測固定在上方" aria-label="學測固定在上方">${ICON_CHECK_SM}</span>` : `<button class="cdm-pin ${pinned ? 'on' : ''}" data-cdpin="${c.key}" aria-pressed="${pinned}" aria-label="${pinned ? '從上方移除' : '放到倒數頁上方'}">${ICON_CHECK_SM}</button>`}
-            <button class="cdm-main" data-cdpick="${c.key}">
+        return `<li class="cdm-row ${cdEnded(c) ? 'ended' : ''} ${c.key === examKey ? 'cur' : ''} ${fixed ? 'fixed' : ''}" ${pinned && !fixed ? `data-sort="${esc(c.key)}"` : ''}>
+            ${fixed ? `<span class="cdm-pin on lock" title="學測固定在上方" aria-label="學測固定在上方">${ICON_CHECK_SM}</span>` : `<button class="cdm-pin ${pinned ? 'on' : ''}" data-cdpin="${esc(c.key)}" aria-pressed="${pinned}" aria-label="${pinned ? '從上方移除' : '放到倒數頁上方'}">${ICON_CHECK_SM}</button>`}
+            <button class="cdm-main" data-cdpick="${esc(c.key)}">
                 <span class="cdm-name"><i class="cd-dot" style="background:${c.color || 'var(--accent)'}"></i><b>${esc(c.name)}</b>${tags}</span>
                 <span class="cdm-sub num">${d.getMonth() + 1}/${d.getDate()}${c.end ? ` – ${shortDate(c.end)}` : ''}${cdEnded(c) ? '' : ` · ${cdRelText(c)}`}</span>
             </button>
-            ${c.builtin ? '' : `<button class="cdm-edit" data-cdedit="${c.key}" aria-label="修改 ${esc(c.name)}">${ICON_PEN}</button>`}
+            ${c.builtin ? '' : `<button class="cdm-edit" data-cdedit="${esc(c.key)}" aria-label="修改 ${esc(c.name)}">${ICON_PEN}</button>`}
             ${pinned && !fixed ? `<button class="drag-h" aria-label="拖曳排序（也可以用上下鍵）">${ICON_HANDLE}</button>` : fixed ? '<span class="drag-sp cdm-lock" title="固定在最右邊"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>' : '<span class="drag-sp"></span>'}
         </li>`;
     };
@@ -4479,7 +4595,7 @@ function normHome(h) {
     keys.forEach(k => { if (!order.includes(k)) order.push(k); });
     return { order, hide: (Array.isArray(h.hide) ? h.hide : []).filter(k => keys.includes(k)) };
 }
-let homePref = normHome(lsGet('study_home', null));
+let homePref = normHome(lsGet(LS.home, null));
 let homeDraft = null;
 function applyHome() {
     const box = $('homeMods');
@@ -4520,7 +4636,7 @@ $('homeEditList').addEventListener('click', (e) => {
 });
 $('homeEditDone').addEventListener('click', () => {
     homePref = normHome(homeDraft);
-    lsSet('study_home', homePref);
+    lsSet(LS.home, homePref);
     applyHome(); savePrefs();
     closeModal('homeModal');
 });
@@ -4664,8 +4780,7 @@ document.addEventListener('fullscreenchange', () => { /* 只是離開瀏覽器�
 state = loadLocal();
 if (removedDupes) saveLocal();
 // 上次是登入狀態：先用雲端副本畫出畫面，雲端回應後只在資料真的有變時才重畫
-let cachedUid = null;
-{ const c = loadCloudCache(); if (c) { state = c.state; cachedUid = c.uid; } }
+{ const c = loadCloudCache(); if (c) { state = c.state; cachedUid = c.uid; cloudBase = c.base; cloudDirty = c.dirty; } }
 applyHome();
 renderExamChips();
 // 關掉 App 期間一輪已經結束的話，打開時直接記錄（不響）
@@ -4679,16 +4794,16 @@ renderAccount();
 const resumed = resumeAfterUpdate();   // 自動更新後重新載入：回到原本的畫面
 // 重新打開：正在計時就回計時頁；離開超過 3 分鐘又沒在計時，一律從倒數頁開始
 const timerLive = () => timer.phase === 'focus' || (timer.phase === 'break' && Date.now() - timer.breakStart < timer.breakLen + 3 * 60000);
-const lastActive = () => { try { return Number(localStorage.getItem('study_last_active')) || 0; } catch (e) { return 0; } };
-const markActive = () => { try { localStorage.setItem('study_last_active', String(Date.now())); } catch (e) {} };
+const lastActive = () => { try { return Number(localStorage.getItem(LS.lastActive)) || 0; } catch (e) { return 0; } };
+const markActive = () => { try { localStorage.setItem(LS.lastActive, String(Date.now())); } catch (e) {} };
 (function startTab() {
     if (resumed) return;
     const saved = localStorage.getItem(LS.tab) || 'tab-countdown';
     const fresh = Date.now() - lastActive() < 3 * 60000;
     showTab(timerLive() ? 'tab-timer' : (fresh ? saved : 'tab-countdown'));
 })();
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') { markActive(); return; }
+onAppHide(markActive);
+onAppShow(() => {
     // 從背景回來：離開超過 30 分鐘、沒在計時、沒在打字或開視窗，就回到倒數頁
     const away = Date.now() - lastActive();
     if (lastActive() && away > 30 * 60000 && !timerLive() && !isTyping(document.activeElement) && !document.querySelector('.modal.open') && !chatRoom && document.body.dataset.tab !== 'tab-countdown') showTab('tab-countdown');
@@ -4765,13 +4880,14 @@ async function initFirebase() {
 }
 
 function onAuthChanged(user) {
+    authKnown = true;
     currentUser = user;
     cloudReady = false;
     if (unsubscribe) { unsubscribe(); unsubscribe = null; }
     if (!user) {
         setTimeout(warmLogin, 1500);
         roomStop(); lastProfile = '';
-        clearCloudCache(); cachedUid = null;
+        clearCloudCache(); cachedUid = null; cloudBase = null; cloudDirty = false;
         state = loadLocal();
         renderAll(); renderAccount(); renderRoom();
         return;
@@ -4781,41 +4897,46 @@ function onAuthChanged(user) {
     setTimeout(handlePendingJoin, 800);
     let first = true;
     // 副本是同一個帳號的才算數；換帳號就先清掉，避免看到別人的資料
-    let shownJson = cachedUid === user.uid ? stateJson(state) : '';
-    if (cachedUid && cachedUid !== user.uid) { clearCloudCache(); cachedUid = null; state = loadLocal(); renderAll(); }
+    if (cachedUid && cachedUid !== user.uid) { clearCloudCache(); cachedUid = null; cloudBase = null; cloudDirty = false; state = loadLocal(); renderAll(); }
+    cachedUid = user.uid;
+    // 沒有副本（這台第一次登入）：以登入當下的畫面為準，之後的修改才算「這台改的」
+    if (!cloudBase) cloudBase = cloneState(state);
     const ref = fb.fs.doc(fb.db, 'users', user.uid);
     // 即時監聽：手機改了，電腦畫面也會自動更新
     // includeMetadataChanges：雲端確認「資料沒變」時也會通知，狀態才會從「離線中」變回已同步
     unsubscribe = fb.fs.onSnapshot(ref, { includeMetadataChanges: true }, (snap) => {
-        if (snap.metadata.hasPendingWrites) return;          // 自己剛寫入的，不用重畫
-        if (!first && savePending) return;                   // 這台剛改了還沒送出：等送出後雲端會回傳合併後的資料
+        if (snap.metadata.hasPendingWrites) return;          // 自己剛寫入的（個人設定），不用重畫
         if (first && snap.metadata.fromCache && !snap.exists()) return; // 本機沒快取，等雲端回應
-        const cloud = snap.exists() ? normalize(snap.data()) : null;
+        const cloud = snap.exists() ? normalize(snap.data()) : normalize({});
         const dupes = removedDupes;
         if (snap.exists()) applyCloudPrefs(snap.data().prefs);
+        let next;
         if (first) {
             first = false;
             cloudReady = true;
             const local = loadLocal();
-            if (cloud && !isEmpty(cloud)) {
-                state = cloud;
-                const missing = earlySessions.filter(x => !state.sessions.some(y => y.id === x.id));
-                if (missing.length) { state.sessions.push(...missing); save(); }
+            if (!isEmpty(cloud)) {
+                next = cloudDirty ? mergeState(cloudBase, state, cloud) : cloud;   // 有還沒送出的修改：跟雲端合併
+                const missing = earlySessions.filter(x => !next.sessions.some(y => y.id === x.id));
+                if (missing.length) { next.sessions.push(...missing); cloudDirty = true; }
+            } else if (cloudDirty) {
+                next = state;   // 雲端是空的：直接把這台的資料送上去
             } else if (!isEmpty(local)) {
-                state = local;   // 雲端是空的：把登入前的本機資料上傳，避免遺失
-                save();
+                next = local;   // 雲端是空的：把登入前的本機資料上傳，避免遺失
+                cloudDirty = true;
                 toast('已把這台裝置的資料上傳到雲端');
             } else {
-                state = normalize({});
+                next = normalize({});
             }
-        } else if (cloud) {
-            state = cloud;
+        } else {
+            next = cloudDirty ? mergeState(cloudBase, state, cloud) : cloud;   // 別台改了：這台還沒送出的修改保留
         }
-        if (dupes && cloud) { save(); toast(`已移除 ${dupes} 個和考試重複的行程`); }
+        cloudBase = cloud;
+        if (dupes && snap.exists()) { cloudDirty = true; toast(`已移除 ${dupes} 個和考試重複的行程`); }
         // 跟畫面上的一樣（打開時已經用副本畫好了）就不用整頁重畫，打開比較順
-        const json = stateJson(state);
-        if (json !== shownJson) { shownJson = json; renderAll(); }
+        setSyncedState(next);
         saveCloudCache();
+        if (cloudDirty) scheduleFlush();
         publishProfile();   // 別台裝置新增了讀書紀錄時，更新房間裡的今日時數
         renderAccount(snap.metadata.fromCache ? '離線中，連上網路後會自動同步' : '');
     }, (err) => {
@@ -4829,7 +4950,10 @@ $('loginBtn').addEventListener('click', async () => {
     if (!fb) { toast('目前無法連線，請連上網路後再試'); return; }
     const { auth, provider, authM } = fb;
     if (currentUser) {
-        if (confirm('確定要登出嗎？')) { await authM.signOut(auth); closeModal('accountModal'); }
+        if (confirm('確定要登出嗎？')) {
+            if (cloudDirty) await flushCloud();   // 還沒送上雲端的修改先送出去
+            await authM.signOut(auth); closeModal('accountModal');
+        }
         return;
     }
     if (loginBusy) return;
