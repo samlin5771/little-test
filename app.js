@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v43';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v44';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -4314,7 +4314,8 @@ function onAuthChanged(user) {
     if (cachedUid && cachedUid !== user.uid) { clearCloudCache(); cachedUid = null; state = loadLocal(); renderAll(); }
     const ref = fb.fs.doc(fb.db, 'users', user.uid);
     // 即時監聽：手機改了，電腦畫面也會自動更新
-    unsubscribe = fb.fs.onSnapshot(ref, (snap) => {
+    // includeMetadataChanges：雲端確認「資料沒變」時也會通知，狀態才會從「離線中」變回已同步
+    unsubscribe = fb.fs.onSnapshot(ref, { includeMetadataChanges: true }, (snap) => {
         if (snap.metadata.hasPendingWrites) return;          // 自己剛寫入的，不用重畫
         if (!first && savePending) return;                   // 這台剛改了還沒送出：等送出後雲端會回傳合併後的資料
         if (first && snap.metadata.fromCache && !snap.exists()) return; // 本機沒快取，等雲端回應

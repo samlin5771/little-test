@@ -1661,12 +1661,13 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 .nb-grab { position: absolute; left: 50%; bottom: 5px; width: 28px; height: 3px; border-radius: 2px; background: var(--line); transform: translateX(-50%); }
 /* C 頂部小膠囊 */
 .npill {
+    top: calc(env(safe-area-inset-top) + 22px);   /* 往下一點，不會被頂部的毛玻璃擋住 */
     left: 50%; width: 240px; max-width: calc(100vw - 28px); height: 42px; border-radius: 21px; padding: 0 9px 0 8px; overflow: hidden;
     /* 深色毛玻璃（不是死黑）：淺色主題時柔和一點，不會像一塊黑色貼紙 */
     background: rgba(28, 28, 36, 0.84); backdrop-filter: blur(22px) saturate(1.6); -webkit-backdrop-filter: blur(22px) saturate(1.6);
     color: #F2F0E9; border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28), 0 1px 0 rgba(255, 255, 255, 0.1) inset;
-    transform: translate3d(-50%, calc(-100% - env(safe-area-inset-top) - 24px), 0);
+    transform: translate3d(-50%, calc(-100% - env(safe-area-inset-top) - 40px), 0);
     transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s, visibility 0s 0.42s, width 0.38s cubic-bezier(0.22, 1, 0.36, 1), height 0.38s cubic-bezier(0.22, 1, 0.36, 1), border-radius 0.38s;
 }
 /* 深色主題：膠囊改成亮一點的灰，再加一圈主題色細邊，才不會和黑色背景混在一起 */
