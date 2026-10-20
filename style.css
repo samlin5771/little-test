@@ -2300,3 +2300,5 @@ body.sorting, body.sorting * { -webkit-user-select: none !important; user-select
 .cdm-lock { display: inline-flex; align-items: center; justify-content: center; color: var(--faint); width: 32px; }
 .cdm-lock svg { width: 16px; height: 16px; }
 .cdm-row.fixed { background: transparent; }
+/* 電腦、平板：打開聊天室時，後面房間頁的標題列也收起來，不會出現兩個標題 */
+@media (min-width: 900px) { body.chat-open .topbar { visibility: hidden; } }

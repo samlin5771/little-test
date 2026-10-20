@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v50';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v51';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -1803,6 +1803,18 @@ const BASE_TITLE = document.title;
 let timer = lsGet(LS.timer, null) || { phase: 'idle' };
 let tpref = Object.assign({ subject: 0, mode: 0, goal: 180 }, lsGet(LS.tpref, {}));
 const saveTimer = () => { lsSet(LS.timer, timer); publishProfile(); };   // 同時更新讀書房間裡的狀態
+// 另一個分頁改了計時或（沒登入時的）資料：這個分頁跟著更新，不會用舊的資料蓋回去
+window.addEventListener('storage', (e) => {
+    if (e.key === LS.timer) {
+        const ls = lsGet(LS.timer, null) || { phase: 'idle' };
+        if (JSON.stringify(ls) === JSON.stringify(timer)) return;
+        timer = ls;
+        if (timer.phase === 'focus' && !timer.pausedAt) requestWake(); else releaseWake();
+        renderTimer(); renderToday();
+    } else if (!currentUser && !cachedUid && [LS.todos, LS.events, LS.weekly, LS.sessions, LS.syllabus, LS.countdowns].includes(e.key)) {
+        state = loadLocal(); renderAll();
+    }
+});
 const saveTpref = () => lsSet(LS.tpref, tpref);
 
 const fmtClock = (ms) => {
@@ -1949,8 +1961,16 @@ function togglePause() {
     saveTimer(); renderTimer();
 }
 // auto：倒數到 0 自動完成；silent：關掉 App 期間就完成了，打開時不要響
+// 同一台電腦開了兩個分頁（或兩個視窗）：只讓一個分頁記錄這一輪，不會重複記兩次
+function timerHandledElsewhere() {
+    const ls = lsGet(LS.timer, null) || { phase: 'idle' };
+    if (ls.phase === 'focus' && ls.startAt === timer.startAt) return false;
+    timer = ls; releaseWake(); renderTimer();
+    return true;
+}
 function finishFocus(auto, silent) {
     if (timer.phase !== 'focus') return;
+    if (timerHandledElsewhere()) return;
     const el = focusElapsed();
     const minutes = timer.duration ? Math.min(el, timer.duration) / 60000 : el / 60000;
     if (minutes < 1) {
@@ -1968,6 +1988,7 @@ function finishFocus(auto, silent) {
     renderTimer(); renderStats();
 }
 function cancelFocus() {
+    if (timer.phase !== 'focus' || timerHandledElsewhere()) return;
     const prev = timer;
     const minutes = focusElapsed() / 60000;
     timer = { phase: 'idle' }; saveTimer(); releaseWake();
@@ -3957,7 +3978,13 @@ async function sendChat(text, img) {
     try {
         const data = { uid: currentUser.uid, name: myName(), text: img ? '' : text, at: Date.now(), recalled: false };
         if (img) { data.img = img; data.expireAt = new Date(Date.now() + PHOTO_KEEP); }
-        await fb.fs.addDoc(fb.fs.collection(fb.db, 'rooms', chatRoom, 'messages'), data);
+        // 網路慢或暫時離線時，不要卡住輸入框：訊息會先排隊，連上網路就自動送出
+        const p = fb.fs.addDoc(fb.fs.collection(fb.db, 'rooms', chatRoom, 'messages'), data);
+        const r = await Promise.race([p, new Promise(res => setTimeout(res, 5000, 'slow'))]);
+        if (r === 'slow') {
+            toast('網路比較慢，訊息會在連上後送出');
+            p.catch(err => { console.error('傳送失敗：', err); toast(err.code === 'permission-denied' ? '有一則訊息沒有送出（等太久或被拒絕），請再傳一次' : '有一則訊息沒有送出，請再傳一次'); });
+        }
         enableRoom();
         chatStick = true; scrollChatEnd(true);
         return true;
