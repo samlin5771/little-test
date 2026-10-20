@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v52';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v53';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -4084,10 +4084,14 @@ function openMsgPop(id, srcEl) {
     $('popDelete').hidden = mine || r?.owner !== currentUser?.uid;
     $('popNote').textContent = mine && !canRecall ? '超過 24 小時的訊息不能收回' : canRecall ? '收回後，大家會看到「你收回了一則訊息」' : '';
     $('msgPop').classList.toggle('mine', mine);
+    try { window.getSelection()?.removeAllRanges(); } catch (err) {}
     popDown = false;
     $('msgPop').classList.add('open');
     device.vibrate(12);
 }
+// 手機、平板：聊天室和訊息選單裡不讓系統選字（長按時會選到時間、名字）
+const finePointer = matchMedia('(hover: hover) and (pointer: fine)');
+[$('chatList'), $('msgPop')].forEach(el => el.addEventListener('selectstart', (e) => { if (!finePointer.matches || el.id === 'chatList') e.preventDefault(); }));
 let popDown = false;   // 長按放開手指時的那一下「點擊」會落在選單背景上，不能讓它把選單關掉
 $('msgPop').addEventListener('pointerdown', () => { popDown = true; });
 function closeMsgPop() { $('msgPop').classList.remove('open'); menuMsg = null; }

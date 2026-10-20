@@ -2396,3 +2396,20 @@ body.sorting, body.sorting * { -webkit-user-select: none !important; user-select
 .mr-e, .pop-reacts button, .heart-burst, .g-rbar { font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; }
 .bubble, #chatInput, .g-msg > span, .g-rx { font-family: 'Noto Sans TC', -apple-system, 'PingFang TC', 'Microsoft JhengHei', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; }
 .mr-n { font-family: 'Manrope', 'Noto Sans TC', sans-serif; }
+/* v53：長按不會選到旁邊的字（時間、名字、已讀…），iOS 也不會跳出「拷貝／查詢」 */
+.chat-list, .chat-list *, .msg-pop, .msg-pop * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+@media (hover: hover) and (pointer: fine) { .pop-msg .bubble { -webkit-user-select: text; user-select: text; } }
+@media not ((hover: hover) and (pointer: fine)) { .pop-msg .bubble { -webkit-user-select: none; user-select: none; } }
+/* v53：表情小一點，整個收在外框裡 */
+.msg-reacts { height: 22px; padding: 0 6px; gap: 2px; border-radius: 11px; margin-top: -7px; overflow: hidden; }
+.mr-e { font-size: 11px; line-height: 1; letter-spacing: .5px; display: inline-flex; align-items: center; height: 14px; }
+.mr-n { font-size: 10.5px; }
+.msg.has-r .chat-meta { margin-bottom: 13px; }
+.msg.them.has-r .chat-av, .msg.them.has-r .chat-av-sp { margin-bottom: 18px; }
+/* v53：表情在小框裡上下置中（iPhone 的表情字型本身偏下，裁掉上下多餘的字型留白再置中） */
+.msg-reacts { align-items: center; }
+.mr-e { height: auto; line-height: 1; text-box: trim-both cap alphabetic; }
+.pop-reacts button { text-box: trim-both cap alphabetic; }
+@supports (-webkit-touch-callout: none) and (not (text-box: trim-both cap alphabetic)) {
+    .mr-e { transform: translateY(-1px); }
+}
