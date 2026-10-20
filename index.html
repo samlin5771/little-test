@@ -121,26 +121,42 @@
                     <p class="hero-note" id="cdNote"></p>
                 </div>
 
-                <!-- 今天：讀了多久＋今天的進度 -->
-                <section class="today-sec">
-                    <div class="sec-head">
-                        <h3>今天</h3>
-                        <span id="todayCount"></span>
+                <!-- 倒數下面的區塊：可以在「編輯首頁」選要不要顯示、排順序 -->
+                <section class="today-sec" id="homeMods">
+                    <div class="home-mod" data-mod="time">
+                        <div class="sec-head">
+                            <h3>今天</h3>
+                            <span id="todayCount"></span>
+                        </div>
+                        <div class="today-time">
+                            <span class="num" id="todayTime"></span>
+                            <span class="tag warn" id="todayTag"></span>
+                        </div>
+                        <div class="progress today-bar"><div id="todayBar"></div></div>
                     </div>
-                    <div class="today-time">
-                        <span class="num" id="todayTime"></span>
-                        <span class="tag warn" id="todayTag"></span>
+                    <div class="home-mod" data-mod="list">
+                        <h3 class="mod-title">今天的清單</h3>
+                        <ul class="check-list" id="todayList"></ul>
                     </div>
-                    <div class="progress today-bar"><div id="todayBar"></div></div>
-                    <ul class="check-list" id="todayList"></ul>
-                    <div class="review-line" id="reviewLine" hidden></div>
-                    <button class="btn btn-accent btn-wide" id="rouletteBtn" style="margin-top:14px">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="15" cy="9" r="1"/><circle cx="9" cy="15" r="1"/></svg>
-                        現在要讀什麼？
-                    </button>
+                    <div class="home-mod" data-mod="review"><div class="review-line" id="reviewLine" hidden></div></div>
+                    <div class="home-mod" data-mod="roulette">
+                        <button class="btn btn-accent btn-wide" id="rouletteBtn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="15" cy="9" r="1"/><circle cx="9" cy="15" r="1"/></svg>
+                            現在要讀什麼？
+                        </button>
+                    </div>
+                    <div class="home-mod" data-mod="upcoming">
+                        <h3 class="mod-title">接下來</h3>
+                        <ul class="hu-list" id="homeUpcoming"></ul>
+                    </div>
+                    <div class="home-mod" data-mod="room">
+                        <h3 class="mod-title">讀書房間</h3>
+                        <div class="hr-box" id="homeRoom"></div>
+                    </div>
                 </section>
-            </div>
-        </section>
+                <div class="home-edit-wrap">
+                    <button class="home-edit-btn" id="homeEditBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>編輯首頁</button>
+                </div>
             </div>
         </section>
 
@@ -301,6 +317,60 @@
             <p class="goal-sub">倒數、計時和統計頁會一起用這個目標。</p>
             <div class="goal-grid" id="goalGrid"></div>
             <div class="sheet-btns"><button class="btn" data-close style="flex:1">取消</button></div>
+        </div>
+    </div>
+
+    <!-- 我的倒數：放到倒數頁上方、排順序、新增 -->
+    <div class="modal bottom" id="cdModal" role="dialog" aria-modal="true" aria-labelledby="cdmTitle">
+        <div class="sheet cdm-sheet">
+            <div class="grabber" data-close></div>
+            <div class="cdm-head">
+                <div><h2 id="cdmTitle">我的倒數</h2><p>勾選的會放在倒數頁上方，拖右邊排順序</p></div>
+                <button class="btn btn-accent btn-small" id="cdmAdd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>新增</button>
+            </div>
+            <p class="cdm-label">放在上方<span class="num" id="cdmCount"></span></p>
+            <ul class="cdm-list" id="cdmPinned"></ul>
+            <p class="cdm-label" id="cdmRestHead">其他</p>
+            <ul class="cdm-list" id="cdmRest"></ul>
+            <div class="sheet-btns" style="margin-top:14px"><button class="btn" data-close style="flex:1">完成</button></div>
+        </div>
+    </div>
+
+    <!-- 新增／修改倒數 -->
+    <div class="modal" id="cdEditModal" role="dialog" aria-modal="true" aria-labelledby="cdeTitle">
+        <div class="sheet cde-sheet">
+            <h2 id="cdeTitle">新增倒數</h2>
+            <label class="field-label" for="cdeName">名稱</label>
+            <input type="text" class="field" id="cdeName" maxlength="30" placeholder="例如：第二次期中考" autocomplete="off">
+            <label class="field-label" for="cdeShort">上方按鈕的字（最多 4 個字，可不填）</label>
+            <input type="text" class="field" id="cdeShort" maxlength="4" placeholder="例如：段考" autocomplete="off">
+            <div class="field-row">
+                <div><label class="field-label" for="cdeDate">日期</label><input type="date" class="field" id="cdeDate"></div>
+                <div id="cdeEndWrap"><label class="field-label" for="cdeEnd">到（多天才填）</label><input type="date" class="field" id="cdeEnd"></div>
+            </div>
+            <p class="field-label">顏色</p>
+            <div class="cde-colors" id="cdeColors" role="group" aria-label="顏色"></div>
+            <label class="cde-switch"><span>每年重複<small>生日、紀念日用</small></span><input type="checkbox" id="cdeYearly" role="switch"><i aria-hidden="true"></i></label>
+            <label class="cde-switch"><span>也顯示在行事曆</span><input type="checkbox" id="cdeCal" role="switch" checked><i aria-hidden="true"></i></label>
+            <div class="sheet-btns">
+                <button class="btn sess-del" id="cdeDelete" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>刪除</button>
+                <span class="spacer"></span>
+                <button class="btn" data-close>取消</button>
+                <button class="btn btn-accent" id="cdeSave">儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 編輯首頁 -->
+    <div class="modal bottom" id="homeModal" role="dialog" aria-modal="true" aria-labelledby="homeEditTitle">
+        <div class="sheet he-sheet">
+            <div class="grabber" data-close></div>
+            <div class="he-head">
+                <div><h2 id="homeEditTitle">編輯首頁</h2><p>勾選要顯示的區塊，按住右邊拖曳排順序</p></div>
+                <button class="he-done" id="homeEditDone" aria-label="完成"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+            </div>
+            <ul class="he-list" id="homeEditList"></ul>
+            <button class="text-link he-reset" id="homeEditReset">恢復預設</button>
         </div>
     </div>
 
@@ -658,7 +728,7 @@
                 <h3>倒數計時</h3>
                 <p class="g-lead">打開網站第一眼看到的頁面：離考試還有多久、今天讀了多少。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-phone">
-  <div class="g-chips"><span class="past">模考一</span><span>模考二</span><span>模考三</span><span class="on">學測</span></div>
+  <div class="g-chips"><span class="on">學測</span><span>模考二</span><span><i class="g-dot" style="background:#F472B6"></i>段考</span><span class="more">⋯</span></div>
   <p class="g-eyebrow">2027 · 116 學測</p>
   <div class="g-days num">95<small>天</small></div>
   <p class="g-hms num">06 : 30 : 08</p>
@@ -670,7 +740,7 @@
   <div class="g-check"><span></span><em class="g-td">待辦</em>交數學作業</div>
   <div class="g-btn">現在要讀什麼？</div>
 </div></figure>
-                <ul class="g-points"><li>上方切換<b>模考一、二、三和學測</b>；已經考完的會變淡。</li><li>大數字是剩下的天數，下面是時分秒，還有考試日期和「下一場」還有幾天。</li><li><b>今天</b>區顯示今天讀了多久、離每日目標還差多少，進度條滿了就是達標。點<b>「目標 3 小時」</b>可以直接改每日目標。</li><li>有標重點複習的單元時，「今天」下面會提醒你，點一下就跳到學測範圍。</li><li>每週進度表裡「今天」的項目，和<b>排在今天（或已經逾期）的待辦</b>，都會列在這裡，可以直接打勾。</li><li>不知道讀什麼？按<b>現在要讀什麼？</b>，轉盤幫你隨機選一科。</li></ul>
+                <ul class="g-points"><li>上方切換<b>模考和學測</b>；已經考完的會變淡，考完一週後自動收起來。</li><li>按最右邊的 <b>⋯</b> 打開「我的倒數」：可以<b>新增自己的倒數</b>（段考、英檢、生日…），選顏色、多天的日期，生日可以設成<b>每年重複</b>，也能顯示在行事曆上。上方最多放 3 個，勾選和拖曳右邊的 ☰ 就能換、排順序。</li><li>大數字是剩下的天數，下面是時分秒，還有考試日期和「下一場」還有幾天。</li><li><b>今天</b>區顯示今天讀了多久、離每日目標還差多少，進度條滿了就是達標。點<b>「目標 3 小時」</b>可以直接改每日目標。</li><li>有標重點複習的單元時，「今天」下面會提醒你，點一下就跳到學測範圍。</li><li>每週進度表裡「今天」的項目，和<b>排在今天（或已經逾期）的待辦</b>，都會列在這裡，可以直接打勾。</li><li>不知道讀什麼？按<b>現在要讀什麼？</b>，轉盤幫你隨機選一科。</li><li>最下面的<b>編輯首頁</b>：勾選要顯示哪些區塊、按住 ☰ 拖曳排順序。還可以打開<b>接下來的行程</b>和<b>讀書房間</b>（看朋友現在在讀什麼）兩個區塊。排法會跟著帳號同步。</li></ul>
                 
             </section>
 
@@ -700,7 +770,7 @@
   <div class="g-syl-unit"><span>平面向量</span><i class="s2">熟練</i><em class="off"></em></div>
   <div class="g-syl-unit"><span>空間向量</span><i class="s0">未讀</i><em class="off"></em></div>
 </div></figure>
-                <ul class="g-points"><li>第一次打開先<b>選要考的科目</b>（數學 A、B 選一個；社會、自然可以只選部分），之後按右上角的按鈕可以再改。</li><li>點單元右邊的狀態，在<b>未讀 → 讀過 → 熟練</b>之間切換。圓圈是整體完成度（讀過算一半、熟練算全部）。</li><li>按<b>書籤</b>把單元加入<b>重點複習</b>：會集中在最上面，倒數頁「今天」下面也會提醒你；按「現在要讀什麼？」時會優先推薦。</li><li>按<b>編輯單元</b>可以新增、改名、刪除單元，每家教科書章節不一樣，改成你習慣的名字就好。</li><li>AI 排計畫會參考還沒讀的單元和重點複習。</li></ul>
+                <ul class="g-points"><li>第一次打開先<b>選要考的科目</b>（數學 A、B 兩個都要考可以都選；社會、自然可以只選部分），之後按右上角的按鈕可以再改。</li><li>點單元右邊的狀態，在<b>未讀 → 讀過 → 熟練</b>之間切換。圓圈是整體完成度（讀過算一半、熟練算全部）。</li><li>按<b>書籤</b>把單元加入<b>重點複習</b>：會集中在最上面，倒數頁「今天」下面也會提醒你；按「現在要讀什麼？」時會優先推薦。</li><li>按<b>編輯單元</b>可以新增、改名、刪除單元，每家教科書章節不一樣，改成你習慣的名字就好。</li><li>AI 排計畫會參考還沒讀的單元和重點複習。</li></ul>
                 <p class="g-tip"><b>小技巧</b>預設單元是依 108 課綱的學測範圍整理的大方向，國文、英文考到高三上的必修，數學、社會、自然是高一、高二的部定必修。</p>
             </section>
 
@@ -720,7 +790,7 @@
     <div class="g-tlog-r"><span class="num">05:05</span><i class="g-dot s2"></i><span class="n">英文<small>已修改</small></span><b class="num">32 分</b><em>✎</em></div>
   </div>
 </div></figure>
-                <ul class="g-points"><li>三種模式：<b>番茄鐘 25</b>（休息 5 分）、<b>長專注 50</b>（休息 10 分）、<b>自由計時</b>。</li><li>專注中可以暫停、提早完成，或按 ✕ 結束；滿 1 分鐘就會記錄。</li><li>完成一輪會進入休息，可以順手把今天的進度打勾。</li><li>圓環內圈的綠色是<b>今日目標</b>的進度。</li><li>「開始專注」下面的<b>今天的紀錄</b>列出今天每一輪：<b>點一筆就能修改</b>讀了多久、開始時間和科目，或刪除（例如忘記暫停、選錯科目）。改過的會標「已修改」，今天總時數和房間排行會一起更新。</li><li>忘記開計時？按卡片右上角的<b>補登</b>。休息畫面也可以直接修改剛剛那一輪。</li><li><b>關掉 App 也沒關係</b>，回來時會自動算好經過的時間；電腦可以開「子母畫面」小視窗。</li></ul>
+                <ul class="g-points"><li>三種模式：<b>番茄鐘 25</b>（休息 5 分）、<b>長專注 50</b>（休息 10 分）、<b>自由計時</b>。</li><li>專注中可以暫停、提早完成，或按 ✕ 結束；滿 1 分鐘就會記錄。</li><li>按<b>全螢幕時鐘</b>：圓圈倒數放大到整個畫面正中間，上面是科目和現在時間，後面是你選的主題背景；手機直放、橫放（當桌鐘）、平板、電腦都會置中。按鈕幾秒後自動藏起來，點一下畫面就出現；畫面每分鐘會稍微移動，保護螢幕。</li><li>完成一輪會進入休息，可以順手把今天的進度打勾。</li><li>圓環內圈的綠色是<b>今日目標</b>的進度。</li><li>「開始專注」下面的<b>今天的紀錄</b>列出今天每一輪：<b>點一筆就能修改</b>讀了多久、開始時間和科目，或刪除（例如忘記暫停、選錯科目）。改過的會標「已修改」，今天總時數和房間排行會一起更新。</li><li>忘記開計時？按卡片右上角的<b>補登</b>。休息畫面也可以直接修改剛剛那一輪。</li><li><b>關掉 App 也沒關係</b>，回來時會自動算好經過的時間；電腦版還可以開「子母畫面」小視窗。</li></ul>
                 <p class="g-tip"><b>小技巧</b>計時頁上方的<b>讀書房間</b>和<b>讀書統計</b>按鈕可以直接進去。</p>
             </section>
 
@@ -837,6 +907,23 @@
     </div>
 
     <!-- 聊天室（全螢幕：上方標題、中間訊息可以滑、下方輸入框固定） -->
+    <!-- 全螢幕時鐘（專注中）：圓圈倒數放大置中，主題背景在後面 -->
+    <div class="standby" id="standby" hidden aria-hidden="true" role="dialog" aria-label="全螢幕時鐘">
+        <div class="sb-mid">
+            <div class="sb-head"><span class="sb-subj" id="sbSubj"></span><span class="sb-now num" id="sbNow"></span></div>
+            <div class="sb-ring">
+                <svg viewBox="0 0 290 290" aria-hidden="true"><circle class="ring-track" cx="145" cy="145" r="134"/><circle class="ring-bar" id="sbRing" cx="145" cy="145" r="134"/></svg>
+                <div class="sb-center"><span class="sb-time num" id="sbTime">00:00</span><span class="sb-sub" id="sbSub"></span></div>
+            </div>
+            <p class="sb-task" id="sbTask"></p>
+            <div class="sb-ctrl">
+                <button class="sb-btn" data-sb="pause" id="sbPause">暫停</button>
+                <button class="sb-btn" data-sb="finish">提早完成</button>
+                <button class="sb-btn sb-exit" data-sb="exit" aria-label="離開全螢幕"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
+            </div>
+        </div>
+    </div>
+
     <section class="chat-screen" id="chatScreen" role="dialog" aria-modal="true" aria-labelledby="chatTitle">
         <header class="chat-head">
             <button class="icon-btn ghost" id="chatBack" aria-label="返回房間"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>

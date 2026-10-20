@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v44';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v45';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -99,7 +99,7 @@ function toast(msg, action) {
 /* =====================================================
  * 資料與儲存
  * ===================================================== */
-let state = { todos: [], events: [], weekly: {}, sessions: [], syllabus: { picked: null, custom: {}, status: {}, flags: [] } };
+let state = { todos: [], events: [], weekly: {}, sessions: [], syllabus: { picked: null, custom: {}, status: {}, flags: [] }, countdowns: { items: [], pins: null } };
 let currentUser = null;
 let fb = null; // Firebase（動態載入，離線時 App 照常可用）
 
@@ -131,17 +131,32 @@ function normalize(raw = {}) {
             id: String(x.id || uid()), subject: Math.min(4, Math.max(0, x.subject | 0)),
             start: Number(x.start), minutes: Math.round(x.minutes), pomo: !!x.pomo, ...(x.edited ? { edited: true } : {})
         })),
-        syllabus: normSyllabus(raw.syllabus)
+        syllabus: normSyllabus(raw.syllabus),
+        countdowns: normCountdowns(raw.countdowns)
     };
 }
-const isEmpty = (s) => !s.todos.length && !s.events.length && !Object.keys(s.weekly).length && !s.sessions.length && !s.syllabus.picked;
-const loadLocal = () => normalize({ todos: lsGet(LS.todos, []), events: lsGet(LS.events, []), weekly: lsGet(LS.weekly, {}), sessions: lsGet(LS.sessions, []), syllabus: lsGet(LS.syllabus, null) });
+// 自訂倒數：{ items: [{ id, name, short, date, end?, color, yearly, cal }], pins: [釘在上方的 key，依順序] 或 null（用預設） }
+const CD_MAX = 3;   // 倒數頁上方最多放幾個（再加一個「⋯」選單，一行剛好放得下）
+const CD_COLORS = ['#F472B6', '#6CB4EE', '#34D399', '#E9B154', '#A99BF0', '#FF8B74'];
+const isYmd = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+function normCountdowns(c) {
+    c = c && typeof c === 'object' ? c : {};
+    const items = (Array.isArray(c.items) ? c.items : []).filter(x => x && isYmd(x.date) && x.name).slice(0, 40).map(x => ({
+        id: String(x.id || 'c_' + uid()), name: String(x.name).slice(0, 30), short: String(x.short || x.name).slice(0, 4),
+        date: x.date, ...(isYmd(x.end) && x.end > x.date && !x.yearly ? { end: x.end } : {}),
+        color: CD_COLORS.includes(x.color) ? x.color : CD_COLORS[0], yearly: !!x.yearly, cal: x.cal !== false
+    }));
+    const pins = Array.isArray(c.pins) ? c.pins.filter(k => typeof k === 'string').slice(0, CD_MAX) : null;
+    return { items, pins };
+}
+const isEmpty = (s) => !s.todos.length && !s.events.length && !Object.keys(s.weekly).length && !s.sessions.length && !s.syllabus.picked && !s.countdowns.items.length;
+const loadLocal = () => normalize({ todos: lsGet(LS.todos, []), events: lsGet(LS.events, []), weekly: lsGet(LS.weekly, {}), sessions: lsGet(LS.sessions, []), syllabus: lsGet(LS.syllabus, null), countdowns: lsGet('study_countdowns', null) });
 function saveLocal() {
-    lsSet(LS.todos, state.todos); lsSet(LS.events, state.events); lsSet(LS.weekly, state.weekly); lsSet(LS.sessions, state.sessions); lsSet(LS.syllabus, state.syllabus);
+    lsSet(LS.todos, state.todos); lsSet(LS.events, state.events); lsSet(LS.weekly, state.weekly); lsSet(LS.sessions, state.sessions); lsSet(LS.syllabus, state.syllabus); lsSet('study_countdowns', state.countdowns);
 }
 // 登入後的雲端資料在這台裝置留一份副本：下次打開直接畫出最新資料，不會先閃一下舊的（登出時清掉）
 const CLOUD_CACHE = 'study_cloud_cache';
-const stateJson = (s) => JSON.stringify({ todos: s.todos, events: s.events, weekly: s.weekly, sessions: s.sessions, syllabus: s.syllabus });
+const stateJson = (s) => JSON.stringify({ todos: s.todos, events: s.events, weekly: s.weekly, sessions: s.sessions, syllabus: s.syllabus, countdowns: s.countdowns });
 let cacheTimer = null;
 function saveCloudCache() {
     if (!currentUser) return;
@@ -172,8 +187,8 @@ function save() {
         try {
             // mergeFields：只覆蓋這幾個欄位，雲端其他舊資料不受影響
             await fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), {
-                todos: state.todos, events: state.events, weekly: state.weekly, sessions: state.sessions, syllabus: state.syllabus, updatedAt: Date.now()
-            }, { mergeFields: ['todos', 'events', 'weekly', 'sessions', 'syllabus', 'updatedAt'] });
+                todos: state.todos, events: state.events, weekly: state.weekly, sessions: state.sessions, syllabus: state.syllabus, countdowns: state.countdowns, updatedAt: Date.now()
+            }, { mergeFields: ['todos', 'events', 'weekly', 'sessions', 'syllabus', 'countdowns', 'updatedAt'] });
         } catch (e) {
             console.error('雲端儲存失敗：', e);
             toast('雲端儲存失敗，請檢查網路');
@@ -182,6 +197,7 @@ function save() {
 }
 
 function renderAll() {
+    renderExamChips(); tick();
     renderToday();
     renderWeek();
     renderCalendar();
@@ -190,6 +206,7 @@ function renderAll() {
     renderStats();
     renderSyllabus();
     renderReviewLine();
+    renderHomeExtras();
 }
 
 /* =====================================================
@@ -445,7 +462,7 @@ function savePrefs() {
     clearTimeout(prefsTimer);
     prefsTimer = setTimeout(() => {
         fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), {
-            prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow', notify: localStorage.getItem(LS.notify) || 'banner' }
+            prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow', notify: localStorage.getItem(LS.notify) || 'banner', home: homePref }
         }, { mergeFields: ['prefs'] }).catch(e => console.warn('設定同步失敗：', e));
     }, 400);
 }
@@ -456,6 +473,10 @@ function applyCloudPrefs(p) {
     }
     if (BG_NAME[p.bg] && p.bg !== (localStorage.getItem(LS.bg) || 'glow')) { applyBg(p.bg); lsSet(LS.bg, p.bg); }
     if (NOTIFY_NAME[p.notify] && p.notify !== notifyStyle) { applyNotify(p.notify); }
+    if (p.home) {   // 首頁排法也跟著帳號
+        const h = normHome(p.home);
+        if (JSON.stringify(h) !== JSON.stringify(homePref)) { homePref = h; lsSet('study_home', h); applyHome(); }
+    }
 }
 
 /* =====================================================
@@ -655,23 +676,58 @@ const examEndTime = (e) => examTime(e.end || e.date) + 86400000;
 const examsOn = (ds) => examEntries.filter(([, e]) => e.date <= ds && ds <= (e.end || e.date)).map(([, e]) => e);
 const shortDate = (s) => { const d = parseYmd(s); return `${d.getMonth() + 1}/${d.getDate()}`; };
 const examTitle = (e) => e.end ? `${e.name}（${shortDate(e.date)}–${shortDate(e.end)}）` : e.name;
-let examKey = localStorage.getItem(LS.exam);
-if (!EXAMS[examKey]) examKey = 'gsat';
+let examKey = localStorage.getItem(LS.exam) || 'gsat';
 
-function renderExamChips() {
-    const now = Date.now();
-    $('examChips').innerHTML = examEntries.map(([k, e]) => {
-        const cls = ['chip', k === examKey ? 'active' : '', examEndTime(e) <= now ? 'past' : ''].join(' ');
-        return `<button class="${cls}" role="tab" aria-selected="${k === examKey}" data-exam="${k}">${esc(e.short)}</button>`;
-    }).join('');
+/* --- 倒數：內建考試＋自己加的（段考、英檢、生日…） --- */
+// 每年重複的（生日）：今年的還沒過就用今年，過了就換明年
+function cdNextDate(c) {
+    if (!c.yearly) return c.date;
+    const md = c.date.slice(5), t = todayStr();
+    for (let y = Number(t.slice(0, 4)); y < Number(t.slice(0, 4)) + 2; y++) {
+        let d = `${y}-${md}`;
+        if (md === '02-29' && new Date(y, 1, 29).getMonth() !== 1) d = `${y}-02-28`;
+        if (d >= t) return d;
+    }
+    return c.date;
 }
-$('examChips').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-exam]');
-    if (!b) return;
-    examKey = b.dataset.exam;
+function cdAll() {
+    return [
+        ...examEntries.map(([k, e]) => ({ key: k, builtin: true, name: e.name, short: e.short, date: e.date, end: e.end })),
+        ...state.countdowns.items.map(c => ({ key: c.id, builtin: false, name: c.name, short: c.short, date: cdNextDate(c), end: c.end, color: c.color, yearly: c.yearly, cal: c.cal }))
+    ];
+}
+const getCd = (key) => cdAll().find(c => c.key === key) || null;
+const cdEnded = (c, now = Date.now()) => examEndTime(c) <= now;
+// 放在上方的：自己排過就照自己的；沒排過就是「還沒考完一週以上的內建考試」＋自己加的
+function cdPins() {
+    const all = cdAll(), keys = new Set(all.map(c => c.key));
+    if (state.countdowns.pins) return state.countdowns.pins.filter(k => keys.has(k)).slice(0, CD_MAX);
+    const now = Date.now();
+    return all.filter(c => !c.builtin || examEndTime(c) > now - 7 * 86400000).map(c => c.key).slice(0, CD_MAX);
+}
+function renderExamChips() {
+    if (!getCd(examKey)) examKey = 'gsat';
+    const now = Date.now();
+    const keys = cdPins();
+    if (!keys.includes(examKey)) keys.splice(Math.min(keys.length, CD_MAX - 1), 1, examKey);   // 從「⋯」裡選了沒放在上方的：暫時換掉最後一個，上方還是只有一行
+    setHtml($('examChips'), keys.map(k => getCd(k)).filter(Boolean).map(c => {
+        const cls = ['chip', c.key === examKey ? 'active' : '', cdEnded(c, now) ? 'past' : ''].join(' ');
+        return `<button class="${cls}" role="tab" aria-selected="${c.key === examKey}" data-exam="${c.key}">${c.color ? `<i class="cd-dot" style="background:${c.color}"></i>` : ''}${esc(c.short)}</button>`;
+    }).join('') + `<button class="chip chip-more" data-cdall aria-label="全部倒數、新增倒數"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18" cy="12" r="1.8"/></svg></button>`);
+}
+function selectCd(key) {
+    examKey = key;
     lsSet(LS.exam, examKey);
     renderExamChips();
     tick();
+    const hero = document.querySelector('#tab-countdown .hero');
+    if (hero && !matchMedia('(prefers-reduced-motion: reduce)').matches) { hero.classList.remove('swap'); void hero.offsetWidth; hero.classList.add('swap'); }
+}
+$('examChips').addEventListener('click', (e) => {
+    if (e.target.closest('[data-cdall]')) { openCdManage(); return; }
+    const b = e.target.closest('[data-exam]');
+    if (!b || b.dataset.exam === examKey) return;
+    selectCd(b.dataset.exam);
 });
 
 /* ② 數字滾動：數字改變時，每一位像翻牌一樣往上滾 */
@@ -696,14 +752,17 @@ function roll(el, str) {
 // 內容一樣就不重寫（每秒都會呼叫，避免不必要的重新排版）
 const setText = (el, v) => { if (el.textContent !== v) el.textContent = v; };
 const setHtml = (el, v) => { if (el.dataset.h !== v) { el.dataset.h = v; el.innerHTML = v; } };
+let homeRoomDue = 0;
 function tick() {
     if (document.body.dataset.tab !== 'tab-countdown' || document.visibilityState === 'hidden') return;   // 看不到就不用更新
     const now = Date.now();
-    const exam = EXAMS[examKey];
+    const exam = getCd(examKey) || getCd('gsat');
     const diff = examTime(exam.date) - now;
     setText($('cdEyebrow'), `${exam.date.slice(0, 4)} · ${exam.name}`);
+    const hero = document.querySelector('#tab-countdown .hero');
+    if (hero.dataset.cdColor !== (exam.color || '')) { hero.dataset.cdColor = exam.color || ''; if (exam.color) hero.style.setProperty('--cd-color', exam.color); else hero.style.removeProperty('--cd-color'); hero.classList.toggle('custom', !!exam.color); }
     const ed = parseYmd(exam.date);
-    let dateHtml = `考試日期 <strong>${ed.getFullYear()}/${pad(ed.getMonth() + 1)}/${pad(ed.getDate())}</strong>（${WEEK_ZH[ed.getDay()]}）`;
+    let dateHtml = `${exam.builtin ? '考試日期' : (exam.yearly ? '下一次' : '日期')} <strong>${ed.getFullYear()}/${pad(ed.getMonth() + 1)}/${pad(ed.getDate())}</strong>（${WEEK_ZH[ed.getDay()]}）`;
     if (exam.end) {
         const ee = parseYmd(exam.end);
         dateHtml += ` – <strong>${pad(ee.getMonth() + 1)}/${pad(ee.getDate())}</strong>（${WEEK_ZH[ee.getDay()]}）`;
@@ -717,10 +776,11 @@ function tick() {
         setText($('cdNote'), '');
     } else {
         ['days', 'hours', 'minutes', 'seconds'].forEach(id => roll($(id), '00'));
-        setText($('cdNote'), now < examEndTime(exam) ? '考試進行中，加油！' : '這場已經考完了，辛苦了！');
+        setText($('cdNote'), now < examEndTime(exam) ? (exam.builtin ? '考試進行中，加油！' : '就是今天！') : (exam.builtin ? '這場已經考完了，辛苦了！' : '這天已經過了'));
     }
     const next = examEntries.map(([, e]) => ({ ...e, diff: examTime(e.date) - now }))
         .filter(e => e.diff > 0).sort((a, b) => a.diff - b.diff)[0];
+    if (homeRoomDue < now) { homeRoomDue = now + 15000; renderHomeRoom(); }
     setHtml($('nextExamLine'), next
         ? `下一場：${esc(next.name)} · 還有 <strong>${Math.ceil(next.diff / 86400000)}</strong> 天`
         : '所有考試都完成了，恭喜！');
@@ -1235,7 +1295,7 @@ let sylPickDraft = [];
 const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 function renderSylPick() {
     $('sylPickBody').innerHTML = SYL.map(x => `<div class="syl-pgrp">
-        <b><i style="background:var(--s${x.s})"></i>${x.name}${x.pickOne ? '<small>選一個</small>' : ''}</b>
+        <b><i style="background:var(--s${x.s})"></i>${x.name}${x.pickOne ? '<small>可以都選</small>' : ''}</b>
         <div class="syl-pills">${x.groups.map(([g]) => { const on = sylPickDraft.includes(g); return `<button class="syl-pill ${on ? 'on' : ''}" data-pick="${g}" aria-pressed="${on}">${on ? ICON_CHECK : ''}${g.replace(/^數學([AB])$/, '數學 $1')}</button>`; }).join('')}</div>
     </div>`).join('');
 }
@@ -1251,8 +1311,7 @@ $('sylPickBody').addEventListener('click', (e) => {
     const g = b.dataset.pick, grp = SYL.find(x => x.groups.some(([n]) => n === g));
     if (sylPickDraft.includes(g)) sylPickDraft = sylPickDraft.filter(n => n !== g);
     else {
-        if (grp.pickOne) sylPickDraft = sylPickDraft.filter(n => !grp.groups.some(([o]) => o === n));   // 數學 A、B 只能選一個
-        sylPickDraft.push(g);
+        sylPickDraft.push(g);   // 數學 A、B 兩個都要考的人可以都選
     }
     renderSylPick();
 });
@@ -1269,6 +1328,7 @@ function renderReviewLine() {
     if (!el) return;
     const flags = sylFlags();
     el.hidden = !flags.length;
+    el.closest('.home-mod')?.classList.toggle('mod-empty', !flags.length);
     if (!flags.length) { el.innerHTML = ''; return; }
     el.innerHTML = `<span class="rl-label">${ICON_BOOK}重點複習</span>` +
         flags.slice(0, 3).map(f => `<button class="rl-chip" data-goto="${esc(f.k)}"><i style="background:var(--s${f.s})"></i>${esc(f.u)}</button>`).join('') +
@@ -1316,8 +1376,8 @@ function renderCalendar() {
         const imp = evs.some(e => e.important);
         const cls = ['cal-cell', ds === t ? 'today' : '', ds < t ? 'past' : '', ds === selDate ? 'selected' : '', exs.length ? 'exam' : '', imp ? 'imp-day' : ''].join(' ');
         const singles = evs.filter(e => !e.end), multi = evs.find(e => e.end);
-        const tds = todosOn(ds);
-        const dots = [...singles.map(e => `<i class="${e.important ? 'imp' : ''}"></i>`), ...tds.map(() => '<i class="td"></i>')].slice(0, 3).join('');
+        const tds = todosOn(ds), cds = cdsOn(ds);
+        const dots = [...cds.map(c => `<i style="background:${c.color}"></i>`), ...singles.map(e => `<i class="${e.important ? 'imp' : ''}"></i>`), ...tds.map(() => '<i class="td"></i>')].slice(0, 3).join('');
         // 連續多天：手機在日期下方畫一條連起來的線（每週的頭尾也收成圓角）
         let bar = '';
         if (multi) {
@@ -1327,6 +1387,7 @@ function renderCalendar() {
         }
         const titles = [
             ...exs.map(e => `<span class="exam">${esc(e.short)}</span>`),
+            ...cds.map(c => `<span class="cdt" style="--cd-color:${c.color}">${esc(c.short)}</span>`),
             ...evs.map(e => `<span class="${e.important ? 'imp' : ''}${e.end ? ' multi' : ''}${e.end && ds !== e.start ? ' cont' : ''}">${esc(e.title)}</span>`),
             ...tds.map(x => `<span class="td">${esc(x.text)}</span>`)
         ].slice(0, 3).join('');
@@ -1369,12 +1430,17 @@ function renderDayList() {
             sub: e.end ? `第 ${daysBetween(e.start, selDate) + 1} 天（${spanText(e)}）` : ''
         }))
     ];
-    const tds = todosOn(selDate);
-    $('selDayList').innerHTML = (items.length || tds.length)
-        ? items.map(i => eventRowHtml(i, false)).join('') + tds.map(x => `<li class="cal-todo"><label><input type="checkbox" class="checkbox" data-todo="${x.id}" aria-label="完成待辦"><span class="cal-todo-tag">待辦</span><span class="cal-todo-tx">${esc(x.text)}</span></label></li>`).join('')
+    const tds = todosOn(selDate), cds = cdsOn(selDate);
+    $('selDayList').innerHTML = (items.length || tds.length || cds.length)
+        ? cds.map(c => `<li><button class="cd-row" data-cdedit="${c.key}"><span class="cd-row-bar" style="background:${c.color}"></span><span class="cd-row-tx">${esc(c.name)}${c.yearly ? '<small>每年</small>' : c.end ? `<small>${shortDate(c.date)} – ${shortDate(c.end)}</small>` : ''}</span><span class="cd-row-tag" style="--cd-color:${c.color}">倒數</span></button></li>`).join('') + items.map(i => eventRowHtml(i, false)).join('') + tds.map(x => `<li class="cal-todo"><label><input type="checkbox" class="checkbox" data-todo="${x.id}" aria-label="完成待辦"><span class="cal-todo-tag">待辦</span><span class="cal-todo-tx">${esc(x.text)}</span></label></li>`).join('')
         : '<li class="empty">這天沒有行程</li>';
 }
 
+// 自訂倒數在行事曆上（勾了「也顯示在行事曆」的；每年重複的看月日）
+function cdsOn(ds) {
+    return state.countdowns.items.filter(c => c.cal && (c.yearly ? c.date.slice(5) === ds.slice(5) && c.date <= ds : c.date <= ds && ds <= (c.end || c.date)))
+        .map(c => ({ key: c.id, name: c.name, short: c.short, color: c.color, yearly: c.yearly, date: c.date, end: c.end }));
+}
 function renderUpcoming() {
     const t = todayStr();
     const items = [
@@ -1398,7 +1464,7 @@ function onEventListClick(e) {
     if (row.dataset.exam) { toast(`${row.dataset.title} 是固定的考試日期`); return; }
     openEventModal({ id: row.dataset.id });
 }
-$('selDayList').addEventListener('click', onEventListClick);
+$('selDayList').addEventListener('click', (e) => { const c = e.target.closest('[data-cdedit]'); if (c) { openCdEdit(c.dataset.cdedit); return; } onEventListClick(e); });
 $('selDayList').addEventListener('change', (e) => { if (e.target.dataset.todo && e.target.checked) completeTodoById(e.target.dataset.todo); });
 $('upcomingList').addEventListener('click', onEventListClick);
 
@@ -1602,7 +1668,8 @@ const MODES = [
     { label: '自由計時', focus: 0, rest: 5, hint: '按下開始就往上計時' }
 ];
 const RING_C = 2 * Math.PI * 134;   // 圓環周長（viewBox 290、半徑 134）
-const pipSupported = 'documentPictureInPicture' in window;
+// 子母畫面只給電腦版（滑鼠操作、螢幕夠寬）
+const pipSupported = 'documentPictureInPicture' in window && matchMedia('(pointer: fine) and (min-width: 900px)').matches;
 const BASE_TITLE = document.title;
 
 // 計時狀態只存在這台裝置；記錄下來的讀書時間（sessions）會同步到雲端
@@ -1790,7 +1857,7 @@ function renderTimer() {
         const task = taskFor(timer.subject);
         const done = roundsOn(t);
         const dots = timer.duration ? `<div class="round-dots" aria-label="今天第 ${done + 1} 輪">${'<i></i>'.repeat(Math.min(done, 8))}<i class="cur"></i><span>今天第 ${done + 1} 輪</span></div>` : '';
-        el.innerHTML = `<div class="timer-wrap">
+        el.innerHTML = `<div class="timer-wrap focus-wrap">
             <div class="timer-head">
                 <span class="chip-subj"><i class="sdot s${timer.subject}"></i>${SUBJECTS[timer.subject]}</span>
                 <p class="label">${paused ? '已暫停' : '專注中'}</p>
@@ -1806,7 +1873,10 @@ function renderTimer() {
                 <button class="btn btn-big" data-act="finish">${timer.duration ? '提早完成' : '完成'}</button>
             </div>
             <div class="focus-extra">
-                ${pipSupported ? '<button class="btn btn-small" data-act="pip">開啟子母畫面</button>' : ''}
+                <div class="focus-tools">
+                    <button class="tool-btn" data-act="standby"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/></svg>全螢幕時鐘</button>
+                    ${pipSupported ? '<button class="tool-btn" data-act="pip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><rect x="12" y="11" width="6.5" height="5" rx="1.2" fill="currentColor" stroke="none"/></svg>子母畫面</button>' : ''}
+                </div>
                 <p class="hint">關掉 App 也沒關係，回來時會自動算好經過的時間</p>
             </div>
         </div>`;
@@ -1869,6 +1939,7 @@ function renderTimer() {
     }
     applyFocusMode();
     updateTimerLive();
+    if (timer.phase !== 'focus') closeStandby(); else updateStandby(true);
 }
 
 /* --- 計時頁「今天的紀錄」：一眼看到今天每一輪，點一下就能修改 --- */
@@ -1979,6 +2050,7 @@ function updateTimerLive() {
             if (bar) bar.style.strokeDashoffset = offset.toFixed(1);
         }
         document.title = `${timer.pausedAt ? '⏸ ' : ''}${text} · ${SUBJECTS[timer.subject]}`;
+        updateStandby();
         updatePip(text, offset);
     } else if (timer.phase === 'break') {
         const left = timer.breakLen - (now - timer.breakStart);
@@ -2085,6 +2157,7 @@ $('tab-timer').addEventListener('click', (e) => {
     else if (act === 'stop') endBreak(false);
     else if (act === 'stats') { statOffset = 0; statSel = null; renderStats(); showTab('tab-stats'); }
     else if (act === 'pip') openPip();
+    else if (act === 'standby') openStandby();
     else if (act === 'room') { roomView = null; showTab('tab-room'); }
 });
 $('tab-timer').addEventListener('change', (e) => {
@@ -3319,7 +3392,7 @@ let codeDraft = '';
 let roomRenderTimer = 0;
 function renderRoomSoon() {
     if (roomRenderTimer) return;
-    roomRenderTimer = setTimeout(() => { roomRenderTimer = 0; requestAnimationFrame(() => renderRoom()); }, 120);
+    roomRenderTimer = setTimeout(() => { roomRenderTimer = 0; requestAnimationFrame(() => { renderRoom(); renderHomeRoom(); }); }, 120);
 }
 // 內容跟上次一樣就不動畫面（不重新排版），只有真的變了才更新
 function setRoomHtml(el, html) {
@@ -4188,6 +4261,373 @@ window.addEventListener('scroll', onScroll, { passive: true });
 requestAnimationFrame(onScroll);   // 等第一次畫面排好再讀捲動位置，不要卡住開啟
 
 /* =====================================================
+ * 拖曳排序（我的倒數、編輯首頁共用）：按住右邊的 ☰ 上下拖，放開就排好；鍵盤也可以用上下鍵
+ * ===================================================== */
+function makeSortable(list, onMove) {
+    list.addEventListener('pointerdown', (e) => {
+        const h = e.target.closest('.drag-h');
+        if (!h || !list.contains(h)) return;
+        const row = h.closest('[data-sort]');
+        if (!row) return;
+        e.preventDefault();
+        const rows = [...list.querySelectorAll('[data-sort]')];
+        const from = rows.indexOf(row);
+        const rects = rows.map(r => r.getBoundingClientRect());
+        const startY = e.clientY, hgt = rects[from].height;
+        let to = from;
+        row.classList.add('dragging');
+        list.classList.add('sorting');
+        try { h.setPointerCapture(e.pointerId); } catch (err) {}
+        const move = (ev) => {
+            const dy = Math.max(rects[0].top - rects[from].top, Math.min(rects[rects.length - 1].top - rects[from].top, ev.clientY - startY));
+            row.style.transform = `translate3d(0, ${dy}px, 0)`;
+            const center = rects[from].top + hgt / 2 + dy;
+            to = from;
+            rects.forEach((r, i) => { const mid = r.top + r.height / 2; if (i < from && center <= mid) to = Math.min(to, i); if (i > from && center >= mid) to = Math.max(to, i); });
+            rows.forEach((r, i) => {
+                if (r === row) return;
+                const sh = from < to && i > from && i <= to ? -hgt : to < from && i >= to && i < from ? hgt : 0;
+                r.style.transform = sh ? `translate3d(0, ${sh}px, 0)` : '';
+            });
+        };
+        const up = () => {
+            h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
+            list.classList.remove('sorting');
+            rows.forEach(r => { r.style.transform = ''; });
+            row.classList.remove('dragging');
+            if (to !== from) { onMove(from, to); try { navigator.vibrate && navigator.vibrate(8); } catch (err) {} }
+        };
+        h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+    });
+    list.addEventListener('keydown', (e) => {
+        const h = e.target.closest('.drag-h');
+        if (!h || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+        const rows = [...list.querySelectorAll('[data-sort]')];
+        const from = rows.indexOf(h.closest('[data-sort]')), to = from + (e.key === 'ArrowUp' ? -1 : 1);
+        if (from < 0 || to < 0 || to >= rows.length) return;
+        e.preventDefault();
+        onMove(from, to);
+        list.querySelectorAll('[data-sort]')[to]?.querySelector('.drag-h')?.focus();
+    });
+}
+const moveItem = (arr, from, to) => { const a = arr.slice(); const [x] = a.splice(from, 1); a.splice(to, 0, x); return a; };
+const ICON_HANDLE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 8h14M5 12h14M5 16h14"/></svg>';
+const ICON_CHECK_SM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+/* =====================================================
+ * 我的倒數：釘選到倒數頁上方（最多 4 個）、排順序、新增／修改自己的倒數
+ * ===================================================== */
+function cdRelText(c) {
+    const d = daysBetween(todayStr(), c.date);
+    if (cdEnded(c)) return '已結束';
+    if (d <= 0) return c.end ? '進行中' : '今天';
+    return d === 1 ? '明天' : `${d} 天後`;
+}
+function renderCdManage() {
+    const pins = cdPins(), all = cdAll();
+    const rest = all.filter(c => !pins.includes(c.key)).sort((a, b) => (cdEnded(a) - cdEnded(b)) || a.date.localeCompare(b.date));
+    const row = (c, pinned) => {
+        const d = parseYmd(c.date);
+        const tags = (c.builtin ? '<em class="cdm-tag">內建</em>' : '') + (c.yearly ? '<em class="cdm-tag yr">每年</em>' : '');
+        return `<li class="cdm-row ${cdEnded(c) ? 'ended' : ''}" ${pinned ? `data-sort="${c.key}"` : ''}>
+            <button class="cdm-pin ${pinned ? 'on' : ''}" data-cdpin="${c.key}" aria-pressed="${pinned}" aria-label="${pinned ? '從上方移除' : '放到倒數頁上方'}">${ICON_CHECK_SM}</button>
+            <button class="cdm-main" data-cdpick="${c.key}">
+                <span class="cdm-name"><i class="cd-dot" style="background:${c.color || 'var(--accent)'}"></i><b>${esc(c.name)}</b>${tags}</span>
+                <span class="cdm-sub num">${d.getMonth() + 1}/${d.getDate()}${c.end ? ` – ${shortDate(c.end)}` : ''} · ${cdRelText(c)}</span>
+            </button>
+            ${c.builtin ? '' : `<button class="cdm-edit" data-cdedit="${c.key}" aria-label="修改 ${esc(c.name)}">${ICON_PEN}</button>`}
+            ${pinned ? `<button class="drag-h" aria-label="拖曳排序（也可以用上下鍵）">${ICON_HANDLE}</button>` : '<span class="drag-sp"></span>'}
+        </li>`;
+    };
+    $('cdmPinned').innerHTML = pins.map(k => all.find(c => c.key === k)).filter(Boolean).map(c => row(c, true)).join('') || '<li class="empty">還沒有放任何倒數，勾選下面的就會出現在上方</li>';
+    $('cdmRest').innerHTML = rest.map(c => row(c, false)).join('') || '<li class="empty">全部都放在上方了</li>';
+    $('cdmRestHead').hidden = !rest.length && !all.length;
+    $('cdmCount').textContent = `${pins.length} / ${CD_MAX}`;
+}
+function openCdManage() { renderCdManage(); openModal('cdModal'); }
+function setPins(p) { state.countdowns = { ...state.countdowns, pins: p.slice(0, CD_MAX) }; save(); renderExamChips(); renderCdManage(); }
+makeSortable($('cdmPinned'), (from, to) => setPins(moveItem(cdPins(), from, to)));
+$('cdModal').addEventListener('click', (e) => {
+    const pin = e.target.closest('[data-cdpin]');
+    if (pin) {
+        const k = pin.dataset.cdpin, pins = cdPins();
+        if (pins.includes(k)) setPins(pins.filter(x => x !== k));
+        else if (pins.length >= CD_MAX) toast(`上方最多放 ${CD_MAX} 個，先取消一個`);
+        else setPins([...pins, k]);
+        return;
+    }
+    const pick = e.target.closest('[data-cdpick]');
+    if (pick) { closeModal('cdModal'); selectCd(pick.dataset.cdpick); return; }
+    const ed = e.target.closest('[data-cdedit]');
+    if (ed) { openCdEdit(ed.dataset.cdedit); return; }
+    if (e.target.closest('#cdmAdd')) openCdEdit(null);
+});
+
+let cdEditing = null, cdColor = CD_COLORS[0];
+function openCdEdit(id) {
+    const c = id ? state.countdowns.items.find(x => x.id === id) : null;
+    if (id && !c) return;
+    cdEditing = id;
+    $('cdeTitle').textContent = c ? '修改倒數' : '新增倒數';
+    $('cdeName').value = c ? c.name : '';
+    $('cdeShort').value = c ? c.short : '';
+    $('cdeDate').value = c ? c.date : '';
+    $('cdeEnd').value = c?.end || '';
+    $('cdeYearly').checked = !!c?.yearly;
+    $('cdeCal').checked = c ? c.cal : true;
+    cdColor = c ? c.color : CD_COLORS[state.countdowns.items.length % CD_COLORS.length];
+    $('cdeDelete').hidden = !c;
+    renderCdColors(); syncCdYearly();
+    openModal('cdEditModal');
+    if (!c) setTimeout(() => $('cdeName').focus(), 260);
+}
+function renderCdColors() {
+    $('cdeColors').innerHTML = CD_COLORS.map(col => `<button class="cde-color ${col === cdColor ? 'on' : ''}" data-col="${col}" style="--c:${col}" aria-label="顏色" aria-pressed="${col === cdColor}"></button>`).join('');
+}
+function syncCdYearly() { const y = $('cdeYearly').checked; $('cdeEnd').disabled = y; $('cdeEndWrap').classList.toggle('off', y); if (y) $('cdeEnd').value = ''; }
+$('cdeColors').addEventListener('click', (e) => { const b = e.target.closest('[data-col]'); if (b) { cdColor = b.dataset.col; renderCdColors(); } });
+$('cdeYearly').addEventListener('change', syncCdYearly);
+$('cdeName').addEventListener('input', () => { $('cdeShort').placeholder = ($('cdeName').value.trim() || '例如：段考').slice(0, 4); });
+function saveCdEdit() {
+    const name = $('cdeName').value.trim();
+    const date = $('cdeDate').value, yearly = $('cdeYearly').checked;
+    const end = yearly ? '' : $('cdeEnd').value;
+    if (!name) { toast('請輸入名稱'); $('cdeName').focus(); return; }
+    if (!isYmd(date)) { toast('請選擇日期'); return; }
+    if (end && end < date) { toast('結束日期要在開始日期之後'); return; }
+    const item = { id: cdEditing || 'c_' + uid(), name: name.slice(0, 30), short: ($('cdeShort').value.trim() || name).slice(0, 4), date, ...(end && end > date ? { end } : {}), color: cdColor, yearly, cal: $('cdeCal').checked };
+    const items = state.countdowns.items.slice();
+    let pins = cdPins();
+    if (cdEditing) items[items.findIndex(x => x.id === cdEditing)] = item;
+    else {
+        items.push(item);
+        if (pins.length < CD_MAX) pins = [...pins, item.id];
+        else {   // 上方滿了：先擠掉已經考完的，不然就只放在「⋯」裡
+            const old = pins.find(k => { const c = getCd(k); return c && cdEnded(c); });
+            if (old) pins = [...pins.filter(k => k !== old), item.id];
+        }
+    }
+    state.countdowns = { items, pins };
+    save();
+    closeModal('cdEditModal');
+    renderCalendar();
+    if ($('cdModal').classList.contains('open')) renderCdManage();
+    selectCd(item.id);
+    if (!cdEditing && !pins.includes(item.id)) toast('已新增；上方滿了，可以在「⋯」裡換位置');
+    else toast(cdEditing ? '已更新' : `已新增「${item.name}」`);
+}
+$('cdeSave').addEventListener('click', saveCdEdit);
+onEnter($('cdeName'), saveCdEdit);
+$('cdeDelete').addEventListener('click', () => {
+    const c = state.countdowns.items.find(x => x.id === cdEditing);
+    if (!c) return;
+    const before = state.countdowns;
+    state.countdowns = { items: before.items.filter(x => x.id !== c.id), pins: before.pins ? before.pins.filter(k => k !== c.id) : null };
+    save(); closeModal('cdEditModal');
+    if (examKey === c.id) selectCd('gsat'); else renderExamChips();
+    renderCalendar();
+    if ($('cdModal').classList.contains('open')) renderCdManage();
+    toast(`已刪除「${c.name}」`, { label: '復原', fn: () => { state.countdowns = before; save(); renderExamChips(); renderCalendar(); if ($('cdModal').classList.contains('open')) renderCdManage(); } });
+});
+
+/* =====================================================
+ * 首頁自己排：倒數頁下面的區塊要不要顯示、排什麼順序（跟著帳號同步）
+ * ===================================================== */
+const HOME_MODS = [
+    { k: 'time', name: '今天讀了多久', icon: '<path d="M4 18V11M10 18V6M16 18v-5M2 21h20"/>' },
+    { k: 'list', name: '今天的清單', sub: '進度表和今天的待辦', icon: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>' },
+    { k: 'review', name: '重點複習', sub: '有標重點時才會出現', icon: '<path d="M6 3h12v18l-6-4-6 4z"/>' },
+    { k: 'roulette', name: '現在要讀什麼？', icon: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="15" cy="9" r="1"/><circle cx="9" cy="15" r="1"/>' },
+    { k: 'upcoming', name: '接下來的行程', sub: '最近的考試、行程和倒數', off: true, icon: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>' },
+    { k: 'room', name: '讀書房間', sub: '朋友現在在讀什麼', off: true, icon: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.5.2 4 1.9 4.5 4.9"/>' }
+];
+const HOME_DEFAULT = { order: HOME_MODS.map(m => m.k), hide: HOME_MODS.filter(m => m.off).map(m => m.k) };
+function normHome(h) {
+    const keys = HOME_MODS.map(m => m.k);
+    if (!h || !Array.isArray(h.order)) return { order: HOME_DEFAULT.order.slice(), hide: HOME_DEFAULT.hide.slice() };
+    const order = h.order.filter(k => keys.includes(k));
+    keys.forEach(k => { if (!order.includes(k)) order.push(k); });
+    return { order, hide: (Array.isArray(h.hide) ? h.hide : []).filter(k => keys.includes(k)) };
+}
+let homePref = normHome(lsGet('study_home', null));
+let homeDraft = null;
+function applyHome() {
+    const box = $('homeMods');
+    const mods = Object.fromEntries([...box.querySelectorAll('.home-mod')].map(el => [el.dataset.mod, el]));
+    let prevVisible = null;
+    homePref.order.forEach(k => {
+        const el = mods[k];
+        if (!el) return;
+        box.appendChild(el);
+        const on = !homePref.hide.includes(k);
+        el.classList.toggle('mod-off', !on);
+        if (k === 'list') el.classList.toggle('with-head', prevVisible !== 'time');   // 「今天」標題不在正上方時，清單自己帶一個小標題
+        if (on && !(k === 'review' && $('reviewLine').hidden)) prevVisible = k;
+    });
+    box.querySelectorAll('.home-mod:not(.mod-off)').forEach((el, i, arr) => el.classList.toggle('last', i === arr.length - 1));
+    renderHomeExtras();
+}
+function renderHomeEdit() {
+    const fixed = `<li class="he-row fixed"><span class="he-check on dim">${ICON_CHECK_SM}</span><span class="he-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/></svg></span><span class="he-tx"><b>倒數</b><small>固定在最上面</small></span><span class="drag-sp"></span></li>`;
+    $('homeEditList').innerHTML = fixed + homeDraft.order.map(k => {
+        const m = HOME_MODS.find(x => x.k === k), on = !homeDraft.hide.includes(k);
+        return `<li class="he-row" data-sort="${k}">
+            <button class="he-check ${on ? 'on' : ''}" data-hetoggle="${k}" aria-pressed="${on}" aria-label="${on ? '隱藏' : '顯示'}${m.name}">${ICON_CHECK_SM}</button>
+            <span class="he-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${m.icon}</svg></span>
+            <span class="he-tx"><b>${m.name}</b>${m.sub ? `<small>${m.sub}</small>` : ''}</span>
+            <button class="drag-h" aria-label="拖曳排序 ${m.name}（也可以用上下鍵）">${ICON_HANDLE}</button>
+        </li>`;
+    }).join('');
+}
+function openHomeEdit() { homeDraft = normHome(homePref); renderHomeEdit(); openModal('homeModal'); }
+makeSortable($('homeEditList'), (from, to) => { homeDraft.order = moveItem(homeDraft.order, from, to); renderHomeEdit(); });
+$('homeEditList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-hetoggle]');
+    if (!b) return;
+    const k = b.dataset.hetoggle;
+    homeDraft.hide = homeDraft.hide.includes(k) ? homeDraft.hide.filter(x => x !== k) : [...homeDraft.hide, k];
+    renderHomeEdit();
+});
+$('homeEditDone').addEventListener('click', () => {
+    homePref = normHome(homeDraft);
+    lsSet('study_home', homePref);
+    applyHome(); savePrefs();
+    closeModal('homeModal');
+});
+$('homeEditReset').addEventListener('click', () => { homeDraft = normHome(null); renderHomeEdit(); });
+$('homeEditBtn').addEventListener('click', openHomeEdit);
+
+// 接下來的行程＋讀書房間（兩個新的首頁區塊，有打開才畫）
+function renderHomeExtras() { renderHomeUpcoming(); renderHomeRoom(); }
+function renderHomeUpcoming() {
+    if (homePref.hide.includes('upcoming')) return;
+    const t = todayStr();
+    const items = [
+        ...examEntries.filter(([, e]) => (e.end || e.date) >= t).map(([, e]) => ({ date: e.date, title: e.name, color: 'var(--exam)', tag: '考試' })),
+        ...state.events.filter(e => (e.end || e.start) >= t).map(e => ({ date: e.start < t ? t : e.start, title: e.title, color: e.important ? 'var(--important)' : 'var(--faint)' })),
+        ...state.countdowns.items.map(c => ({ date: cdNextDate(c), title: c.name, color: c.color, tag: '倒數', end: c.end })).filter(c => (c.end || c.date) >= t)
+    ].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+    setHtml($('homeUpcoming'), items.length ? items.map(i => {
+        const d = parseYmd(i.date), rel = daysBetween(t, i.date);
+        return `<li><button class="hu-row" data-hudate="${i.date}"><span class="hu-date num"><b>${d.getMonth() + 1}/${d.getDate()}</b><small>週${WEEK_ZH[d.getDay()]}</small></span><i class="hu-bar" style="background:${i.color}"></i><span class="hu-tx">${esc(i.title)}</span><span class="hu-rel">${rel <= 0 ? '今天' : rel === 1 ? '明天' : rel + ' 天後'}</span></button></li>`;
+    }).join('') : '<li class="empty">接下來沒有安排</li>');
+}
+$('homeUpcoming').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-hudate]');
+    if (!b) return;
+    selDate = b.dataset.hudate;
+    const d = parseYmd(selDate); calY = d.getFullYear(); calM = d.getMonth();
+    showTab('tab-calendar'); renderCalendar();
+});
+function renderHomeRoom() {
+    if (homePref.hide.includes('room')) return;
+    let html;
+    if (!currentUser) html = `<div class="hr-empty"><span>登入後就能看到朋友現在在讀什麼</span><button class="btn btn-small" data-hr="login">登入</button></div>`;
+    else if (!roomsLoaded) html = `<div class="hr-empty"><span>讀取中…</span></div>`;
+    else if (!myRooms.length) html = `<div class="hr-empty"><span>還沒加入讀書房間</span><button class="btn btn-small" data-hr="room">去看看</button></div>`;
+    else {
+        const now = Date.now();
+        const uids = [...new Set(myRooms.flatMap(r => r.members || []))].filter(u => u !== currentUser.uid && profiles[u]);
+        const list = uids.map(u => ({ u, p: profiles[u], s: liveStatus(profiles[u], now) }))
+            .sort((a, b) => (b.s.phase === 'focus') - (a.s.phase === 'focus') || b.s.min - a.s.min).slice(0, 5);
+        const live = list.filter(x => x.s.phase === 'focus').length;
+        html = list.length ? `<p class="hr-sum">${live ? `<i></i>${live} 人正在讀` : '現在沒有人在讀'}</p>` + list.map(({ u, p, s }) => {
+            const st = s.phase === 'focus' ? (p.hidden ? '專注中' : `${SUBJECTS[s.subject] || ''} · 讀了 ${fmtHM(s.el / 60000)}`) : s.phase === 'break' ? '休息中' : (s.min ? `今天 ${fmtHM(s.min)}` : '今天還沒讀');
+            return `<button class="hr-row ${s.phase}" data-hr="room">${avHtml(p, u)}<span class="hr-name">${esc(p.name || '同學')}</span><span class="hr-st">${st}</span></button>`;
+        }).join('') : `<div class="hr-empty"><span>房間裡只有你，邀請朋友一起來吧</span><button class="btn btn-small" data-hr="room">邀請</button></div>`;
+    }
+    setHtml($('homeRoom'), html);
+}
+$('homeRoom').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-hr]')?.dataset.hr;
+    if (a === 'login') openModal('accountModal');
+    else if (a === 'room') { roomView = null; showTab('tab-room'); }
+});
+
+/* =====================================================
+ * 全螢幕時鐘（專注中）：主題背景＋像 iPhone 待機模式的大數字，手機直放、橫放、平板、電腦都置中
+ * ===================================================== */
+let sbOpen = false, sbHideTimer = 0, sbShiftTimer = 0, sbFontLoaded = false;
+function openStandby() {
+    if (timer.phase !== 'focus') return;
+    if (!sbFontLoaded) {   // 沒有 iPhone 圓體字的裝置，用相近的 Nunito（只下載數字）
+        sbFontLoaded = true;
+        const l = document.createElement('link'); l.rel = 'stylesheet';
+        l.href = 'https://fonts.googleapis.com/css2?family=Nunito:wght@600;700&display=swap&text=0123456789%3A';
+        document.head.appendChild(l);
+    }
+    sbOpen = true;
+    const el = $('standby');
+    el.hidden = false; el.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('sb-on');
+    requestAnimationFrame(() => el.classList.add('show'));
+    try { document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {}); } catch (e) {}
+    requestWake();
+    updateStandby(true);
+    sbWake();
+    clearInterval(sbShiftTimer);
+    sbShiftTimer = setInterval(() => {   // 每分鐘稍微挪一下位置，OLED 螢幕比較不會烙印
+        el.style.setProperty('--sb-x', `${Math.round(Math.random() * 16 - 8)}px`);
+        el.style.setProperty('--sb-y', `${Math.round(Math.random() * 12 - 6)}px`);
+    }, 60000);
+}
+function closeStandby() {
+    if (!sbOpen) return;
+    sbOpen = false;
+    clearTimeout(sbHideTimer); clearInterval(sbShiftTimer);
+    const el = $('standby');
+    el.classList.remove('show', 'idle');
+    document.body.classList.remove('sb-on');
+    el.setAttribute('aria-hidden', 'true');
+    setTimeout(() => { if (!sbOpen) el.hidden = true; }, 380);
+    try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); } catch (e) {}
+}
+// 點一下畫面：按鈕出現，4 秒沒動作又藏起來
+function sbWake() {
+    const el = $('standby');
+    el.classList.remove('idle');
+    clearTimeout(sbHideTimer);   // （每分鐘的小位移也會在這裡重設，不會一直偏一邊）
+    sbHideTimer = setTimeout(() => { if (sbOpen && !timer.pausedAt) el.classList.add('idle'); }, 4000);
+}
+function updateStandby(full) {
+    if (!sbOpen) return;
+    if (timer.phase !== 'focus') { closeStandby(); return; }
+    const now = Date.now(), el = focusElapsed(now);
+    const ms = timer.duration ? Math.max(0, timer.duration - el) : el;
+    const tot = Math.floor(ms / 1000), h = Math.floor(tot / 3600), m = Math.floor(tot % 3600 / 60), sec = tot % 60;
+    setText($('sbTime'), h ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`);
+    $('standby').classList.toggle('long', !!h);
+    const frac = timer.duration ? Math.min(1, el / timer.duration) : (el % 3600000) / 3600000;
+    $('sbRing').style.strokeDashoffset = (timer.duration ? RING_C * frac : RING_C * (1 - frac)).toFixed(1);
+    const d = new Date(now);
+    setText($('sbNow'), `${pad(d.getHours())}:${pad(d.getMinutes())}`);
+    if (full) {
+        $('sbRing').setAttribute('stroke-dasharray', RING_C.toFixed(2));
+        const task = taskFor(timer.subject);
+        $('sbSubj').innerHTML = `<i class="sdot s${timer.subject}"></i>${SUBJECTS[timer.subject]}`;
+        setText($('sbTask'), task && !task.done ? task.text : '');
+    }
+    const paused = !!timer.pausedAt;
+    $('standby').classList.toggle('paused', paused);
+    $('sbRing').classList.toggle('paused', paused);
+    setText($('sbSub'), paused ? '已暫停' : (timer.duration ? `已專注 ${fmtHM(el / 60000)}` : '自由計時中'));
+    setText($('sbPause'), paused ? '繼續' : '暫停');
+}
+$('standby').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-sb]')?.dataset.sb;
+    if (a === 'exit') { closeStandby(); return; }
+    if (a === 'pause') { togglePause(); updateStandby(); sbWake(); return; }
+    if (a === 'finish') { closeStandby(); finishFocus(false); return; }
+    sbWake();
+});
+document.addEventListener('keydown', (e) => {
+    if (!sbOpen) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); closeStandby(); }
+    else if (e.key === ' ') { e.preventDefault(); e.stopImmediatePropagation(); togglePause(); updateStandby(); sbWake(); }
+}, true);
+document.addEventListener('fullscreenchange', () => { /* 只是離開瀏覽器全螢幕：時鐘畫面保留，再點右上角就能關 */ });
+
+/* =====================================================
  * 啟動：先用本機資料畫出畫面
  * ===================================================== */
 { const v = $('appVersion'); if (v) v.textContent = `目前版本 ${APP_VERSION}`; }
@@ -4196,6 +4636,7 @@ if (removedDupes) saveLocal();
 // 上次是登入狀態：先用雲端副本畫出畫面，雲端回應後只在資料真的有變時才重畫
 let cachedUid = null;
 { const c = loadCloudCache(); if (c) { state = c.state; cachedUid = c.uid; } }
+applyHome();
 renderExamChips();
 // 關掉 App 期間一輪已經結束的話，打開時直接記錄（不響）
 if (timer.phase === 'focus' && timer.duration && !timer.pausedAt && focusElapsed() >= timer.duration) finishFocus(true, true);
