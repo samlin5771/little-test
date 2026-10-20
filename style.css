@@ -1994,3 +1994,4 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 }
 .fab { transition: opacity .2s ease, transform .2s ease, visibility .2s; }
 .fab.away { opacity: 0; transform: scale(0.8); visibility: hidden; pointer-events: none; }
+#loginBtn.busy { opacity: .7; pointer-events: none; }

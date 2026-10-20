@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v42';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v43';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -4089,7 +4089,7 @@ function renderAccount(statusText) {
     $('loginBtn').classList.toggle('btn-accent', !u);
     $('loginBtn').classList.toggle('btn-logout', !!u);
 }
-$('accountBtn').addEventListener('click', () => { $('installState').textContent = isStandalone() ? '已加入 ✓' : '教學'; closeFolds(); openModal('accountModal'); });
+$('accountBtn').addEventListener('click', () => { $('installState').textContent = isStandalone() ? '已加入 ✓' : '教學'; closeFolds(); openModal('accountModal'); warmLogin(); });
 $('guideRow').addEventListener('click', () => { closeModal('accountModal'); openGuide(); });
 $('installRow').addEventListener('click', () => { closeModal('accountModal'); openInstall(false); });
 
@@ -4245,6 +4245,13 @@ setInterval(() => {
 /* =====================================================
  * Firebase 登入與雲端同步
  * ===================================================== */
+// 先把 Google 登入用的小網頁載好：沒登入時才做（已登入的人不需要），按「登入」才不會卡很久（Safari 特別明顯）
+let loginWarm = false;
+function warmLogin() {
+    if (loginWarm || !fb || currentUser) return;
+    loginWarm = true;
+    fb.authM.getRedirectResult(fb.auth).catch(() => {});
+}
 async function initFirebase() {
     try {
         const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VER}`;
@@ -4278,7 +4285,7 @@ async function initFirebase() {
         // 只有剛用「整頁跳轉」登入回來時才需要讀結果（平常打開不用多載一個登入用的網頁框）
         let redirected = false;
         try { redirected = sessionStorage.getItem('study_redirect') === '1'; sessionStorage.removeItem('study_redirect'); } catch (e) {}
-        if (redirected) authM.getRedirectResult(auth).catch(err => { console.warn('跳轉登入結果：', err); toast('登入沒有完成，請再試一次'); });
+        if (redirected) { loginWarm = true; authM.getRedirectResult(auth).catch(err => { console.warn('跳轉登入結果：', err); toast('登入沒有完成，請再試一次'); }); }
         authM.onAuthStateChanged(auth, onAuthChanged);
     } catch (e) {
         console.warn('Firebase 載入失敗（可能離線），只使用本機儲存：', e);
@@ -4291,6 +4298,7 @@ function onAuthChanged(user) {
     cloudReady = false;
     if (unsubscribe) { unsubscribe(); unsubscribe = null; }
     if (!user) {
+        setTimeout(warmLogin, 1500);
         roomStop(); lastProfile = '';
         clearCloudCache(); cachedUid = null;
         state = loadLocal();
@@ -4344,6 +4352,7 @@ function onAuthChanged(user) {
     });
 }
 
+let loginBusy = false;
 $('loginBtn').addEventListener('click', async () => {
     if (!fb) { toast('目前無法連線，請連上網路後再試'); return; }
     const { auth, provider, authM } = fb;
@@ -4351,6 +4360,12 @@ $('loginBtn').addEventListener('click', async () => {
         if (confirm('確定要登出嗎？')) { await authM.signOut(auth); closeModal('accountModal'); }
         return;
     }
+    if (loginBusy) return;
+    loginBusy = true;
+    const btn = $('loginBtn');
+    btn.textContent = '登入中…'; btn.classList.add('busy');
+    // 登入視窗在另一個分頁打開時，回到這頁會自動完成；太久沒反應就讓按鈕恢復，可以再按一次
+    const slow = setTimeout(() => { if (!currentUser) toast('登入視窗還開著嗎？完成後回到這裡就會自動登入'); }, 8000);
     try {
         await authM.signInWithPopup(auth, provider);
         closeModal('accountModal');
@@ -4359,6 +4374,10 @@ $('loginBtn').addEventListener('click', async () => {
         const useRedirect = ['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'];
         if (useRedirect.includes(err.code)) { try { sessionStorage.setItem('study_redirect', '1'); } catch (e) {} authM.signInWithRedirect(auth, provider); }
         else if (err.code !== 'auth/popup-closed-by-user') alert('登入失敗：' + err.message);
+    } finally {
+        clearTimeout(slow);
+        loginBusy = false; btn.classList.remove('busy');
+        if (!currentUser) renderAccount();
     }
 });
 
