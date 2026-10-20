@@ -14,8 +14,20 @@
  *   8. AI 讀書計畫
  *   9. 讀書房間
  *   質感效果（背景光、數字滾動、按鈕回饋、開啟畫面、滑動、指令面板、分享卡片）
+ *   改版 2：子頁面頂部、區塊標題、標籤、固定按鈕
+ *   個人設定
+ *   完整網站導覽
  *   底部分頁列（手機在下方，電腦在上方）
  *   彈出視窗、提示訊息
+ *   2-2. 學測範圍
+ *   聊天訊息通知（頂部橫幅／頂部小膠囊）
+ *   讀書房間：讀書紀錄
+ *   待辦日期、邀請連結
+ *   計時頁「今天的紀錄」、編輯讀書紀錄
+ *   自訂倒數、首頁自己排、專注畫面置中、全螢幕時鐘
+ *
+ * 注意：後面的區塊會蓋過前面同樣的設定（後來加的功能放在最後面），
+ *       所以區塊的先後順序不要隨便對調，不然畫面可能會跑掉
  * ===================================================== */
 
 /* =====================================================
@@ -1817,7 +1829,7 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 .g-rh-meta { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); }
 
 /* =====================================================
- * v40：待辦日期、邀請連結、字體大小
+ * 待辦日期、邀請連結
  * ===================================================== */
 /* 待辦輸入列的日期按鈕：透明的原生日期欄位蓋在上面，點了就跳出系統日曆 */
 .todo-date-btn {
@@ -1884,7 +1896,7 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 
 
 /* =====================================================
- * v41：計時頁「今天的紀錄」＋編輯紀錄
+ * 計時頁「今天的紀錄」、編輯讀書紀錄
  * ===================================================== */
 .tlog {
     margin-top: 22px; padding: 16px 16px 8px; border-radius: 20px;
@@ -1999,7 +2011,7 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 #loginBtn.busy { opacity: .7; pointer-events: none; }
 
 /* =====================================================
- * v45：自訂倒數、首頁自己排、專注畫面置中、全螢幕時鐘
+ * 自訂倒數、首頁自己排、專注畫面置中、全螢幕時鐘
  * ===================================================== */
 /* --- 倒數頁上方的切換鈕 --- */
 .chip { display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background .2s, border-color .2s, color .2s, transform .15s; }
@@ -2254,7 +2266,7 @@ body.sb-on .tabbar, body.sb-on .topbar, body.sb-on .main { visibility: hidden; }
 @media (min-width: 900px) and (max-width: 1100px) {
     .tab-btn { padding: 0 13px; gap: 6px; font-size: 13.5px; }
 }
-/* v47：學測固定、⋯ 亮起表示正在看沒放在上方的倒數 */
+/* 我的倒數：學測固定、⋯ 亮起表示正在看沒放在上方的倒數 */
 .cdm-pin.lock { cursor: default; opacity: .55; }
 .cdm-row.cur .cdm-name b { color: var(--accent-text); }
 .cdm-row.ended .cdm-name b, .cdm-row.ended .cdm-sub { color: var(--faint); }
@@ -2281,7 +2293,7 @@ body.sb-on .tabbar, body.sb-on .topbar, body.sb-on .main { visibility: hidden; }
     .day-row .muted { display: none; }
 }
 
-/* v48：拖曳排序時不會選到文字（iPhone 長按會出現藍色選取框） */
+/* 拖曳排序：不會選到文字（iPhone 長按會出現藍色選取框） */
 .cdm-list, .he-list, .cdm-row, .he-row { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 body.sorting, body.sorting * { -webkit-user-select: none !important; user-select: none !important; }
 .drag-h { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
