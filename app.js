@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v41';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v42';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -139,6 +139,22 @@ const loadLocal = () => normalize({ todos: lsGet(LS.todos, []), events: lsGet(LS
 function saveLocal() {
     lsSet(LS.todos, state.todos); lsSet(LS.events, state.events); lsSet(LS.weekly, state.weekly); lsSet(LS.sessions, state.sessions); lsSet(LS.syllabus, state.syllabus);
 }
+// 登入後的雲端資料在這台裝置留一份副本：下次打開直接畫出最新資料，不會先閃一下舊的（登出時清掉）
+const CLOUD_CACHE = 'study_cloud_cache';
+const stateJson = (s) => JSON.stringify({ todos: s.todos, events: s.events, weekly: s.weekly, sessions: s.sessions, syllabus: s.syllabus });
+let cacheTimer = null;
+function saveCloudCache() {
+    if (!currentUser) return;
+    clearTimeout(cacheTimer);
+    cacheTimer = setTimeout(() => { try { localStorage.setItem(CLOUD_CACHE, JSON.stringify({ uid: currentUser.uid, at: Date.now(), json: stateJson(state) })); } catch (e) {} }, 300);
+}
+function loadCloudCache() {
+    try {
+        const c = JSON.parse(localStorage.getItem(CLOUD_CACHE) || 'null');
+        return c && c.uid && c.json ? { uid: c.uid, state: normalize(JSON.parse(c.json)) } : null;
+    } catch (e) { return null; }
+}
+const clearCloudCache = () => { try { localStorage.removeItem(CLOUD_CACHE); } catch (e) {} };
 
 let cloudTimer;
 let cloudReady = false;
@@ -149,6 +165,7 @@ function save() {
     if (!currentUser || !fb) { saveLocal(); return; }
     if (!cloudReady) { toast('還在連線雲端，這次修改可能不會同步'); return; }
     clearTimeout(cloudTimer);
+    saveCloudCache();
     savePending = true;   // 還沒送出前，別台裝置的舊資料不要蓋掉剛剛的修改
     cloudTimer = setTimeout(async () => {
         savePending = false;
@@ -1609,8 +1626,21 @@ const hmHtml = (min) => {
     const h = Math.floor(min / 60), m = min % 60;
     return h ? `${h}<small>時</small>${pad(m)}<small>分</small>` : `${m}<small>分</small>`;
 };
-const sessionDay = (x) => ymd(new Date(x.start));
-const dayMinutes = (ds) => state.sessions.reduce((a, x) => a + (sessionDay(x) === ds ? x.minutes : 0), 0);
+// 每筆紀錄是哪一天：算過就記住（統計、連續天數會反覆用到，紀錄多時差很多）
+const dayOf = new WeakMap();
+const sessionDay = (x) => { let d = dayOf.get(x); if (!d) { d = ymd(new Date(x.start)); dayOf.set(x, d); } return d; };
+let dayMinMemo = { arr: null, len: -1, sig: 0, map: null };
+function dayMinutesMap() {
+    const arr = state.sessions;
+    let sig = 0;
+    for (let i = 0; i < arr.length; i++) sig = (sig * 31 + arr[i].start + arr[i].minutes * 7) % 1e15;
+    if (dayMinMemo.arr === arr && dayMinMemo.len === arr.length && dayMinMemo.sig === sig) return dayMinMemo.map;
+    const map = new Map();
+    for (const x of arr) { const k = sessionDay(x); map.set(k, (map.get(k) || 0) + x.minutes); }
+    dayMinMemo = { arr, len: arr.length, sig, map };
+    return map;
+}
+const dayMinutes = (ds) => dayMinutesMap().get(ds) || 0;
 const roundsOn = (ds) => state.sessions.filter(x => x.pomo && sessionDay(x) === ds).length;
 function studyStreak() {
     const d = new Date();
@@ -1857,7 +1887,9 @@ function todayLogsHtml(t, todayMin) {
             <span class="mn num">${fmtHM(x.minutes)}</span><span class="tl-pen">${ICON_PEN}</span>
         </button></li>`).join('');
     const more = logs.length > 5 ? `<button class="tl-more" data-act="logs-all" aria-expanded="${logsAll}">${logsAll ? '收起' : `顯示全部 ${logs.length} 筆`}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>` : '';
-    const meta = [`${hmBold(todayMin)} ／ 目標 ${goal / 60} 小時`, rounds ? `${rounds} 輪` : '', streak ? `連續 ${streak} 天` : ''].filter(Boolean).map(x => `<span>${x}</span>`).join('');
+    // 第一行：今天讀了多久／目標；第二行：幾輪、連續幾天（分兩行，不會在奇怪的地方斷行）
+    const sub = [rounds ? `${rounds} 輪番茄鐘` : '', streak ? `連續讀書 ${streak} 天` : ''].filter(Boolean).map(x => `<span>${x}</span>`).join('');
+    const meta = `<span class="tlog-sum">${hmBold(todayMin)} ／ 目標 ${goal / 60} 小時</span>${sub ? `<span class="tlog-sub">${sub}</span>` : ''}`;
     return `<section class="tlog" aria-labelledby="tlogTitle">
         <div class="tlog-head">
             <div class="tlog-tx"><h3 id="tlogTitle">今天的紀錄${todayMin >= goal ? '<span class="tlog-ok">達標了！</span>' : ''}</h3><p>${meta}</p></div>
@@ -4153,7 +4185,7 @@ function resumeAfterUpdate() {
 const topbar = document.querySelector('.topbar');
 const onScroll = () => topbar.classList.toggle('scrolled', window.scrollY > 4);
 window.addEventListener('scroll', onScroll, { passive: true });
-onScroll();
+requestAnimationFrame(onScroll);   // 等第一次畫面排好再讀捲動位置，不要卡住開啟
 
 /* =====================================================
  * 啟動：先用本機資料畫出畫面
@@ -4161,6 +4193,9 @@ onScroll();
 { const v = $('appVersion'); if (v) v.textContent = `目前版本 ${APP_VERSION}`; }
 state = loadLocal();
 if (removedDupes) saveLocal();
+// 上次是登入狀態：先用雲端副本畫出畫面，雲端回應後只在資料真的有變時才重畫
+let cachedUid = null;
+{ const c = loadCloudCache(); if (c) { state = c.state; cachedUid = c.uid; } }
 renderExamChips();
 // 關掉 App 期間一輪已經結束的話，打開時直接記錄（不響）
 if (timer.phase === 'focus' && timer.duration && !timer.pausedAt && focusElapsed() >= timer.duration) finishFocus(true, true);
@@ -4213,17 +4248,18 @@ setInterval(() => {
 async function initFirebase() {
     try {
         const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VER}`;
-        const [appM, authM, fsM] = await Promise.all([
+        // 四個模組同時下載（以前 App Check 要等前面載完才開始，打開會慢一點）
+        const [appM, authM, fsM, acM] = await Promise.all([
             import(`${base}/firebase-app.js`),
             import(`${base}/firebase-auth.js`),
-            import(`${base}/firebase-firestore.js`)
+            import(`${base}/firebase-firestore.js`),
+            RECAPTCHA_SITE_KEY ? import(`${base}/firebase-app-check.js`).catch(e => { console.warn('App Check 載入失敗：', e); return null; }) : null
         ]);
         const app = appM.initializeApp(FIREBASE_CONFIG);
         // App Check：證明請求來自這個網站，保護 AI 額度（要先在主控台註冊 reCAPTCHA）
-        if (RECAPTCHA_SITE_KEY) {
+        if (acM) {
             try {
                 if (['localhost', '127.0.0.1'].includes(location.hostname)) self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-                const acM = await import(`${base}/firebase-app-check.js`);
                 acM.initializeAppCheck(app, { provider: new acM.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
             } catch (e) { console.warn('App Check 啟動失敗：', e); }
         }
@@ -4239,7 +4275,10 @@ async function initFirebase() {
         }
         fb = { app, auth, provider, authM, db, fs: fsM };
         renderAccount();
-        authM.getRedirectResult(auth).catch(err => console.warn('跳轉登入結果：', err));
+        // 只有剛用「整頁跳轉」登入回來時才需要讀結果（平常打開不用多載一個登入用的網頁框）
+        let redirected = false;
+        try { redirected = sessionStorage.getItem('study_redirect') === '1'; sessionStorage.removeItem('study_redirect'); } catch (e) {}
+        if (redirected) authM.getRedirectResult(auth).catch(err => { console.warn('跳轉登入結果：', err); toast('登入沒有完成，請再試一次'); });
         authM.onAuthStateChanged(auth, onAuthChanged);
     } catch (e) {
         console.warn('Firebase 載入失敗（可能離線），只使用本機儲存：', e);
@@ -4253,6 +4292,7 @@ function onAuthChanged(user) {
     if (unsubscribe) { unsubscribe(); unsubscribe = null; }
     if (!user) {
         roomStop(); lastProfile = '';
+        clearCloudCache(); cachedUid = null;
         state = loadLocal();
         renderAll(); renderAccount(); renderRoom();
         return;
@@ -4261,6 +4301,9 @@ function onAuthChanged(user) {
     renderAccount('同步中…');
     setTimeout(handlePendingJoin, 800);
     let first = true;
+    // 副本是同一個帳號的才算數；換帳號就先清掉，避免看到別人的資料
+    let shownJson = cachedUid === user.uid ? stateJson(state) : '';
+    if (cachedUid && cachedUid !== user.uid) { clearCloudCache(); cachedUid = null; state = loadLocal(); renderAll(); }
     const ref = fb.fs.doc(fb.db, 'users', user.uid);
     // 即時監聽：手機改了，電腦畫面也會自動更新
     unsubscribe = fb.fs.onSnapshot(ref, (snap) => {
@@ -4289,7 +4332,10 @@ function onAuthChanged(user) {
             state = cloud;
         }
         if (dupes && cloud) { save(); toast(`已移除 ${dupes} 個和考試重複的行程`); }
-        renderAll();
+        // 跟畫面上的一樣（打開時已經用副本畫好了）就不用整頁重畫，打開比較順
+        const json = stateJson(state);
+        if (json !== shownJson) { shownJson = json; renderAll(); }
+        saveCloudCache();
         publishProfile();   // 別台裝置新增了讀書紀錄時，更新房間裡的今日時數
         renderAccount(snap.metadata.fromCache ? '離線中，連上網路後會自動同步' : '');
     }, (err) => {
@@ -4311,9 +4357,14 @@ $('loginBtn').addEventListener('click', async () => {
     } catch (err) {
         // 加到主畫面的 App 常會擋彈出視窗，改用整頁跳轉登入
         const useRedirect = ['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'];
-        if (useRedirect.includes(err.code)) authM.signInWithRedirect(auth, provider);
+        if (useRedirect.includes(err.code)) { try { sessionStorage.setItem('study_redirect', '1'); } catch (e) {} authM.signInWithRedirect(auth, provider); }
         else if (err.code !== 'auth/popup-closed-by-user') alert('登入失敗：' + err.message);
     }
 });
 
 initFirebase();
+
+// 行事曆：捲到「＋ 新增」那一列時，右下角的浮動按鈕先淡出，不會疊在一起
+if ('IntersectionObserver' in window) {
+    new IntersectionObserver((ents) => ents.forEach(en => $('calFab').classList.toggle('away', en.isIntersecting)), { rootMargin: '0px 0px -60px 0px' }).observe($('addOnDayBtn'));
+}
