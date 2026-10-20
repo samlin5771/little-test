@@ -1355,9 +1355,10 @@ body.guide-open { overflow: hidden; }
     .tabbar {
         top: calc(10px + env(safe-area-inset-top)); bottom: auto; left: 50%; right: auto;
         transform: translateX(-50%); display: flex; gap: 4px; padding: 4px;
+        width: max-content; max-width: calc(100vw - 260px);   /* 寬度照內容，不會被 left:50% 限制成半個螢幕而把字擠成直排 */
         border: 1px solid var(--line); border-radius: 26px; z-index: 45;
     }
-    .tab-btn { flex-direction: row; gap: 8px; min-height: 40px; padding: 0 18px; border-radius: 21px; font-size: 14px; }
+    .tab-btn { flex-direction: row; gap: 8px; min-height: 40px; padding: 0 18px; border-radius: 21px; font-size: 14px; white-space: nowrap; flex-shrink: 0; }
     .tab-btn svg { width: 18px; height: 18px; }
     .tab-btn:hover { background: var(--surface); }
     .tab-btn.active { background: var(--accent-soft); }
@@ -2235,3 +2236,21 @@ body.sb-on .tabbar, body.sb-on .topbar, body.sb-on .main { visibility: hidden; }
 #examChips > :last-child { margin-right: auto; }
 #examChips .chip { flex-shrink: 0; padding: 0 14px; }
 #examChips .chip-more { padding: 0; width: 42px; }
+
+/* 平板、電腦：捲動後頂部改成「上深下淡」的漸層毛玻璃，選單列清楚、下面的內容自然淡出，不會像一塊黑色擋住 */
+@media (min-width: 900px) {
+    .topbar, html:not([data-bg="glow"]):not([data-bg="plain"]) .topbar.scrolled, .topbar.scrolled { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; border-bottom-color: transparent; }
+    .topbar::after { display: none; }
+    .topbar::before {
+        content: ''; position: absolute; left: 0; right: 0; top: 0; bottom: -26px; z-index: -1; pointer-events: none;
+        background: linear-gradient(to bottom, rgba(var(--bg-rgb), .9) 0%, rgba(var(--bg-rgb), .72) 62%, rgba(var(--bg-rgb), 0) 100%);
+        backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+        -webkit-mask-image: linear-gradient(#000 58%, transparent); mask-image: linear-gradient(#000 58%, transparent);
+        opacity: 0; transition: opacity .25s ease;
+    }
+    .topbar.scrolled::before { opacity: 1; }
+}
+/* 900–1100 寬（iPad 直放、小筆電）：選單按鈕縮一點，右邊的按鈕也不會被擠到 */
+@media (min-width: 900px) and (max-width: 1100px) {
+    .tab-btn { padding: 0 13px; gap: 6px; font-size: 13.5px; }
+}
