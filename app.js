@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v39';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v40';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -121,7 +121,7 @@ function normalize(raw = {}) {
     return {
         todos: (raw.todos || []).map(t => typeof t === 'string'
             ? { id: uid(), text: t }
-            : { id: t.id || uid(), text: t.text || '' }),
+            : { id: t.id || uid(), text: t.text || '', ...(/^\d{4}-\d{2}-\d{2}$/.test(t.date || '') ? { date: t.date } : {}) }),
         events: (raw.events || []).filter(e => e && e.start).map(e => ({
             id: String(e.id || uid()), title: e.title || '', start: String(e.start).slice(0, 10), important: !!e.important,
             ...(e.end && String(e.end).slice(0, 10) > String(e.start).slice(0, 10) ? { end: String(e.end).slice(0, 10) } : {})
@@ -245,6 +245,18 @@ $('modeSeg').addEventListener('click', (e) => {
     else { lsSet(LS.theme, b.dataset.mode); applyTheme(b.dataset.mode); }
 });
 renderModeSeg();
+// 字體大小（標準／大）：每台裝置各自設定，眼睛累或晚上讀書可以調大
+function applyFont(f) {
+    const lg = f === 'lg';
+    if (lg) document.documentElement.setAttribute('data-font', 'lg'); else document.documentElement.removeAttribute('data-font');
+    document.querySelectorAll('#fontSeg [data-font]').forEach(b => { const on = b.dataset.font === (lg ? 'lg' : 'md'); b.classList.toggle('active', on); b.setAttribute('aria-pressed', on); });
+}
+applyFont(localStorage.getItem('study_font'));
+$('fontSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-font]');
+    if (!b) return;
+    lsSet('study_font', b.dataset.font); applyFont(b.dataset.font);
+});
 
 /* =====================================================
  * 背景（個人設定裡選）
@@ -715,23 +727,31 @@ function renderToday() {
             if (d && d.text) items.push({ key, s, subj, text: d.text, done: !!d.done });
         }
     });
+    // 今天（和已經逾期）的待辦也列在這裡，不用兩邊跑
+    const tds = state.todos.filter(x => x.date && x.date <= t).sort((a, b) => a.date.localeCompare(b.date));
     const done = items.filter(i => i.done).length;
-    $('todayCount').textContent = items.length ? `${items.length} 項 · 完成 ${done} 項` : '';
+    const total = items.length + tds.length;
+    $('todayCount').textContent = total ? `${total} 項 · 完成 ${done} 項` : '';
     const min = Math.round(dayMinutes(t)), goal = tpref.goal;
     const left = goal - min;
     $('todayTime').innerHTML = `${hmHtml(min)}<button class="goal-of goal-btn" id="goalBtn" aria-label="每日目標 ${goal / 60} 小時，點一下修改">／ 目標 ${goal / 60} 小時<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>`;
     $('todayTag').className = 'tag ' + (left <= 0 ? 'ok' : 'warn');
     $('todayTag').textContent = left <= 0 ? '今天達標了' : `還差 ${fmtHM(left)}`;
     $('todayBar').style.width = Math.min(100, min / goal * 100) + '%';
-    $('todayList').innerHTML = items.length
+    $('todayList').innerHTML = total
         ? items.map(i => `
             <li class="check-item ${i.done ? 'done' : ''}">
                 <input type="checkbox" class="checkbox" data-key="${i.key}" ${i.done ? 'checked' : ''} aria-label="完成 ${esc(i.subj)}">
                 <span class="text"><span class="subj" style="color:var(--s${i.s})">${esc(i.subj)}</span>${esc(i.text)}</span>
+            </li>`).join('') + tds.map(x => `
+            <li class="check-item">
+                <input type="checkbox" class="checkbox" data-todo="${x.id}" aria-label="完成待辦">
+                <span class="text"><span class="subj todo-subj">待辦</span>${esc(x.text)}${x.date < t ? todoDateTag(x.date) : ''}</span>
             </li>`).join('')
         : `<li class="empty">今天還沒安排進度，<button class="btn btn-small" id="goWeekBtn">去安排</button></li>`;
 }
 $('todayList').addEventListener('change', (e) => {
+    if (e.target.dataset.todo) { if (e.target.checked) completeTodoById(e.target.dataset.todo); return; }
     const key = e.target.dataset.key;
     if (!key || !state.weekly[key]) return;
     state.weekly[key].done = e.target.checked;
@@ -1286,7 +1306,8 @@ function renderCalendar() {
         const imp = evs.some(e => e.important);
         const cls = ['cal-cell', ds === t ? 'today' : '', ds < t ? 'past' : '', ds === selDate ? 'selected' : '', exs.length ? 'exam' : '', imp ? 'imp-day' : ''].join(' ');
         const singles = evs.filter(e => !e.end), multi = evs.find(e => e.end);
-        const dots = singles.slice(0, 3).map(e => `<i class="${e.important ? 'imp' : ''}"></i>`).join('');
+        const tds = todosOn(ds);
+        const dots = [...singles.map(e => `<i class="${e.important ? 'imp' : ''}"></i>`), ...tds.map(() => '<i class="td"></i>')].slice(0, 3).join('');
         // 連續多天：手機在日期下方畫一條連起來的線（每週的頭尾也收成圓角）
         let bar = '';
         if (multi) {
@@ -1296,9 +1317,10 @@ function renderCalendar() {
         }
         const titles = [
             ...exs.map(e => `<span class="exam">${esc(e.short)}</span>`),
-            ...evs.map(e => `<span class="${e.important ? 'imp' : ''}${e.end ? ' multi' : ''}${e.end && ds !== e.start ? ' cont' : ''}">${esc(e.title)}</span>`)
+            ...evs.map(e => `<span class="${e.important ? 'imp' : ''}${e.end ? ' multi' : ''}${e.end && ds !== e.start ? ' cont' : ''}">${esc(e.title)}</span>`),
+            ...tds.map(x => `<span class="td">${esc(x.text)}</span>`)
         ].slice(0, 3).join('');
-        const label = `${calM + 1}月${n}日${exs.length ? '，考試' : ''}${imp ? '，有重要行程' : ''}${evs.length ? `，${evs.length} 個行程` : ''}`;
+        const label = `${calM + 1}月${n}日${exs.length ? '，考試' : ''}${imp ? '，有重要行程' : ''}${evs.length ? `，${evs.length} 個行程` : ''}${tds.length ? `，${tds.length} 個待辦` : ''}`;
         html += `<button class="${cls}" data-date="${ds}" aria-label="${label}"><span class="cal-num num">${n}</span><span class="cal-dots">${dots}</span>${bar}<span class="cal-titles">${titles}</span></button>`;
     }
     const rest = (7 - (offset + total) % 7) % 7;
@@ -1337,7 +1359,10 @@ function renderDayList() {
             sub: e.end ? `第 ${daysBetween(e.start, selDate) + 1} 天（${spanText(e)}）` : ''
         }))
     ];
-    $('selDayList').innerHTML = items.length ? items.map(i => eventRowHtml(i, false)).join('') : '<li class="empty">這天沒有行程</li>';
+    const tds = todosOn(selDate);
+    $('selDayList').innerHTML = (items.length || tds.length)
+        ? items.map(i => eventRowHtml(i, false)).join('') + tds.map(x => `<li class="cal-todo"><label><input type="checkbox" class="checkbox" data-todo="${x.id}" aria-label="完成待辦"><span class="cal-todo-tag">待辦</span><span class="cal-todo-tx">${esc(x.text)}</span></label></li>`).join('')
+        : '<li class="empty">這天沒有行程</li>';
 }
 
 function renderUpcoming() {
@@ -1364,6 +1389,7 @@ function onEventListClick(e) {
     openEventModal({ id: row.dataset.id });
 }
 $('selDayList').addEventListener('click', onEventListClick);
+$('selDayList').addEventListener('change', (e) => { if (e.target.dataset.todo && e.target.checked) completeTodoById(e.target.dataset.todo); });
 $('upcomingList').addEventListener('click', onEventListClick);
 
 function moveMonth(delta) {
@@ -1479,9 +1505,22 @@ $('deleteEventBtn').addEventListener('click', () => {
 /* =====================================================
  * 4. 待辦
  * ===================================================== */
+// 待辦的日期標籤：今天、明天、逾期用不同顏色
+function todoDateText(ds) {
+    const diff = daysBetween(todayStr(), ds), d = parseYmd(ds);
+    return diff === 0 ? '今天' : diff === 1 ? '明天' : diff === -1 ? '昨天' : `${d.getMonth() + 1}/${d.getDate()}（${WEEK_ZH[d.getDay()]}）`;
+}
+function todoDateTag(ds) {
+    if (!ds) return '';
+    const diff = daysBetween(todayStr(), ds);
+    return `<span class="todo-date ${diff < 0 ? 'late' : diff === 0 ? 'today' : ''}">${diff < 0 ? '逾期 · ' : ''}${todoDateText(ds)}</span>`;
+}
+const todosOn = (ds) => state.todos.filter(t => t.date === ds);
+// 有日期的排前面（越早越前面），沒日期的照新增順序
+const sortedTodos = () => [...state.todos.filter(t => t.date).sort((a, b) => a.date.localeCompare(b.date)), ...state.todos.filter(t => !t.date)];
 function renderTodos() {
     $('todoList').innerHTML = state.todos.length
-        ? state.todos.map(t => `
+        ? sortedTodos().map(t => `
             <li class="check-item swipe-row" data-id="${t.id}">
                 <div class="swipe-bg" aria-hidden="true">
                     <span class="sw-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>完成</span>
@@ -1489,7 +1528,7 @@ function renderTodos() {
                 </div>
                 <div class="swipe-fg">
                     <input type="checkbox" class="checkbox" aria-label="完成">
-                    <span class="text">${esc(t.text)}</span>
+                    <span class="text">${esc(t.text)}${todoDateTag(t.date)}</span>
                     <button class="del-btn" aria-label="刪除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
                 </div>
             </li>`).join('') + '<li class="swipe-hint">往右滑完成，往左滑刪除</li>'
@@ -1502,19 +1541,44 @@ function removeTodo(li, doneText) {
         const idx = state.todos.findIndex(t => t.id === li.dataset.id);
         if (idx < 0) return;
         const [item] = state.todos.splice(idx, 1);
-        save(); renderTodos();
-        toast(doneText, { label: '復原', fn: () => { state.todos.splice(idx, 0, item); save(); renderTodos(); } });
+        save(); renderTodosEverywhere();
+        toast(doneText, { label: '復原', fn: () => { state.todos.splice(idx, 0, item); save(); renderTodosEverywhere(); } });
     }, 200);
+}
+// 有日期的待辦也會出現在倒數頁「今天」和行事曆，改了要一起更新
+function renderTodosEverywhere() { renderTodos(); renderToday(); renderCalendar(); }
+// 從倒數頁或行事曆打勾完成某一個待辦
+function completeTodoById(id) {
+    const idx = state.todos.findIndex(t => t.id === id);
+    if (idx < 0) return;
+    const [item] = state.todos.splice(idx, 1);
+    save(); renderTodosEverywhere();
+    toast('完成一項，讚！', { label: '復原', fn: () => { state.todos.splice(idx, 0, item); save(); renderTodosEverywhere(); } });
 }
 $('todoList').addEventListener('change', (e) => { if (e.target.checked) removeTodo(e.target.closest('li'), '完成一項，讚！'); });
 $('todoList').addEventListener('click', (e) => { if (e.target.closest('.del-btn')) removeTodo(e.target.closest('li'), '已刪除'); });
 function addTodo() {
     const text = $('todoInput').value.trim();
     if (!text) return;
-    state.todos.push({ id: uid(), text });
+    const date = $('todoDate').value;
+    state.todos.push({ id: uid(), text, ...(date ? { date } : {}) });
     $('todoInput').value = '';
-    save(); renderTodos();
+    setTodoDate('');
+    save(); renderTodosEverywhere();
+    if (date) toast(`已排在${todoDateText(date)}，行事曆上也看得到`);
 }
+// 待辦日期：按日曆圖示選日期，選好後顯示在按鈕上，按 ✕ 取消
+function setTodoDate(v) {
+    $('todoDate').value = v || '';
+    $('todoDateBtn').classList.toggle('has', !!v);
+    $('todoDateLabel').textContent = v ? todoDateText(v).replace(/（.）/, '') : '';
+    $('todoDateClear').hidden = !v;
+}
+$('todoDate').addEventListener('change', () => setTodoDate($('todoDate').value));
+$('todoDate').addEventListener('input', () => setTodoDate($('todoDate').value));
+// 電腦版：點透明的日期欄位不一定會打開日曆，直接叫出來
+$('todoDate').addEventListener('click', (e) => { try { e.target.showPicker?.(); } catch (err) {} });
+$('todoDateClear').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); setTodoDate(''); });
 $('addTodoBtn').addEventListener('click', addTodo);
 onEnter($('todoInput'), addTodo);
 
@@ -2861,6 +2925,7 @@ function roomStart() {
     setTimeout(() => { if (roomUnsub && !roomsLoaded) { roomSlow = true; renderRoom(); } }, 10000);
     roomUnsub = fs.onSnapshot(q, (snap) => {
         roomsLoaded = true;
+        setTimeout(handlePendingJoin, 0);
         myRooms = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
         if (myRooms.length && !roomPref.enabled) { roomPref.enabled = true; saveRoomPref(); publishProfile(true); }
         if (myRooms.some(r => r.id === pendingRoom)) pendingRoom = null;
@@ -2918,6 +2983,55 @@ async function createRoom(name) {
     }
     throw new Error('code');
 }
+/* --- 邀請連結：網址帶 ?join=邀請碼，打開後問要不要加入 --- */
+let joinAsking = false;
+(function readJoinLink() {
+    try {
+        const p = new URLSearchParams(location.search);
+        if (!p.has('join')) return;
+        const c = (p.get('join') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (c.length === 6) sessionStorage.setItem('study_join', c);
+        history.replaceState(null, '', location.pathname + location.hash);   // 網址清乾淨，重新整理不會再問
+    } catch (e) {}
+})();
+const pendingJoinCode = () => { try { return sessionStorage.getItem('study_join') || ''; } catch (e) { return ''; } };
+const clearPendingJoin = () => { try { sessionStorage.removeItem('study_join'); } catch (e) {} };
+let joinLoginHinted = false;
+async function handlePendingJoin() {
+    const code = pendingJoinCode();
+    if (!code || joinAsking) return;
+    // 第一次打開可能先跳「加到主畫面」等視窗，等它們關掉再問
+    if (document.querySelector('.modal.open')) { setTimeout(handlePendingJoin, 800); return; }
+    if (!fb || !currentUser) {
+        if (!joinLoginHinted) {
+            joinLoginHinted = true;
+            roomView = null; showTab('tab-room');
+            toast('登入後就能加入朋友的讀書房間');
+        }
+        return;   // 登入、房間載入完會再呼叫一次
+    }
+    if (!roomsLoaded) return;
+    if (myRooms.some(r => r.id === code)) { clearPendingJoin(); roomView = code; showTab('tab-room'); renderRoom(); return; }
+    joinAsking = true;
+    try {
+        const snap = await fb.fs.getDoc(fb.fs.doc(fb.db, 'rooms', code));
+        if (!snap.exists()) { clearPendingJoin(); toast('找不到這個房間，邀請連結可能失效了'); return; }
+        const r = snap.data(), n = (r.members || []).length;
+        $('joinRoomName').textContent = r.name || '讀書房間';
+        $('joinRoomInfo').textContent = `${n} 位成員 · 邀請碼 ${code}`;
+        $('joinConfirmBtn').dataset.code = code;
+        openModal('joinModal');
+    } catch (e) { toast('讀取房間失敗，請檢查網路'); }
+    finally { joinAsking = false; }
+}
+$('joinConfirmBtn').addEventListener('click', async () => {
+    const code = $('joinConfirmBtn').dataset.code;
+    clearPendingJoin(); closeModal('joinModal');
+    roomView = null; showTab('tab-room');
+    await joinRoom(code);
+});
+$('joinModal').addEventListener('click', (e) => { if (e.target.closest('[data-close]') || e.target === $('joinModal')) clearPendingJoin(); });
+
 async function joinRoom(code) {
     code = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (code.length !== 6) { toast('邀請碼是 6 碼'); return; }
@@ -2956,8 +3070,8 @@ async function leaveRoom(code) {
 }
 async function shareRoom(code) {
     const r = myRooms.find(x => x.id === code);
-    const text = `一起來讀書！在「學測倒數」的讀書房間輸入邀請碼 ${code} 加入「${r?.name || ''}」`;
-    const url = location.origin + location.pathname;
+    const text = `一起來讀書！點連結登入後按「加入」，就能進「${r?.name || ''}」（邀請碼 ${code}）`;
+    const url = `${location.origin}${location.pathname}?join=${code}`;   // 朋友點開會直接問要不要加入
     try {
         if (navigator.share) { await navigator.share({ title: '讀書房間邀請', text, url }); return; }
     } catch (e) { if (e.name === 'AbortError') return; }
@@ -3868,7 +3982,8 @@ function nudgeViewport() {
     const y = window.scrollY;
     window.scrollTo(0, y + 1); window.scrollTo(0, y);
     const tb = document.querySelector('.tabbar');
-    if (tb) { tb.style.transform = 'translateZ(0)'; requestAnimationFrame(() => { tb.style.transform = ''; }); }
+    // 讓 iPhone 重新計算固定在底部的選單列（先拿掉再放回來，畫面上看不出來）
+    if (tb) { tb.style.display = 'none'; void tb.offsetHeight; tb.style.display = ''; }
 }
 const nudgeSoon = () => [60, 350, 700].forEach(t => setTimeout(nudgeViewport, t));
 document.addEventListener('focusout', (e) => { if (isTyping(e.target)) nudgeSoon(); });
@@ -3930,11 +4045,12 @@ if (navigator.serviceWorker) {
 function resumeAfterUpdate() {
     let r = null;
     try { r = JSON.parse(sessionStorage.getItem('study_resume') || 'null'); sessionStorage.removeItem('study_resume'); } catch (e) {}
-    if (!r) return;
+    if (!r) return false;
     if (r.tab) showTab(r.tab);
     if (r.room) { roomView = r.room; if (r.tab === 'tab-room') renderRoom(); }
     if (r.chat) setTimeout(() => { if (myRooms.some(x => x.id === r.chat)) openChat(r.chat); }, 1500);
     if (r.y) setTimeout(() => window.scrollTo(0, r.y), 60);
+    return !!r.tab;
 }
 
 // 往下捲動時頂部列才出現底色
@@ -3958,8 +4074,28 @@ tick();
 setInterval(() => { tick(); timerTick(); roomTick(); }, 1000);
 renderAll();
 renderAccount();
-resumeAfterUpdate();
-showTab(localStorage.getItem(LS.tab) || 'tab-countdown');
+const resumed = resumeAfterUpdate();   // 自動更新後重新載入：回到原本的畫面
+// 重新打開：正在計時就回計時頁；離開超過 3 分鐘又沒在計時，一律從倒數頁開始
+const timerLive = () => timer.phase === 'focus' || (timer.phase === 'break' && Date.now() - timer.breakStart < timer.breakLen + 3 * 60000);
+const lastActive = () => { try { return Number(localStorage.getItem('study_last_active')) || 0; } catch (e) { return 0; } };
+const markActive = () => { try { localStorage.setItem('study_last_active', String(Date.now())); } catch (e) {} };
+(function startTab() {
+    if (resumed) return;
+    const saved = localStorage.getItem(LS.tab) || 'tab-countdown';
+    const fresh = Date.now() - lastActive() < 3 * 60000;
+    showTab(timerLive() ? 'tab-timer' : (fresh ? saved : 'tab-countdown'));
+})();
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { markActive(); return; }
+    // 從背景回來：離開超過 30 分鐘、沒在計時、沒在打字或開視窗，就回到倒數頁
+    const away = Date.now() - lastActive();
+    if (lastActive() && away > 30 * 60000 && !timerLive() && !isTyping(document.activeElement) && !document.querySelector('.modal.open') && !chatRoom && document.body.dataset.tab !== 'tab-countdown') showTab('tab-countdown');
+    markActive();
+});
+window.addEventListener('pagehide', markActive);
+setInterval(() => { if (document.visibilityState === 'visible') markActive(); }, 60000);
+markActive();
+setTimeout(() => { nudgeSoon(); handlePendingJoin(); }, 300);
 
 // ⑩ 開啟畫面淡出
 setTimeout(() => {
@@ -4027,6 +4163,7 @@ function onAuthChanged(user) {
     }
     loadRoomProfile(user);
     renderAccount('同步中…');
+    setTimeout(handlePendingJoin, 800);
     let first = true;
     const ref = fb.fs.doc(fb.db, 'users', user.uid);
     // 即時監聽：手機改了，電腦畫面也會自動更新

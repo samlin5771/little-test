@@ -1813,3 +1813,77 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 .g-rh-bar { display: block; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
 .g-rh-bar i { display: block; height: 100%; border-radius: 2px; }
 .g-rh-meta { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); }
+
+/* =====================================================
+ * v40：待辦日期、邀請連結、字體大小
+ * ===================================================== */
+/* 待辦輸入列的日期按鈕：透明的原生日期欄位蓋在上面，點了就跳出系統日曆 */
+.todo-date-btn {
+    position: relative; flex-shrink: 0; min-width: 46px; height: 46px; padding: 0 12px; border-radius: 23px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--muted);
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;
+    font: 600 13.5px 'Noto Sans TC', sans-serif; transition: border-color .15s, background .15s, color .15s;
+}
+.todo-date-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+.todo-date-btn:active { transform: scale(0.97); }
+.todo-date-btn #todoDateLabel:empty { display: none; }
+.todo-date-btn.has { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); padding-right: 4px; }
+.todo-date-btn input[type="date"] {
+    position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; margin: 0; padding: 0;
+    cursor: pointer; font-size: 16px; -webkit-appearance: none; appearance: none; z-index: 1;
+}
+.todo-date-btn input[type="date"]::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: auto; height: auto; opacity: 0; cursor: pointer; }
+.todo-date-x {
+    position: relative; z-index: 2; width: 30px; height: 30px; border-radius: 15px; border: none; background: transparent;
+    color: inherit; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+}
+.todo-date-x[hidden] { display: none; }
+.todo-date-x svg { width: 13px; height: 13px; }
+.todo-date-x:hover { background: rgba(var(--card-rgb), .5); }
+
+/* 待辦清單上的日期標籤 */
+.todo-date {
+    display: inline-block; vertical-align: 1px; margin-left: 8px; padding: 1px 8px; border-radius: 8px;
+    font-size: 11.5px; font-weight: 700; line-height: 1.6; white-space: nowrap;
+    background: var(--surface-2); color: var(--muted);
+}
+.todo-date.today { background: var(--mark-green-bg); color: var(--mark-green); }
+.todo-date.late { background: rgba(239, 68, 68, 0.14); color: var(--exam); }
+.check-item.done .todo-date { text-decoration: none; }
+.subj.todo-subj { color: var(--mark-green); }
+
+/* 行事曆：待辦是綠色小點／綠色標題 */
+.cal-dots i.td { background: var(--mark-green); }
+@media (min-width: 768px) {
+    .cal-titles span.td { background: var(--mark-green-bg); color: var(--mark-green); }
+}
+.legend i.td { background: var(--mark-green); }
+.legend { flex-wrap: wrap; gap: 6px 14px; }
+.cal-todo label { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 4px 4px; cursor: pointer; font-family: 'Noto Sans TC', sans-serif; font-size: 15px; }
+.cal-todo-tag { flex-shrink: 0; font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 8px; background: var(--mark-green-bg); color: var(--mark-green); line-height: 1.6; }
+.cal-todo-tx { flex: 1; min-width: 0; word-break: break-word; }
+
+/* 導覽示意 */
+.g-check .g-td, .g-todo .g-td-date { font-style: normal; font-size: 8.5px; font-weight: 700; padding: 0 5px; border-radius: 5px; background: var(--mark-green-bg); color: var(--mark-green); }
+.g-check .g-td { margin-right: 2px; }
+.g-todo .g-td-date { margin-left: 5px; }
+.g-cal span.td { position: relative; }
+.g-cal span.td::after { content: ''; position: absolute; bottom: 2px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 2px; background: var(--mark-green); }
+
+/* 邀請連結：加入房間確認 */
+.join-sheet { max-width: 340px; text-align: center; }
+.join-ic { width: 56px; height: 56px; margin: 4px auto 12px; border-radius: 18px; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); }
+.join-ic svg { width: 28px; height: 28px; }
+.join-kicker { margin: 0 0 4px; font: 600 12.5px 'Noto Sans TC', sans-serif; color: var(--muted); letter-spacing: .04em; }
+.join-sheet h2 { margin: 0 0 6px; word-break: break-word; }
+.join-info { margin: 0 0 18px; font-size: 13px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
+.join-sheet .sheet-btns { justify-content: center; }
+.join-sheet .sheet-btns .btn { flex: 1; }
+
+/* 字體大小：「大」把內容整體放大一點（選單列、頂部列維持原樣，不會擠） */
+#fontSeg { grid-template-columns: repeat(2, auto); }
+#fontSeg button { min-width: 48px; }
+[data-font="lg"] .main,
+[data-font="lg"] .guide-body,
+[data-font="lg"] .chat-list,
+[data-font="lg"] .chat-bar { zoom: 1.1; }

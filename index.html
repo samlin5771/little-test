@@ -54,6 +54,9 @@
             var b = null;
             try { b = localStorage.getItem('study_bg'); } catch (e) {}
             document.documentElement.setAttribute('data-bg', /^(stars|aurora|mist|rain|petal|grid|plain)$/.test(b || '') ? b : 'glow');
+            var f = null;
+            try { f = localStorage.getItem('study_font'); } catch (e) {}
+            if (f === 'lg') document.documentElement.setAttribute('data-font', 'lg');
         })();
     </script>
 
@@ -227,6 +230,7 @@
                 <span><i class="imp-ring"></i>重要</span>
                 <span class="lg-bar"><i class="bar"></i>連續多天</span>
                 <span><i class="ring"></i>考試</span>
+                <span><i class="td"></i>待辦</span>
             </div>
             </div>
             <aside class="cal-lists">
@@ -253,6 +257,12 @@
             <div class="narrow">
                 <div class="input-row">
                     <input type="text" class="text-input" id="todoInput" placeholder="新增待辦事項..." enterkeyhint="done" aria-label="新增待辦事項">
+                    <div class="todo-date-btn" id="todoDateBtn" title="選日期（可不選）">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+                        <span id="todoDateLabel"></span>
+                        <input type="date" id="todoDate" aria-label="待辦日期（可不選）">
+                        <button type="button" class="todo-date-x" id="todoDateClear" aria-label="取消日期" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg></button>
+                    </div>
                     <button class="btn btn-accent" id="addTodoBtn">新增</button>
                 </div>
                 <ul class="check-list todo-list" id="todoList"></ul>
@@ -294,6 +304,20 @@
             <p class="goal-sub">倒數、計時和統計頁會一起用這個目標。</p>
             <div class="goal-grid" id="goalGrid"></div>
             <div class="sheet-btns"><button class="btn" data-close style="flex:1">取消</button></div>
+        </div>
+    </div>
+
+    <!-- 邀請連結：問要不要加入房間 -->
+    <div class="modal" id="joinModal" role="dialog" aria-modal="true" aria-labelledby="joinRoomName">
+        <div class="sheet join-sheet">
+            <span class="join-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.4"/><path d="M2.8 19.5a6.2 6.2 0 0 1 12.4 0"/><path d="M18.5 8v6M15.5 11h6"/></svg></span>
+            <p class="join-kicker">朋友邀請你一起讀書</p>
+            <h2 id="joinRoomName">讀書房間</h2>
+            <p class="join-info num" id="joinRoomInfo"></p>
+            <div class="sheet-btns">
+                <button class="btn" data-close>先不要</button>
+                <button class="btn btn-accent" id="joinConfirmBtn">加入</button>
+            </div>
         </div>
     </div>
 
@@ -415,6 +439,13 @@
                     <span class="acct-label">外觀</span><span class="grow"></span>
                     <div class="mode-seg" id="modeSeg" role="group" aria-label="外觀">
                         <button data-mode="light">淺色</button><button data-mode="dark">深色</button><button data-mode="auto">跟系統</button>
+                    </div>
+                </div>
+                <div class="acct-row acct-mode">
+                    <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 19l5-13 5 13M4.8 14.5h6.4"/><path d="M14.5 19l3.2-8.5 3.3 8.5M15.6 16.3h4.3"/></svg></span>
+                    <span class="acct-label">字體大小</span><span class="grow"></span>
+                    <div class="mode-seg" id="fontSeg" role="group" aria-label="字體大小">
+                        <button data-font="md">標準</button><button data-font="lg">大</button>
                     </div>
                 </div>
                 <button class="acct-row" id="notifyRow" aria-expanded="false" aria-controls="notifyFold">
@@ -618,9 +649,10 @@
   <div class="g-bar"><i style="width:42%"></i></div>
   <div class="g-check on"><span></span>數學 3-1 例題</div>
   <div class="g-check"><span></span>社會 第二冊 1-2 課</div>
+  <div class="g-check"><span></span><em class="g-td">待辦</em>交數學作業</div>
   <div class="g-btn">現在要讀什麼？</div>
 </div></figure>
-                <ul class="g-points"><li>上方切換<b>模考一、二、三和學測</b>；已經考完的會變淡。</li><li>大數字是剩下的天數，下面是時分秒，還有考試日期和「下一場」還有幾天。</li><li><b>今天</b>區顯示今天讀了多久、離每日目標還差多少，進度條滿了就是達標。點<b>「目標 3 小時」</b>可以直接改每日目標。</li><li>有標重點複習的單元時，「今天」下面會提醒你，點一下就跳到學測範圍。</li><li>每週進度表裡「今天」的項目會列在這裡，可以直接打勾。</li><li>不知道讀什麼？按<b>現在要讀什麼？</b>，轉盤幫你隨機選一科。</li></ul>
+                <ul class="g-points"><li>上方切換<b>模考一、二、三和學測</b>；已經考完的會變淡。</li><li>大數字是剩下的天數，下面是時分秒，還有考試日期和「下一場」還有幾天。</li><li><b>今天</b>區顯示今天讀了多久、離每日目標還差多少，進度條滿了就是達標。點<b>「目標 3 小時」</b>可以直接改每日目標。</li><li>有標重點複習的單元時，「今天」下面會提醒你，點一下就跳到學測範圍。</li><li>每週進度表裡「今天」的項目，和<b>排在今天（或已經逾期）的待辦</b>，都會列在這裡，可以直接打勾。</li><li>不知道讀什麼？按<b>現在要讀什麼？</b>，轉盤幫你隨機選一科。</li></ul>
                 
             </section>
 
@@ -699,7 +731,7 @@
     <div class="g-rh-row"><span class="g-rh-av" style="background:var(--s0)">明</span><span class="g-rh-mid"><b>阿明</b><i class="g-rh-bar"><i style="width:78%;background:var(--s0)"></i></i><span class="g-rh-meta"><span>4 時 2 分</span><span>讀了 5 天</span></span></span></div>
   </div>
 </div></figure>
-                <ul class="g-points"><li>按<b>建立新房間</b>會拿到 6 碼邀請碼，傳給朋友輸入就能加入，最多 20 人。</li><li>房間裡每個人有一個座位，頭像外圈是這一輪的進度；綠色是正在讀，變淡是還沒開始。</li><li><b>今天排行</b>連正在讀的那一輪也算進去，前三名有金銀銅。</li><li>最下面的<b>讀書紀錄</b>可以選<b>日、週、月或自訂</b>期間，看房間裡每個人讀了多久、讀了幾天，第一名的頭像會戴上<b>皇冠</b>。</li><li>右上角的暱稱可以改名字、選<b>頭像顏色</b>（10 種顏色或自動），或開<b>隱身模式</b>：只顯示今天時數，不顯示在讀什麼。</li><li>房主可以改房間名稱；「⋯」裡可以邀請朋友或離開房間。</li></ul>
+                <ul class="g-points"><li>按<b>建立新房間</b>會拿到 6 碼邀請碼，最多 20 人。</li><li><b>邀請朋友</b>（「⋯」裡）會分享一個<b>邀請連結</b>：朋友點開、登入後按「加入」就好，不用自己輸入邀請碼；也可以直接輸入 6 碼加入。</li><li>房間裡每個人有一個座位，頭像外圈是這一輪的進度；綠色是正在讀，變淡是還沒開始。</li><li><b>今天排行</b>連正在讀的那一輪也算進去，前三名有金銀銅。</li><li>最下面的<b>讀書紀錄</b>可以選<b>日、週、月或自訂</b>期間，看房間裡每個人讀了多久、讀了幾天，第一名的頭像會戴上<b>皇冠</b>。</li><li>右上角的暱稱可以改名字、選<b>頭像顏色</b>（10 種顏色或自動），或開<b>隱身模式</b>：只顯示今天時數，不顯示在讀什麼。</li><li>房主可以改房間名稱；「⋯」裡可以邀請朋友或離開房間。</li></ul>
                 
             </section>
 
@@ -725,11 +757,11 @@
                 <p class="g-lead">考試、行程和雜事，都在這兩頁。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-phone">
   <div class="g-row"><b>10 月</b><span class="g-cap">← 左右滑換月 →</span></div>
-  <div class="g-cal"><span class="">12</span><span class="">13</span><span class="">14</span><span class="">15</span><span class="">16</span><span class="">17</span><span class="today">18</span><span class="">19</span><span class="">20</span><span class="imp">21</span><span class="">22</span><span class="">23</span><span class="">24</span><span class="">25</span><span class="">26</span><span class="">27</span><span class="exam">28</span><span class="exam">29</span><span class="">30</span><span class="">31</span></div>
-  <div class="g-todo"><span class="swipe ok">✓ 完成</span><span class="item">交數學作業</span></div>
+  <div class="g-cal"><span class="">12</span><span class="">13</span><span class="">14</span><span class="">15</span><span class="">16</span><span class="">17</span><span class="today">18</span><span class="td">19</span><span class="">20</span><span class="imp">21</span><span class="">22</span><span class="">23</span><span class="">24</span><span class="">25</span><span class="">26</span><span class="">27</span><span class="exam">28</span><span class="exam">29</span><span class="">30</span><span class="">31</span></div>
+  <div class="g-todo"><span class="swipe ok">✓ 完成</span><span class="item">交數學作業<em class="g-td-date">明天</em></span></div>
   <div class="g-todo"><span class="item">背英文單字</span><span class="swipe del">刪除</span></div>
 </div></figure>
-                <ul class="g-points"><li>行事曆左右滑換月份；點日期再按 ＋ 新增行程，可以選<b>單日或連續多天</b>；標成<b>重要</b>的日期會被圈起來。</li><li>考試日會用紅色標出；下面列出即將到來的行程和剩幾天。</li><li>待辦清單：輸入後按新增；<b>往右滑完成、往左滑刪除</b>，不小心刪掉可以按「復原」。</li></ul>
+                <ul class="g-points"><li>行事曆左右滑換月份；點日期再按 ＋ 新增行程，可以選<b>單日或連續多天</b>；標成<b>重要</b>的日期會被圈起來。</li><li>考試日會用紅色標出；下面列出即將到來的行程和剩幾天。</li><li>待辦清單：輸入後按新增；<b>往右滑完成、往左滑刪除</b>，不小心刪掉可以按「復原」。</li><li>新增待辦時可以按輸入框旁的<b>日曆圖示選日期</b>（不選也可以）。有日期的待辦會排在前面，同時出現在<b>行事曆</b>那天（綠色小點），當天和逾期的也會列在倒數頁的<b>「今天」</b>，在哪裡打勾都可以。</li></ul>
                 
             </section>
 
@@ -744,7 +776,7 @@
   <div class="g-acct-row">網站導覽<span>›</span></div>
   <div class="g-acct-row">新增到主畫面<span>›</span></div>
 </div></figure>
-                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 8 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>訊息通知</b>：選聊天訊息要用<b>頂部橫幅</b>（顯示誰傳的和兩行訊息）還是<b>頂部小膠囊</b>（最不佔空間，點一下展開），按「試試看」可以先看效果。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li></ul>
+                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 8 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>字體大小</b>：選<b>標準</b>或<b>大</b>，眼睛累或晚上讀書時可以調大，只影響這台裝置。</li><li><b>訊息通知</b>：選聊天訊息要用<b>頂部橫幅</b>（顯示誰傳的和兩行訊息）還是<b>頂部小膠囊</b>（最不佔空間，點一下展開），按「試試看」可以先看效果。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
                 
             </section>
 
