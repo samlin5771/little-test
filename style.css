@@ -2254,3 +2254,29 @@ body.sb-on .tabbar, body.sb-on .topbar, body.sb-on .main { visibility: hidden; }
 @media (min-width: 900px) and (max-width: 1100px) {
     .tab-btn { padding: 0 13px; gap: 6px; font-size: 13.5px; }
 }
+/* v47：學測固定、⋯ 亮起表示正在看沒放在上方的倒數 */
+.cdm-pin.lock { cursor: default; opacity: .55; }
+.cdm-row.cur .cdm-name b { color: var(--accent-text); }
+.cdm-row.ended .cdm-name b, .cdm-row.ended .cdm-sub { color: var(--faint); }
+.cdm-row.ended .cd-dot { filter: grayscale(1); opacity: .6; }
+#examChips .chip-more.active { border-style: solid; border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
+.cdm-head .btn, .he-head .he-done { flex-shrink: 0; white-space: nowrap; }
+.cdm-head > div, .he-head > div { min-width: 0; }
+/* 文字不亂換行：設定列、統計那一列、計時頁捷徑，窄螢幕自動縮小或省略 */
+.acct-label, .acct-value { white-space: nowrap; }
+.acct-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.day-row > * { white-space: nowrap; }
+.day-row b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.go-tx b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sess-subj button { white-space: nowrap; }
+@media (max-width: 374px) {
+    .acct-row .acct-value:not(#notifyName):not(#accentName):not(#bgName) { display: none; }
+    .go-btn { padding: 0 10px; gap: 8px; }
+    .go-ic { width: 30px; height: 30px; }
+    .go-tx b { font-size: 13.5px; }
+    .sess-subj { gap: 4px; }
+    .sess-subj button { font-size: 12px; gap: 3px; }
+    .sess-subj button .sdot { display: none; }
+    .day-row { gap: 8px; }
+    .day-row .muted { display: none; }
+}

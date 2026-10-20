@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v46';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v47';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -136,7 +136,8 @@ function normalize(raw = {}) {
     };
 }
 // 自訂倒數：{ items: [{ id, name, short, date, end?, color, yearly, cal }], pins: [釘在上方的 key，依順序] 或 null（用預設） }
-const CD_MAX = 3;   // 倒數頁上方最多放幾個（再加一個「⋯」選單，一行剛好放得下）
+const CD_MAX = 3;   // 倒數頁上方最多放幾個（含固定的學測；再加一個「⋯」選單，一行剛好放得下）
+const CD_FIXED = 'gsat';   // 學測固定在上方，不能取消
 const CD_COLORS = ['#F472B6', '#6CB4EE', '#34D399', '#E9B154', '#A99BF0', '#FF8B74'];
 const isYmd = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
 function normCountdowns(c) {
@@ -146,8 +147,9 @@ function normCountdowns(c) {
         date: x.date, ...(isYmd(x.end) && x.end > x.date && !x.yearly ? { end: x.end } : {}),
         color: CD_COLORS.includes(x.color) ? x.color : CD_COLORS[0], yearly: !!x.yearly, cal: x.cal !== false
     }));
-    const pins = Array.isArray(c.pins) ? c.pins.filter(k => typeof k === 'string').slice(0, CD_MAX) : null;
-    return { items, pins };
+    const pins = Array.isArray(c.pins) ? [...new Set(c.pins.filter(k => typeof k === 'string'))].slice(0, 12) : null;
+    const off = Array.isArray(c.off) ? [...new Set(c.off.filter(k => typeof k === 'string'))].slice(0, 60) : [];
+    return { items, pins, off };
 }
 const isEmpty = (s) => !s.todos.length && !s.events.length && !Object.keys(s.weekly).length && !s.sessions.length && !s.syllabus.picked && !s.countdowns.items.length;
 const loadLocal = () => normalize({ todos: lsGet(LS.todos, []), events: lsGet(LS.events, []), weekly: lsGet(LS.weekly, {}), sessions: lsGet(LS.sessions, []), syllabus: lsGet(LS.syllabus, null), countdowns: lsGet('study_countdowns', null) });
@@ -698,22 +700,40 @@ function cdAll() {
 }
 const getCd = (key) => cdAll().find(c => c.key === key) || null;
 const cdEnded = (c, now = Date.now()) => examEndTime(c) <= now;
-// 放在上方的：自己排過就照自己的；沒排過就是「還沒考完一週以上的內建考試」＋自己加的
+// 放在上方的（最多 3 個，學測一定在）：
+// 1. 自己排過的順序優先；沒排過就照日期
+// 2. 已經過完的自動拿掉，空出來的位置補上「下一個要到的」（自己取消勾選過的不會被補回來）
 function cdPins() {
-    const all = cdAll(), keys = new Set(all.map(c => c.key));
-    if (state.countdowns.pins) return state.countdowns.pins.filter(k => keys.has(k)).slice(0, CD_MAX);
-    const now = Date.now();
-    return all.filter(c => !c.builtin || examEndTime(c) > now - 7 * 86400000).map(c => c.key).slice(0, CD_MAX);
+    const all = cdAll(), now = Date.now();
+    const byKey = new Map(all.map(c => [c.key, c]));
+    const live = (k) => { const c = byKey.get(k); return c && (k === CD_FIXED || !cdEnded(c, now)); };
+    const off = new Set(state.countdowns.off || []);
+    const saved = (state.countdowns.pins || []).filter(k => byKey.has(k));
+    let keys = saved.filter(live);
+    if (!keys.includes(CD_FIXED)) keys = state.countdowns.pins ? [...keys, CD_FIXED] : keys;
+    // 自己排過：只補「過完了被拿掉」的空位；沒排過：直接照日期放滿
+    const room = state.countdowns.pins ? Math.min(CD_MAX - keys.length, saved.length - saved.filter(live).length) : CD_MAX - keys.length;
+    const upcoming = all.filter(c => !keys.includes(c.key) && !off.has(c.key) && !cdEnded(c, now)).sort((a, b) => a.date.localeCompare(b.date)).map(c => c.key);
+    keys.push(...upcoming.slice(0, Math.max(0, room)));
+    if (!keys.includes(CD_FIXED)) keys.push(CD_FIXED);
+    // 學測一定要在，超過就從後面拿掉別的
+    while (keys.length > CD_MAX) { const i = keys.map((k, j) => [k, j]).reverse().find(([k]) => k !== CD_FIXED)[1]; keys.splice(i, 1); }
+    // 沒自己排過：照日期排
+    if (!state.countdowns.pins) keys.sort((a, b) => byKey.get(a).date.localeCompare(byKey.get(b).date));
+    return keys;
 }
+let cdPicked = false;   // 這次打開時自己從「⋯」點來看的（就算已經結束也讓你看）
 function renderExamChips() {
-    if (!getCd(examKey)) examKey = 'gsat';
     const now = Date.now();
     const keys = cdPins();
-    if (!keys.includes(examKey)) keys.splice(Math.min(keys.length, CD_MAX - 1), 1, examKey);   // 從「⋯」裡選了沒放在上方的：暫時換掉最後一個，上方還是只有一行
+    // 選的那個不見了、或已經過完又不在上方 → 自動回到上方第一個
+    const cur = getCd(examKey);
+    if (!cur || (!keys.includes(examKey) && cdEnded(cur, now) && !cdPicked)) { examKey = keys[0] || CD_FIXED; lsSet(LS.exam, examKey); }
+    const outside = !keys.includes(examKey);   // 從「⋯」裡選了沒放在上方的：「⋯」按鈕亮起來，上方三個不動
     setHtml($('examChips'), keys.map(k => getCd(k)).filter(Boolean).map(c => {
         const cls = ['chip', c.key === examKey ? 'active' : '', cdEnded(c, now) ? 'past' : ''].join(' ');
         return `<button class="${cls}" role="tab" aria-selected="${c.key === examKey}" data-exam="${c.key}">${c.color ? `<i class="cd-dot" style="background:${c.color}"></i>` : ''}${esc(c.short)}</button>`;
-    }).join('') + `<button class="chip chip-more" data-cdall aria-label="全部倒數、新增倒數"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18" cy="12" r="1.8"/></svg></button>`);
+    }).join('') + `<button class="chip chip-more ${outside ? 'active' : ''}" data-cdall aria-label="${outside ? `正在看：${esc(cur?.name || '')}，點開全部倒數` : '全部倒數、新增倒數'}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18" cy="12" r="1.8"/></svg></button>`);
 }
 function selectCd(key) {
     examKey = key;
@@ -727,6 +747,7 @@ $('examChips').addEventListener('click', (e) => {
     if (e.target.closest('[data-cdall]')) { openCdManage(); return; }
     const b = e.target.closest('[data-exam]');
     if (!b || b.dataset.exam === examKey) return;
+    cdPicked = false;
     selectCd(b.dataset.exam);
 });
 
@@ -4328,12 +4349,13 @@ function renderCdManage() {
     const rest = all.filter(c => !pins.includes(c.key)).sort((a, b) => (cdEnded(a) - cdEnded(b)) || a.date.localeCompare(b.date));
     const row = (c, pinned) => {
         const d = parseYmd(c.date);
-        const tags = (c.builtin ? '<em class="cdm-tag">內建</em>' : '') + (c.yearly ? '<em class="cdm-tag yr">每年</em>' : '');
-        return `<li class="cdm-row ${cdEnded(c) ? 'ended' : ''}" ${pinned ? `data-sort="${c.key}"` : ''}>
-            <button class="cdm-pin ${pinned ? 'on' : ''}" data-cdpin="${c.key}" aria-pressed="${pinned}" aria-label="${pinned ? '從上方移除' : '放到倒數頁上方'}">${ICON_CHECK_SM}</button>
+        const tags = (c.key === CD_FIXED ? '<em class="cdm-tag">固定</em>' : c.builtin ? '<em class="cdm-tag">內建</em>' : '') + (c.yearly ? '<em class="cdm-tag yr">每年</em>' : '') + (cdEnded(c) ? '<em class="cdm-tag">已結束</em>' : '');
+        const fixed = c.key === CD_FIXED;
+        return `<li class="cdm-row ${cdEnded(c) ? 'ended' : ''} ${c.key === examKey ? 'cur' : ''}" ${pinned ? `data-sort="${c.key}"` : ''}>
+            ${fixed ? `<span class="cdm-pin on lock" title="學測固定在上方" aria-label="學測固定在上方">${ICON_CHECK_SM}</span>` : `<button class="cdm-pin ${pinned ? 'on' : ''}" data-cdpin="${c.key}" aria-pressed="${pinned}" aria-label="${pinned ? '從上方移除' : '放到倒數頁上方'}">${ICON_CHECK_SM}</button>`}
             <button class="cdm-main" data-cdpick="${c.key}">
                 <span class="cdm-name"><i class="cd-dot" style="background:${c.color || 'var(--accent)'}"></i><b>${esc(c.name)}</b>${tags}</span>
-                <span class="cdm-sub num">${d.getMonth() + 1}/${d.getDate()}${c.end ? ` – ${shortDate(c.end)}` : ''} · ${cdRelText(c)}</span>
+                <span class="cdm-sub num">${d.getMonth() + 1}/${d.getDate()}${c.end ? ` – ${shortDate(c.end)}` : ''}${cdEnded(c) ? '' : ` · ${cdRelText(c)}`}</span>
             </button>
             ${c.builtin ? '' : `<button class="cdm-edit" data-cdedit="${c.key}" aria-label="修改 ${esc(c.name)}">${ICON_PEN}</button>`}
             ${pinned ? `<button class="drag-h" aria-label="拖曳排序（也可以用上下鍵）">${ICON_HANDLE}</button>` : '<span class="drag-sp"></span>'}
@@ -4345,19 +4367,25 @@ function renderCdManage() {
     $('cdmCount').textContent = `${pins.length} / ${CD_MAX}`;
 }
 function openCdManage() { renderCdManage(); openModal('cdModal'); }
-function setPins(p) { state.countdowns = { ...state.countdowns, pins: p.slice(0, CD_MAX) }; save(); renderExamChips(); renderCdManage(); }
+function setPins(p, off) {
+    if (!p.includes(CD_FIXED)) p = [...p, CD_FIXED];
+    state.countdowns = { ...state.countdowns, pins: p.slice(0, CD_MAX), off: off || state.countdowns.off || [] };
+    save(); renderExamChips(); renderCdManage();
+}
 makeSortable($('cdmPinned'), (from, to) => setPins(moveItem(cdPins(), from, to)));
 $('cdModal').addEventListener('click', (e) => {
     const pin = e.target.closest('[data-cdpin]');
     if (pin) {
-        const k = pin.dataset.cdpin, pins = cdPins();
-        if (pins.includes(k)) setPins(pins.filter(x => x !== k));
-        else if (pins.length >= CD_MAX) toast(`上方最多放 ${CD_MAX} 個，先取消一個`);
-        else setPins([...pins, k]);
+        const k = pin.dataset.cdpin, pins = cdPins(), off = (state.countdowns.off || []).filter(x => x !== k);
+        const c = getCd(k);
+        if (pins.includes(k)) setPins(pins.filter(x => x !== k), [...off, k]);   // 取消：記住，之後不會自動補回來
+        else if (c && cdEnded(c)) toast('這個已經結束了，不能放到上方');
+        else if (pins.length >= CD_MAX) toast(`上方最多放 ${CD_MAX} 個（含學測），先取消一個`);
+        else setPins([...pins, k], off);
         return;
     }
     const pick = e.target.closest('[data-cdpick]');
-    if (pick) { closeModal('cdModal'); selectCd(pick.dataset.cdpick); return; }
+    if (pick) { closeModal('cdModal'); cdPicked = true; selectCd(pick.dataset.cdpick); return; }
     const ed = e.target.closest('[data-cdedit]');
     if (ed) { openCdEdit(ed.dataset.cdedit); return; }
     if (e.target.closest('#cdmAdd')) openCdEdit(null);
@@ -4401,13 +4429,9 @@ function saveCdEdit() {
     if (cdEditing) items[items.findIndex(x => x.id === cdEditing)] = item;
     else {
         items.push(item);
-        if (pins.length < CD_MAX) pins = [...pins, item.id];
-        else {   // 上方滿了：先擠掉已經考完的，不然就只放在「⋯」裡
-            const old = pins.find(k => { const c = getCd(k); return c && cdEnded(c); });
-            if (old) pins = [...pins.filter(k => k !== old), item.id];
-        }
+        if (pins.length < CD_MAX) pins = [...pins, item.id];   // 上方滿了就只放在「⋯」裡
     }
-    state.countdowns = { items, pins };
+    state.countdowns = { items, pins, off: (state.countdowns.off || []).filter(k => k !== item.id) };
     save();
     closeModal('cdEditModal');
     renderCalendar();
@@ -4422,9 +4446,9 @@ $('cdeDelete').addEventListener('click', () => {
     const c = state.countdowns.items.find(x => x.id === cdEditing);
     if (!c) return;
     const before = state.countdowns;
-    state.countdowns = { items: before.items.filter(x => x.id !== c.id), pins: before.pins ? before.pins.filter(k => k !== c.id) : null };
+    state.countdowns = { items: before.items.filter(x => x.id !== c.id), pins: before.pins ? before.pins.filter(k => k !== c.id) : null, off: (before.off || []).filter(k => k !== c.id) };
     save(); closeModal('cdEditModal');
-    if (examKey === c.id) selectCd('gsat'); else renderExamChips();
+    if (examKey === c.id) selectCd(cdPins()[0] || CD_FIXED); else renderExamChips();
     renderCalendar();
     if ($('cdModal').classList.contains('open')) renderCdManage();
     toast(`已刪除「${c.name}」`, { label: '復原', fn: () => { state.countdowns = before; save(); renderExamChips(); renderCalendar(); if ($('cdModal').classList.contains('open')) renderCdManage(); } });

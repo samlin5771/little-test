@@ -325,7 +325,7 @@
         <div class="sheet cdm-sheet">
             <div class="grabber" data-close></div>
             <div class="cdm-head">
-                <div><h2 id="cdmTitle">我的倒數</h2><p>勾選的會放在倒數頁上方，拖右邊排順序</p></div>
+                <div><h2 id="cdmTitle">我的倒數</h2><p>學測固定，可再勾 2 個，拖 ☰ 排順序</p></div>
                 <button class="btn btn-accent btn-small" id="cdmAdd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>新增</button>
             </div>
             <p class="cdm-label">放在上方<span class="num" id="cdmCount"></span></p>
@@ -366,7 +366,7 @@
         <div class="sheet he-sheet">
             <div class="grabber" data-close></div>
             <div class="he-head">
-                <div><h2 id="homeEditTitle">編輯首頁</h2><p>勾選要顯示的區塊，按住右邊拖曳排順序</p></div>
+                <div><h2 id="homeEditTitle">編輯首頁</h2><p>勾選要顯示的，拖 ☰ 排順序</p></div>
                 <button class="he-done" id="homeEditDone" aria-label="完成"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
             </div>
             <ul class="he-list" id="homeEditList"></ul>
@@ -517,11 +517,11 @@
                 <div class="notify-grid" id="notifyGrid">
                     <button class="notify-opt" data-notify="banner">
                         <span class="nt-th"><span class="nt-banner"><i></i><span><b></b><em></em><em class="s"></em></span></span></span>
-                        <span class="nt-name">頂部橫幅</span><span class="nt-sub">顯示誰傳的和兩行訊息</span>
+                        <span class="nt-name">頂部橫幅</span><span class="nt-sub">名字＋兩行訊息</span>
                     </button>
                     <button class="notify-opt" data-notify="pill">
                         <span class="nt-th"><span class="nt-pill"><i></i><em></em><u></u></span></span>
-                        <span class="nt-name">頂部小膠囊</span><span class="nt-sub">最不佔空間，點一下展開</span>
+                        <span class="nt-name">頂部小膠囊</span><span class="nt-sub">最省空間</span>
                     </button>
                 </div>
                 <button class="nt-try" id="notifyTry" type="button">試試看</button>
@@ -740,7 +740,7 @@
   <div class="g-check"><span></span><em class="g-td">待辦</em>交數學作業</div>
   <div class="g-btn">現在要讀什麼？</div>
 </div></figure>
-                <ul class="g-points"><li>上方切換<b>模考和學測</b>；已經考完的會變淡，考完一週後自動收起來。</li><li>按最右邊的 <b>⋯</b> 打開「我的倒數」：可以<b>新增自己的倒數</b>（段考、英檢、生日…），選顏色、多天的日期，生日可以設成<b>每年重複</b>，也能顯示在行事曆上。上方最多放 3 個，勾選和拖曳右邊的 ☰ 就能換、排順序。</li><li>大數字是剩下的天數，下面是時分秒，還有考試日期和「下一場」還有幾天。</li><li><b>今天</b>區顯示今天讀了多久、離每日目標還差多少，進度條滿了就是達標。點<b>「目標 3 小時」</b>可以直接改每日目標。</li><li>有標重點複習的單元時，「今天」下面會提醒你，點一下就跳到學測範圍。</li><li>每週進度表裡「今天」的項目，和<b>排在今天（或已經逾期）的待辦</b>，都會列在這裡，可以直接打勾。</li><li>不知道讀什麼？按<b>現在要讀什麼？</b>，轉盤幫你隨機選一科。</li><li>最下面的<b>編輯首頁</b>：勾選要顯示哪些區塊、按住 ☰ 拖曳排順序。還可以打開<b>接下來的行程</b>和<b>讀書房間</b>（看朋友現在在讀什麼）兩個區塊。排法會跟著帳號同步。</li></ul>
+                <ul class="g-points"><li>上方切換<b>模考和學測</b>；考完的會自動收進「⋯」，換成下一場。</li><li>按最右邊的 <b>⋯</b> 打開「我的倒數」：可以<b>新增自己的倒數</b>（段考、英檢、生日…），選顏色、多天的日期，生日可以設成<b>每年重複</b>，也能顯示在行事曆上。上方最多放 3 個（<b>學測固定</b>，另外可以再勾 2 個），拖曳右邊的 ☰ 排順序；沒放在上方的都留在「⋯」裡，點一下就能看。已經過完的倒數會變灰，並自動從上方拿掉、換成下一個要到的。</li><li>大數字是剩下的天數，下面是時分秒，還有考試日期和「下一場」還有幾天。</li><li><b>今天</b>區顯示今天讀了多久、離每日目標還差多少，進度條滿了就是達標。點<b>「目標 3 小時」</b>可以直接改每日目標。</li><li>有標重點複習的單元時，「今天」下面會提醒你，點一下就跳到學測範圍。</li><li>每週進度表裡「今天」的項目，和<b>排在今天（或已經逾期）的待辦</b>，都會列在這裡，可以直接打勾。</li><li>不知道讀什麼？按<b>現在要讀什麼？</b>，轉盤幫你隨機選一科。</li><li>最下面的<b>編輯首頁</b>：勾選要顯示哪些區塊、按住 ☰ 拖曳排順序。還可以打開<b>接下來的行程</b>和<b>讀書房間</b>（看朋友現在在讀什麼）兩個區塊。排法會跟著帳號同步。</li></ul>
                 
             </section>
 
