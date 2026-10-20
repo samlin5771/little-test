@@ -54,9 +54,6 @@
             var b = null;
             try { b = localStorage.getItem('study_bg'); } catch (e) {}
             document.documentElement.setAttribute('data-bg', /^(stars|aurora|mist|rain|petal|grid|plain)$/.test(b || '') ? b : 'glow');
-            var f = null;
-            try { f = localStorage.getItem('study_font'); } catch (e) {}
-            if (f === 'lg') document.documentElement.setAttribute('data-font', 'lg');
         })();
     </script>
 
@@ -441,13 +438,6 @@
                         <button data-mode="light">淺色</button><button data-mode="dark">深色</button><button data-mode="auto">跟系統</button>
                     </div>
                 </div>
-                <div class="acct-row acct-mode">
-                    <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 19l5-13 5 13M4.8 14.5h6.4"/><path d="M14.5 19l3.2-8.5 3.3 8.5M15.6 16.3h4.3"/></svg></span>
-                    <span class="acct-label">字體大小</span><span class="grow"></span>
-                    <div class="mode-seg" id="fontSeg" role="group" aria-label="字體大小">
-                        <button data-font="md">標準</button><button data-font="lg">大</button>
-                    </div>
-                </div>
                 <button class="acct-row" id="notifyRow" aria-expanded="false" aria-controls="notifyFold">
                     <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9z"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg></span>
                     <span class="acct-label">訊息通知</span><span class="grow"></span>
@@ -513,6 +503,34 @@
             <div class="sheet-btns">
                 <button class="btn" data-close>取消</button>
                 <button class="btn btn-accent" id="saveLogBtn">儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 編輯一筆讀書紀錄 -->
+    <div class="modal" id="sessModal" role="dialog" aria-modal="true" aria-labelledby="sessTitle">
+        <div class="sheet sess-sheet">
+            <h2 id="sessTitle">編輯紀錄</h2>
+            <p class="sess-sub" id="sessSub"></p>
+            <p class="field-label">科目</p>
+            <div class="sess-subj" id="sessSubj" role="group" aria-label="科目"></div>
+            <label class="field-label" for="sessMin">讀了多久</label>
+            <div class="sess-dur">
+                <button class="sess-step num" data-step="-5" aria-label="少 5 分鐘">−5</button>
+                <div class="sess-min"><span class="sess-min-row"><input type="number" class="num" id="sessMin" min="1" max="600" step="1" inputmode="numeric"><small>分</small></span><em id="sessHint"></em></div>
+                <button class="sess-step num" data-step="5" aria-label="多 5 分鐘">+5</button>
+            </div>
+            <div class="sess-quick num" id="sessQuick" role="group" aria-label="常用時間"><button data-q="15">15</button><button data-q="25">25</button><button data-q="30">30</button><button data-q="45">45</button><button data-q="60">60</button><button data-q="90">90</button></div>
+            <div class="field-row">
+                <div><label class="field-label" for="sessStart">開始時間</label><input type="time" class="field" id="sessStart"></div>
+                <div><span class="field-label">結束時間</span><span class="field sess-end num" id="sessEnd"></span></div>
+            </div>
+            <p class="sess-note">改好後，今天總時數、統計和讀書房間的排行會一起更新。</p>
+            <div class="sheet-btns">
+                <button class="btn sess-del" id="sessDel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>刪除</button>
+                <span class="spacer"></span>
+                <button class="btn" data-close>取消</button>
+                <button class="btn btn-accent" id="sessSave">儲存</button>
             </div>
         </div>
     </div>
@@ -676,7 +694,7 @@
                 <h3>學測範圍</h3>
                 <p class="g-lead">把學測要考的單元列出來，讀完一個勾一個，看自己準備了幾 %。在「進度」分頁上方切換到「學測範圍」。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-phone">
-  <div class="g-syl-sum"><span class="g-ring num">42%</span><div><b>整體完成度</b><small>還有 31 個單元沒熟練</small></div></div>
+  <div class="g-syl-sum"><span class="g-syl-ring num">42%</span><div><b>整體完成度</b><small>還有 31 個單元沒熟練</small></div></div>
   <div class="g-syl-focus"><b>重點複習</b><span>三角函數</span><span>遺傳</span><span>單字 L5–6</span></div>
   <div class="g-syl-unit"><span>指數與對數函數</span><i class="s1">讀過</i><em></em></div>
   <div class="g-syl-unit"><span>平面向量</span><i class="s2">熟練</i><em class="off"></em></div>
@@ -695,8 +713,14 @@
   <div class="g-ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="54" class="tr"/><circle cx="60" cy="60" r="54" class="br" stroke-dasharray="339.3" stroke-dashoffset="120"/><circle cx="60" cy="60" r="47" class="gt"/><circle cx="60" cy="60" r="47" class="gb" stroke-dasharray="295.3" stroke-dashoffset="170"/></svg><span class="num">17:42</span></div>
   <div class="g-row center"><span class="g-pill">暫停</span><span class="g-pill solid">提早完成</span></div>
   <p class="g-cap">外圈：這一輪進度　內圈：今日目標</p>
+  <div class="g-tlog">
+    <div class="g-tlog-h"><b>今天的紀錄</b><span>＋ 補登</span></div>
+    <div class="g-tlog-bar"><i style="width:34%;background:var(--s0)"></i><i style="width:22%;background:var(--s2)"></i></div>
+    <div class="g-tlog-r"><span class="num">07:10</span><i class="g-dot s0"></i><span class="n">數學</span><b class="num">46 分</b><em>✎</em></div>
+    <div class="g-tlog-r"><span class="num">05:05</span><i class="g-dot s2"></i><span class="n">英文<small>已修改</small></span><b class="num">32 分</b><em>✎</em></div>
+  </div>
 </div></figure>
-                <ul class="g-points"><li>三種模式：<b>番茄鐘 25</b>（休息 5 分）、<b>長專注 50</b>（休息 10 分）、<b>自由計時</b>。</li><li>專注中可以暫停、提早完成，或按 ✕ 結束；滿 1 分鐘就會記錄。</li><li>完成一輪會進入休息，可以順手把今天的進度打勾。</li><li>圓環內圈的綠色是<b>今日目標</b>的進度。</li><li><b>關掉 App 也沒關係</b>，回來時會自動算好經過的時間；電腦可以開「子母畫面」小視窗。</li></ul>
+                <ul class="g-points"><li>三種模式：<b>番茄鐘 25</b>（休息 5 分）、<b>長專注 50</b>（休息 10 分）、<b>自由計時</b>。</li><li>專注中可以暫停、提早完成，或按 ✕ 結束；滿 1 分鐘就會記錄。</li><li>完成一輪會進入休息，可以順手把今天的進度打勾。</li><li>圓環內圈的綠色是<b>今日目標</b>的進度。</li><li>「開始專注」下面的<b>今天的紀錄</b>列出今天每一輪：<b>點一筆就能修改</b>讀了多久、開始時間和科目，或刪除（例如忘記暫停、選錯科目）。改過的會標「已修改」，今天總時數和房間排行會一起更新。</li><li>忘記開計時？按卡片右上角的<b>補登</b>。休息畫面也可以直接修改剛剛那一輪。</li><li><b>關掉 App 也沒關係</b>，回來時會自動算好經過的時間；電腦可以開「子母畫面」小視窗。</li></ul>
                 <p class="g-tip"><b>小技巧</b>計時頁上方的<b>讀書房間</b>和<b>讀書統計</b>按鈕可以直接進去。</p>
             </section>
 
@@ -705,7 +729,7 @@
                 <h3>讀書統計</h3>
                 <p class="g-lead">看這週、這個月讀了多少，哪科讀得多、哪科該補。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-phone"><div class="g-total num">23<small>時</small>10<small>分</small></div><p class="g-cap left"><span class="up">↑ 比上週多 4 時</span></p><div class="g-chart"><div class="g-goal"></div><span class="g-col"><i style="height:11px;background:var(--s0)"></i><i style="height:15px;background:var(--s1)"></i><i style="height:19px;background:var(--s2)"></i><i style="height:11px;background:var(--s3)"></i></span><span class="g-col"><i style="height:8px;background:var(--s0)"></i><i style="height:19px;background:var(--s1)"></i><i style="height:15px;background:var(--s2)"></i></span><span class="g-col"><i style="height:15px;background:var(--s0)"></i><i style="height:11px;background:var(--s1)"></i><i style="height:23px;background:var(--s2)"></i><i style="height:17px;background:var(--s3)"></i></span><span class="g-col"><i style="height:19px;background:var(--s0)"></i><i style="height:11px;background:var(--s1)"></i><i style="height:19px;background:var(--s2)"></i></span><span class="g-col"><i style="height:17px;background:var(--s0)"></i><i style="height:23px;background:var(--s1)"></i><i style="height:15px;background:var(--s2)"></i><i style="height:17px;background:var(--s3)"></i></span><span class="g-col"><i style="height:11px;background:var(--s0)"></i><i style="height:15px;background:var(--s1)"></i><i style="height:23px;background:var(--s2)"></i><i style="height:13px;background:var(--s3)"></i></span><span class="g-col"><i style="height:10px;background:var(--s0)"></i><i style="height:13px;background:var(--s1)"></i><i style="height:15px;background:var(--s2)"></i></span></div><div class="g-split"><i style="width:22%;background:var(--s0)"></i><i style="width:19%;background:var(--s1)"></i><i style="width:24%;background:var(--s2)"></i><i style="width:20%;background:var(--s3)"></i><i style="width:15%;background:var(--s4)"></i></div><div class="g-dayrow">10/18 星期日 · 5 筆紀錄<span>›</span></div></div></figure>
-                <ul class="g-points"><li>最上面是總時數和「比上週多／少多少」，下面是日平均、連續讀書天數、達標天數。</li><li>在「達標每日 3 小時 ▾」可以<b>改每日目標</b>，倒數和計時頁會一起更新。</li><li>長條圖用科目顏色堆疊，綠色虛線是目標，達標的那天數字會變綠。</li><li>點長條選一天，再點下面那一列就會滑出<b>當天明細</b>：可以刪除紀錄、補登時間、分享成 IG 限動圖卡。</li><li>各科比例用一條彩色長條加排名表示。</li></ul>
+                <ul class="g-points"><li>最上面是總時數和「比上週多／少多少」，下面是日平均、連續讀書天數、達標天數。</li><li>在「達標每日 3 小時 ▾」可以<b>改每日目標</b>，倒數和計時頁會一起更新。</li><li>長條圖用科目顏色堆疊，綠色虛線是目標，達標的那天數字會變綠。</li><li>點長條選一天，再點下面那一列就會滑出<b>當天明細</b>：點一筆紀錄可以<b>修改或刪除</b>，也可以補登時間、分享成 IG 限動圖卡。</li><li>各科比例用一條彩色長條加排名表示。</li></ul>
                 
             </section>
 
@@ -776,7 +800,7 @@
   <div class="g-acct-row">網站導覽<span>›</span></div>
   <div class="g-acct-row">新增到主畫面<span>›</span></div>
 </div></figure>
-                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 8 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>字體大小</b>：選<b>標準</b>或<b>大</b>，眼睛累或晚上讀書時可以調大，只影響這台裝置。</li><li><b>訊息通知</b>：選聊天訊息要用<b>頂部橫幅</b>（顯示誰傳的和兩行訊息）還是<b>頂部小膠囊</b>（最不佔空間，點一下展開），按「試試看」可以先看效果。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
+                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 8 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>訊息通知</b>：選聊天訊息要用<b>頂部橫幅</b>（顯示誰傳的和兩行訊息）還是<b>頂部小膠囊</b>（最不佔空間，點一下展開），按「試試看」可以先看效果。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
                 
             </section>
 

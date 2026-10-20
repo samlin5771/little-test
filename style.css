@@ -1397,13 +1397,13 @@ body.modal-open { overflow: hidden; }
     font-family: 'Noto Sans TC', sans-serif; color-scheme: light dark;
     display: block; min-width: 0; max-width: 100%; height: 48px;
 }
-input[type="date"].field {
+input[type="date"].field, input[type="time"].field {
     -webkit-appearance: none; appearance: none; text-align: left; line-height: 24px;
 }
-input[type="date"].field::-webkit-date-and-time-value { text-align: left; margin: 0; }
-input[type="date"].field::-webkit-calendar-picker-indicator { opacity: 0.6; }
-[data-theme="dark"] input[type="date"].field { color-scheme: dark; }
-[data-theme="light"] input[type="date"].field { color-scheme: light; }
+input[type="date"].field::-webkit-date-and-time-value, input[type="time"].field::-webkit-date-and-time-value { text-align: left; margin: 0; }
+input[type="date"].field::-webkit-calendar-picker-indicator, input[type="time"].field::-webkit-calendar-picker-indicator { opacity: 0.6; }
+[data-theme="dark"] input[type="date"].field, [data-theme="dark"] input[type="time"].field, [data-theme="dark"] #todoDate { color-scheme: dark; }
+[data-theme="light"] input[type="date"].field, [data-theme="light"] input[type="time"].field, [data-theme="light"] #todoDate { color-scheme: light; }
 .field:focus { border-color: var(--accent); }
 textarea.field { height: auto; min-height: 96px; resize: vertical; line-height: 1.5; }
 .toggle-row { display: flex; align-items: center; gap: 12px; min-height: 44px; margin-bottom: 14px; font-size: 15px; cursor: pointer; font-family: 'Noto Sans TC', sans-serif; }
@@ -1585,7 +1585,7 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 .roulette-sub:empty { display: none; }
 /* 網站導覽：學測範圍、背景示意 */
 .g-syl-sum { display: flex; align-items: center; gap: 10px; padding: 4px 2px 8px; }
-.g-ring { width: 42px; height: 42px; border-radius: 21px; border: 4px solid var(--surface-2); border-top-color: var(--accent); border-right-color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; flex-shrink: 0; }
+.g-syl-ring { width: 42px; height: 42px; border-radius: 21px; border: 4px solid var(--surface-2); border-top-color: var(--accent); border-right-color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; flex-shrink: 0; }
 .g-syl-sum b { display: block; font-size: 11.5px; }
 .g-syl-sum small { font-size: 10px; color: var(--muted); }
 .g-syl-focus { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 8px; border-radius: 10px; background: var(--accent-soft); margin-bottom: 6px; }
@@ -1843,8 +1843,8 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 
 /* 待辦清單上的日期標籤 */
 .todo-date {
-    display: inline-block; vertical-align: 1px; margin-left: 8px; padding: 1px 8px; border-radius: 8px;
-    font-size: 11.5px; font-weight: 700; line-height: 1.6; white-space: nowrap;
+    display: inline-flex; align-items: center; height: 20px; vertical-align: 1px; margin-left: 8px; padding: 0 8px; border-radius: 7px;
+    font-size: 11.5px; font-weight: 700; line-height: 1; white-space: nowrap;
     background: var(--surface-2); color: var(--muted);
 }
 .todo-date.today { background: var(--mark-green-bg); color: var(--mark-green); }
@@ -1860,7 +1860,7 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 .legend i.td { background: var(--mark-green); }
 .legend { flex-wrap: wrap; gap: 6px 14px; }
 .cal-todo label { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 4px 4px; cursor: pointer; font-family: 'Noto Sans TC', sans-serif; font-size: 15px; }
-.cal-todo-tag { flex-shrink: 0; font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 8px; background: var(--mark-green-bg); color: var(--mark-green); line-height: 1.6; }
+.cal-todo-tag { flex-shrink: 0; display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 7px; font-size: 11.5px; font-weight: 700; line-height: 1; background: var(--mark-green-bg); color: var(--mark-green); }
 .cal-todo-tx { flex: 1; min-width: 0; word-break: break-word; }
 
 /* 導覽示意 */
@@ -1880,10 +1880,114 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 .join-sheet .sheet-btns { justify-content: center; }
 .join-sheet .sheet-btns .btn { flex: 1; }
 
-/* 字體大小：「大」把內容整體放大一點（選單列、頂部列維持原樣，不會擠） */
-#fontSeg { grid-template-columns: repeat(2, auto); }
-#fontSeg button { min-width: 48px; }
-[data-font="lg"] .main,
-[data-font="lg"] .guide-body,
-[data-font="lg"] .chat-list,
-[data-font="lg"] .chat-bar { zoom: 1.1; }
+
+/* =====================================================
+ * v41：計時頁「今天的紀錄」＋編輯紀錄
+ * ===================================================== */
+.tlog {
+    margin-top: 22px; padding: 16px 16px 8px; border-radius: 20px;
+    background: var(--surface); border: 1px solid var(--line);
+    font-family: 'Noto Sans TC', sans-serif; text-align: left;
+}
+.tlog-head { display: flex; align-items: flex-start; gap: 12px; }
+.tlog-tx { flex: 1; min-width: 0; }
+.tlog-tx h3 { margin: 0; font-size: 15px; font-weight: 700; line-height: 22px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tlog-ok { display: inline-flex; align-items: center; height: 19px; padding: 0 8px; border-radius: 7px; font-size: 11px; font-weight: 700; line-height: 1; background: var(--mark-green-bg); color: var(--mark-green); }
+.tlog-tx p { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+.tlog-tx p b { color: var(--text); font-weight: 700; font-size: 13.5px; }
+.tlog-tx p span { white-space: nowrap; }
+.tlog-tx p { display: flex; flex-wrap: wrap; column-gap: 12px; }
+.tlog-tx p span + span { position: relative; }
+.tlog-tx p span + span::before { content: ''; position: absolute; left: -7px; top: 50%; width: 3px; height: 3px; margin-top: -1px; border-radius: 2px; background: currentColor; opacity: .55; }
+.tlog-add {
+    flex-shrink: 0; min-height: 36px; padding: 0 13px 0 10px; border-radius: 18px; border: 1px solid var(--line);
+    background: transparent; color: var(--text); font: 600 13px 'Noto Sans TC', sans-serif;
+    display: inline-flex; align-items: center; gap: 4px; cursor: pointer; transition: transform .15s, background .15s;
+}
+.tlog-add svg { width: 14px; height: 14px; }
+.tlog-add:hover { background: var(--surface-2); }
+.tlog-add:active { transform: scale(0.96); }
+.tlog-bar { display: flex; gap: 2px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--surface-2); margin: 12px 0 4px; }
+.tlog-bar i { display: block; height: 100%; flex-shrink: 0; transition: width .4s ease; }
+.tl-list { list-style: none; margin: 0; padding: 0; }
+.tl-list li + li .tl-row { border-top: 1px solid var(--line); }
+.tl-row, .log-main {
+    width: 100%; display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 2px;
+    border: none; background: transparent; color: var(--text); text-align: left; cursor: pointer;
+    font: 400 14.5px 'Noto Sans TC', sans-serif; border-radius: 10px; transition: background .15s;
+}
+.tl-row:hover, .log-main:hover { background: var(--surface-2); }
+.tl-row:active, .log-main:active { background: var(--surface-2); }
+.tl-row .at { width: 42px; flex-shrink: 0; font-size: 13px; font-weight: 600; color: var(--muted); }
+.tl-row .nm { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.tl-row .mn { font-size: 14px; font-weight: 700; }
+.tl-edited { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 6px; font-style: normal; font-size: 10.5px; font-weight: 700; line-height: 1; background: var(--mark-green-bg); color: var(--mark-green); white-space: nowrap; flex-shrink: 0; }
+.tl-pen { width: 30px; height: 30px; border-radius: 15px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-2); color: var(--muted); transition: color .15s, background .15s; }
+.tl-pen svg { width: 14px; height: 14px; }
+.tl-row:hover .tl-pen, .log-main:hover .tl-pen { color: var(--accent-text); background: var(--accent-soft); }
+.tl-more { width: 100%; min-height: 40px; border: none; background: transparent; color: var(--accent-text); font: 600 13px 'Noto Sans TC', sans-serif; display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer; border-top: 1px solid var(--line); }
+.tl-more svg { width: 14px; height: 14px; transition: transform .2s; }
+.tl-more[aria-expanded="true"] svg { transform: rotate(180deg); }
+.tlog-hint, .tlog-empty { margin: 6px 0 6px; font-size: 12px; color: var(--muted); text-align: center; line-height: 1.6; }
+.tlog-empty { margin: 10px 0 12px; font-size: 13px; }
+.break-edit { display: flex; width: fit-content; margin: 6px auto 0; font-size: 13px; }
+.break-edit svg { width: 14px; height: 14px; }
+
+/* 統計 → 當天明細：整列可以點來編輯，右邊保留刪除 */
+.log-row { gap: 4px; }
+.log-main { flex: 1; min-width: 0; gap: 12px; min-height: 48px; }
+.log-main .nm { flex: 1; min-width: 0; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.log-main .tl-pen { width: 28px; height: 28px; }
+
+/* 編輯紀錄視窗 */
+.sess-sheet { max-width: 400px; }
+.sess-sheet h2 { margin-bottom: 2px; }
+.sess-sub { margin: 0 0 6px; font-size: 13px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
+.sess-subj { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-bottom: 16px; }
+.sess-subj button {
+    min-height: 40px; padding: 0 2px; border-radius: 12px; border: 1px solid var(--line); background: transparent; color: var(--muted);
+    font: 500 13px 'Noto Sans TC', sans-serif; display: flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer; transition: all .15s;
+}
+.sess-subj button .sdot { width: 7px; height: 7px; }
+.sess-subj button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--text); font-weight: 700; }
+.sess-dur { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); }
+.sess-step { width: 48px; height: 48px; border-radius: 24px; border: 1px solid var(--line); background: transparent; color: var(--text); font-size: 15px; font-weight: 700; cursor: pointer; flex-shrink: 0; transition: transform .12s, background .15s; }
+.sess-step:hover { background: var(--surface-2); }
+.sess-step:active { transform: scale(0.92); }
+.sess-min { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.sess-min-row { display: flex; align-items: baseline; justify-content: center; gap: 4px; }
+.sess-min input {
+    width: 3.2ch; border: none; background: transparent; color: var(--text); text-align: center; padding: 0;
+    font-size: 40px; font-weight: 700; line-height: 1.1; outline: none; -moz-appearance: textfield; appearance: textfield;
+    border-bottom: 2px solid transparent; transition: border-color .15s;
+}
+.sess-min input:focus { border-bottom-color: var(--accent); }
+.sess-min input::-webkit-outer-spin-button, .sess-min input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sess-min small { font-size: 15px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
+.sess-min em { font-style: normal; font-size: 12px; color: var(--muted); min-height: 1.5em; font-family: 'Noto Sans TC', sans-serif; text-align: center; }
+.sess-quick { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 8px 0 16px; }
+.sess-quick button { min-height: 34px; border-radius: 10px; border: 1px solid transparent; background: var(--surface-2); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+.sess-quick button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
+.sess-end { display: flex; align-items: center; color: var(--muted); border-style: dashed; white-space: nowrap; overflow: hidden; }
+.sess-note { margin: 2px 0 10px; font-size: 12px; color: var(--muted); line-height: 1.6; font-family: 'Noto Sans TC', sans-serif; }
+.sess-del { color: var(--exam); border-color: transparent; padding-left: 8px; padding-right: 10px; }
+.sess-del svg { width: 16px; height: 16px; }
+
+/* 導覽示意：今天的紀錄 */
+.g-tlog { margin-top: 4px; padding: 8px 9px 4px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-size: 9.5px; }
+.g-tlog-h { display: flex; justify-content: space-between; align-items: center; }
+.g-tlog-h b { font-size: 10.5px; }
+.g-tlog-h span { font-size: 8.5px; padding: 2px 7px; border-radius: 8px; border: 1px solid var(--line); font-weight: 700; }
+.g-tlog-bar { display: flex; gap: 1px; height: 4px; border-radius: 2px; overflow: hidden; background: var(--surface-2); margin: 6px 0 3px; }
+.g-tlog-bar i { display: block; height: 100%; }
+.g-tlog-r { display: flex; align-items: center; gap: 6px; min-height: 22px; }
+.g-tlog-r + .g-tlog-r { border-top: 1px solid var(--line); }
+.g-tlog-r > span.num { width: 26px; color: var(--muted); font-weight: 600; }
+.g-tlog-r .n { flex: 1; display: flex; align-items: center; gap: 4px; }
+.g-tlog-r .n small { font-size: 7.5px; font-weight: 700; padding: 0 4px; border-radius: 4px; background: var(--mark-green-bg); color: var(--mark-green); }
+.g-tlog-r em { font-style: normal; width: 16px; height: 16px; border-radius: 8px; background: var(--surface-2); display: inline-flex; align-items: center; justify-content: center; font-size: 8px; color: var(--muted); }
+.sess-sheet p.field-label { margin-top: 0; }
+
+@supports (-webkit-touch-callout: none) {
+    .tlog-ok, .tl-edited, .todo-date, .cal-todo-tag { padding-bottom: 1px; }
+}

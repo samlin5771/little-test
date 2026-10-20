@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v40';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v41';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -129,7 +129,7 @@ function normalize(raw = {}) {
         weekly: raw.weekly && typeof raw.weekly === 'object' ? raw.weekly : {},
         sessions: (raw.sessions || []).filter(x => x && x.start && x.minutes > 0).map(x => ({
             id: String(x.id || uid()), subject: Math.min(4, Math.max(0, x.subject | 0)),
-            start: Number(x.start), minutes: Math.round(x.minutes), pomo: !!x.pomo
+            start: Number(x.start), minutes: Math.round(x.minutes), pomo: !!x.pomo, ...(x.edited ? { edited: true } : {})
         })),
         syllabus: normSyllabus(raw.syllabus)
     };
@@ -142,13 +142,16 @@ function saveLocal() {
 
 let cloudTimer;
 let cloudReady = false;
+let savePending = false;
 const earlySessions = [];   // 讀到雲端資料後才允許寫回，避免空資料蓋掉雲端
 let unsubscribe = null;
 function save() {
     if (!currentUser || !fb) { saveLocal(); return; }
     if (!cloudReady) { toast('還在連線雲端，這次修改可能不會同步'); return; }
     clearTimeout(cloudTimer);
+    savePending = true;   // 還沒送出前，別台裝置的舊資料不要蓋掉剛剛的修改
     cloudTimer = setTimeout(async () => {
+        savePending = false;
         try {
             // mergeFields：只覆蓋這幾個欄位，雲端其他舊資料不受影響
             await fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), {
@@ -245,18 +248,7 @@ $('modeSeg').addEventListener('click', (e) => {
     else { lsSet(LS.theme, b.dataset.mode); applyTheme(b.dataset.mode); }
 });
 renderModeSeg();
-// 字體大小（標準／大）：每台裝置各自設定，眼睛累或晚上讀書可以調大
-function applyFont(f) {
-    const lg = f === 'lg';
-    if (lg) document.documentElement.setAttribute('data-font', 'lg'); else document.documentElement.removeAttribute('data-font');
-    document.querySelectorAll('#fontSeg [data-font]').forEach(b => { const on = b.dataset.font === (lg ? 'lg' : 'md'); b.classList.toggle('active', on); b.setAttribute('aria-pressed', on); });
-}
-applyFont(localStorage.getItem('study_font'));
-$('fontSeg').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-font]');
-    if (!b) return;
-    lsSet('study_font', b.dataset.font); applyFont(b.dataset.font);
-});
+try { localStorage.removeItem('study_font'); } catch (e) {}   // v40 的字體大小已移除
 
 /* =====================================================
  * 背景（個人設定裡選）
@@ -630,7 +622,8 @@ document.querySelectorAll('.modal').forEach(m => {
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     const open = document.querySelectorAll('.modal.open');
-    if (open.length) open.forEach(m => { if (!m.hasAttribute('data-locked')) closeModal(m.id); });
+    // 疊在一起的視窗（例如當天明細上的編輯紀錄）一次只關最上面那個
+    if (open.length) { const top = open[open.length - 1]; if (!top.hasAttribute('data-locked')) closeModal(top.id); }
     else if (document.body.classList.contains('sub') && !isTyping(document.activeElement)) goBack();   // 子頁面按 Esc 返回
 });
 function onEnter(el, fn) {
@@ -1653,12 +1646,17 @@ function recordSession(subject, start, minutes, pomo) {
     publishProfile();
     return rec;
 }
+// 讀書紀錄改了（新增、刪除、編輯）：所有用到時數的地方一起更新，房間排行也同步
+function afterSessionsChange() {
+    save(); renderTimer(); renderStats(); renderToday(); publishProfile();
+    if ($('dayModal').classList.contains('open')) renderDaySheet();
+}
 function removeSession(id, msg) {
     const idx = state.sessions.findIndex(x => x.id === id);
     if (idx < 0) return;
     const [item] = state.sessions.splice(idx, 1);
-    save(); renderTimer(); renderStats(); publishProfile();
-    toast(msg || '已刪除紀錄', { label: '復原', fn: () => { state.sessions.splice(idx, 0, item); save(); renderTimer(); renderStats(); } });
+    afterSessionsChange();
+    toast(msg || '已刪除紀錄', { label: '復原', fn: () => { state.sessions.splice(idx, 0, item); afterSessionsChange(); } });
 }
 
 /* --- 螢幕常亮、提示音 --- */
@@ -1730,7 +1728,7 @@ function cancelFocus() {
     if (minutes >= 1) {
         const rec = recordSession(prev.subject, prev.startAt, minutes, false);
         renderTimer(); renderStats();
-        toast(`已記錄 ${fmtHM(minutes)}`, { label: '不要記錄', fn: () => { state.sessions = state.sessions.filter(x => x.id !== rec.id); save(); renderTimer(); renderStats(); } });
+        toast(`已記錄 ${fmtHM(minutes)}`, { label: '不要記錄', fn: () => { state.sessions = state.sessions.filter(x => x.id !== rec.id); afterSessionsChange(); } });
     } else {
         renderTimer();
     }
@@ -1741,6 +1739,7 @@ function endBreak(startNext) {
 }
 
 /* --- 畫面 --- */
+const ICON_PEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>';
 const ICON_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 const ICON_CHART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>';
 const ICON_ROOM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:16px;height:16px"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.5.2 4 1.9 4.5 4.9"/></svg>';
@@ -1787,6 +1786,7 @@ function renderTimer() {
             <div class="done-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
             <h2 class="break-title">完成一輪，${SUBJECTS[timer.subject]} ${timer.lastMin} 分鐘</h2>
             <p class="break-sub">今天累計 ${fmtHM(dayMinutes(t))}${roundsOn(t) ? ` · 第 ${roundsOn(t)} 輪` : ''}</p>
+            ${timer.lastId && state.sessions.some(x => x.id === timer.lastId) ? `<button class="text-link break-edit" data-edit="${timer.lastId}">${ICON_PEN}修改這一輪的時間或科目</button>` : ''}
             ${task ? `<label class="task-check"><input type="checkbox" class="checkbox" data-task="${task.key}" ${task.done ? 'checked' : ''}><span class="text">「${esc(task.text)}」讀完了嗎？<small>打勾會同步到進度表</small></span></label>` : ''}
             <div class="break-time" id="brBox"><p class="label" id="brLabel">休息時間</p><span class="num" id="brTime"></span></div>
             <div class="block">
@@ -1829,18 +1829,107 @@ function renderTimer() {
                 <svg class="goal-ring" viewBox="0 0 290 290" aria-hidden="true"><circle class="goal-track" cx="145" cy="145" r="122"/><circle class="goal-bar" cx="145" cy="145" r="122" stroke-dasharray="${GC.toFixed(1)}" stroke-dashoffset="${(GC * (1 - goalFrac)).toFixed(1)}"/></svg>
                 <div class="ring-center"><span class="ring-time num">${m.focus ? pad(m.focus) + ':00' : '00:00'}</span><span class="ring-sub">${m.hint}</span></div>
             </div>
-            <p class="goal-line"><i></i>今天 ${fmtHM(todayMin)} ／ 目標 ${tpref.goal / 60} 小時${todayMin >= tpref.goal ? '，達標了！' : ''}</p>
             <p class="task-line">${task && !task.done ? `今天的${SUBJECTS[tpref.subject]}進度：<b>${esc(task.text)}</b>` : ''}</p>
             <button class="btn btn-accent btn-wide" data-act="start" style="margin-top:14px">
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>開始專注
             </button>
-            <p class="mini-stats"><span><b class="num">${roundsOn(t)}</b> 輪番茄鐘</span><span><b class="num hot">${studyStreak()}</b> 天連續讀書</span></p>
+            ${todayLogsHtml(t, todayMin)}
         </div>`;
         if (pipWin) { try { pipWin.close(); } catch (e) {} }
     }
     applyFocusMode();
     updateTimerLive();
 }
+
+/* --- 計時頁「今天的紀錄」：一眼看到今天每一輪，點一下就能修改 --- */
+let logsAll = false;
+const hmBold = (min) => { min = Math.round(min); const h = Math.floor(min / 60), m = min % 60; return h ? `<b class="num">${h}</b> 時 <b class="num">${pad(m)}</b> 分` : `<b class="num">${m}</b> 分`; };
+const clockOf = (ms) => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+function todayLogsHtml(t, todayMin) {
+    const logs = state.sessions.filter(x => sessionDay(x) === t).sort((a, b) => b.start - a.start);
+    const goal = tpref.goal, rounds = roundsOn(t), streak = studyStreak();
+    const scale = Math.max(goal, todayMin) || 1;   // 進度條：滿格＝每日目標（超過目標就以總時數為準）
+    const bar = [...logs].reverse().map(x => `<i style="width:${(x.minutes / scale * 100).toFixed(2)}%;background:var(--s${x.subject})"></i>`).join('');
+    const shown = logsAll ? logs : logs.slice(0, 5);
+    const rows = shown.map(x => `<li><button class="tl-row" data-edit="${x.id}" aria-label="編輯 ${clockOf(x.start)} ${SUBJECTS[x.subject]} ${fmtHM(x.minutes)}">
+            <span class="at num">${clockOf(x.start)}</span><i class="sdot s${x.subject}"></i>
+            <span class="nm">${SUBJECTS[x.subject]}${x.edited ? '<em class="tl-edited">已修改</em>' : ''}</span>
+            <span class="mn num">${fmtHM(x.minutes)}</span><span class="tl-pen">${ICON_PEN}</span>
+        </button></li>`).join('');
+    const more = logs.length > 5 ? `<button class="tl-more" data-act="logs-all" aria-expanded="${logsAll}">${logsAll ? '收起' : `顯示全部 ${logs.length} 筆`}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>` : '';
+    const meta = [`${hmBold(todayMin)} ／ 目標 ${goal / 60} 小時`, rounds ? `${rounds} 輪` : '', streak ? `連續 ${streak} 天` : ''].filter(Boolean).map(x => `<span>${x}</span>`).join('');
+    return `<section class="tlog" aria-labelledby="tlogTitle">
+        <div class="tlog-head">
+            <div class="tlog-tx"><h3 id="tlogTitle">今天的紀錄${todayMin >= goal ? '<span class="tlog-ok">達標了！</span>' : ''}</h3><p>${meta}</p></div>
+            <button class="tlog-add" data-act="log-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>補登</button>
+        </div>
+        <div class="tlog-bar" role="img" aria-label="今日目標完成 ${Math.min(100, Math.round(todayMin / goal * 100))}%">${bar}</div>
+        ${logs.length
+            ? `<ul class="tl-list">${rows}</ul>${more}<p class="tlog-hint">點一筆紀錄可以改時間、科目，或刪除</p>`
+            : '<p class="tlog-empty">今天還沒有紀錄，開始第一輪吧！<br>忘記按計時也可以按「補登」。</p>'}
+    </section>`;
+}
+
+/* --- 編輯一筆讀書紀錄（計時頁、休息畫面、統計的當天明細都會打開這個） --- */
+let sessEdit = null;   // { id, subject, minutes, orig }
+function openSessEditor(id) {
+    const x = state.sessions.find(r => r.id === id);
+    if (!x) { toast('找不到這筆紀錄，可能已經刪除了'); return; }
+    const d = new Date(x.start);
+    sessEdit = { id, subject: x.subject, minutes: x.minutes, orig: x.minutes };
+    $('sessSub').textContent = `${d.getMonth() + 1}/${d.getDate()} 星期${WEEK_ZH[d.getDay()]} · ${x.pomo ? '番茄鐘' : '自由計時或補登'}`;
+    $('sessStart').value = clockOf(x.start);
+    renderSessEditor();
+    openModal('sessModal');
+}
+function renderSessEditor() {
+    if (!sessEdit) return;
+    $('sessSubj').innerHTML = SUBJECTS.map((n, i) => `<button class="${i === sessEdit.subject ? 'on' : ''}" data-es-subj="${i}" aria-pressed="${i === sessEdit.subject}"><i class="sdot s${i}"></i>${n}</button>`).join('');
+    if (document.activeElement !== $('sessMin')) $('sessMin').value = sessEdit.minutes;
+    const m = sessEdit.minutes;
+    $('sessHint').textContent = m !== sessEdit.orig ? `原本 ${fmtHM(sessEdit.orig)}${m >= 60 ? `，改成 ${fmtHM(m)}` : ''}` : (m >= 60 ? `＝ ${fmtHM(m)}` : '');
+    document.querySelectorAll('#sessQuick [data-q]').forEach(b => b.classList.toggle('on', Number(b.dataset.q) === m));
+    const [hh, mm] = ($('sessStart').value || '00:00').split(':').map(Number);
+    const end = (hh * 60 + mm + m) % 1440;
+    $('sessEnd').textContent = `${pad(Math.floor(end / 60))}:${pad(end % 60)}${hh * 60 + mm + m >= 1440 ? '（隔天）' : ''}`;
+}
+const clampMin = (v) => Math.max(1, Math.min(600, Math.round(v) || 1));
+$('sessModal').addEventListener('click', (e) => {
+    if (!sessEdit) return;
+    const subj = e.target.closest('[data-es-subj]');
+    if (subj) { sessEdit.subject = Number(subj.dataset.esSubj); renderSessEditor(); return; }
+    const step = e.target.closest('[data-step]');
+    if (step) { sessEdit.minutes = clampMin(sessEdit.minutes + Number(step.dataset.step)); $('sessMin').value = sessEdit.minutes; renderSessEditor(); return; }
+    const q = e.target.closest('[data-q]');
+    if (q) { sessEdit.minutes = Number(q.dataset.q); $('sessMin').value = sessEdit.minutes; renderSessEditor(); }
+});
+$('sessMin').addEventListener('input', () => { const v = Number($('sessMin').value); if (v >= 1) { sessEdit.minutes = clampMin(v); renderSessEditor(); } });
+$('sessMin').addEventListener('blur', () => { if (sessEdit) { $('sessMin').value = sessEdit.minutes; } });
+$('sessStart').addEventListener('input', renderSessEditor);
+$('sessStart').addEventListener('change', renderSessEditor);
+$('sessDel').addEventListener('click', () => {
+    if (!sessEdit) return;
+    const id = sessEdit.id;
+    closeModal('sessModal'); sessEdit = null;
+    removeSession(id);
+});
+$('sessSave').addEventListener('click', () => {
+    if (!sessEdit) return;
+    const idx = state.sessions.findIndex(r => r.id === sessEdit.id);
+    if (idx < 0) { closeModal('sessModal'); return; }
+    const x = state.sessions[idx];
+    const minutes = clampMin(Number($('sessMin').value) || sessEdit.minutes);
+    const d = new Date(x.start);
+    const [hh, mm] = ($('sessStart').value || clockOf(x.start)).split(':').map(Number);
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm).getTime();
+    if (start + minutes * 60000 > Date.now() + 60000) { toast('結束時間不能超過現在，請調短一點或改開始時間'); return; }
+    if (minutes === x.minutes && start === x.start && sessEdit.subject === x.subject) { closeModal('sessModal'); return; }
+    const before = { ...x };
+    state.sessions[idx] = { ...x, subject: sessEdit.subject, start, minutes, edited: true };
+    closeModal('sessModal'); sessEdit = null;
+    afterSessionsChange();
+    toast(`已改成 ${SUBJECTS[state.sessions[idx].subject]} ${fmtHM(minutes)}`, { label: '復原', fn: () => { const i = state.sessions.findIndex(r => r.id === before.id); if (i >= 0) { state.sessions[i] = before; afterSessionsChange(); } } });
+});
 
 // 每秒更新：數字、圓環、分頁標題、子母畫面
 function updateTimerLive() {
@@ -1951,7 +2040,11 @@ $('tab-timer').addEventListener('click', (e) => {
     if (subj) { tpref.subject = Number(subj.dataset.subj); saveTpref(); renderTimer(); return; }
     const mode = e.target.closest('[data-mode]');
     if (mode) { tpref.mode = Number(mode.dataset.mode); saveTpref(); renderTimer(); return; }
+    const ed = e.target.closest('[data-edit]');
+    if (ed) { openSessEditor(ed.dataset.edit); return; }
     const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'logs-all') { logsAll = !logsAll; renderTimer(); return; }
+    if (act === 'log-add') { openLogModal(todayStr()); return; }
     if (act === 'start') startFocus();
     else if (act === 'pause') togglePause();
     else if (act === 'finish') finishFocus(false);
@@ -2141,13 +2234,15 @@ function renderDaySheet() {
     $('daySplit').innerHTML = sum ? logs.map(x => `<i style="width:${(x.minutes / sum * 100).toFixed(2)}%;background:var(--s${x.subject})"></i>`).join('') : '';
     $('dayLogs').innerHTML = logs.length ? logs.map(x => {
         const d = new Date(x.start);
-        return `<li class="log-row"><span class="at">${pad(d.getHours())}:${pad(d.getMinutes())}</span><i class="sdot s${x.subject}"></i><span class="nm">${SUBJECTS[x.subject]}</span><span class="mn">${fmtHM(x.minutes)}</span><button class="del-btn" data-del="${x.id}" aria-label="刪除這筆紀錄">${ICON_X}</button></li>`;
+        return `<li class="log-row"><button class="log-main" data-edit="${x.id}" aria-label="編輯 ${pad(d.getHours())}:${pad(d.getMinutes())} ${SUBJECTS[x.subject]}"><span class="at">${pad(d.getHours())}:${pad(d.getMinutes())}</span><i class="sdot s${x.subject}"></i><span class="nm">${SUBJECTS[x.subject]}${x.edited ? '<em class="tl-edited">已修改</em>' : ''}</span><span class="mn">${fmtHM(x.minutes)}</span><span class="tl-pen">${ICON_PEN}</span></button><button class="del-btn" data-del="${x.id}" aria-label="刪除這筆紀錄">${ICON_X}</button></li>`;
     }).join('') : '<li class="empty">這天沒有讀書紀錄</li>';
 }
 function openDaySheet() { renderDaySheet(); openModal('dayModal'); }
 $('dayModal').addEventListener('click', (e) => {
     const del = e.target.closest('[data-del]');
-    if (del) { removeSession(del.dataset.del); renderDaySheet(); return; }
+    if (del) { removeSession(del.dataset.del); return; }
+    const ed = e.target.closest('[data-edit]');
+    if (ed) { openSessEditor(ed.dataset.edit); return; }
     const a = e.target.closest('[data-day-act]')?.dataset.dayAct;
     if (a === 'add') openLogModal();
     else if (a === 'share') { closeModal('dayModal'); openShareCard(statSel); }
@@ -2161,7 +2256,7 @@ $('tab-stats').addEventListener('click', (e) => {
     const act = e.target.closest('[data-sact]')?.dataset.sact;
     if (act === 'prev') { statOffset--; statSel = null; renderStats(); }
     else if (act === 'next' && statOffset < 0) { statOffset++; statSel = null; renderStats(); }
-    else if (act === 'add') openLogModal();
+    else if (act === 'add') openLogModal();   // 統計頁：預設選的那天
     else if (act === 'day') openDaySheet();
 });
 $('tab-stats').addEventListener('change', (e) => {
@@ -2170,10 +2265,11 @@ $('tab-stats').addEventListener('change', (e) => {
 
 /* --- 補登 --- */
 $('logSubject').innerHTML = SUBJECTS.map((n, i) => `<option value="${i}">${n}</option>`).join('');
-function openLogModal() {
+function openLogModal(date) {
     const now = new Date();
     $('logSubject').value = String(tpref.subject);
-    $('logDate').value = statSel && statSel <= todayStr() ? statSel : todayStr();
+    $('logDate').value = date || (statSel && statSel <= todayStr() ? statSel : todayStr());
+    $('logDate').max = todayStr();
     $('logTime').value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
     $('logMinutes').value = 25;
     openModal('logModal');
@@ -2188,9 +2284,9 @@ $('saveLogBtn').addEventListener('click', () => {
     const start = new Date(y, m - 1, d, hh, mm).getTime();
     if (start > Date.now()) { toast('不能補登未來的時間'); return; }
     recordSession(Number($('logSubject').value), start, minutes, false);
-    statSel = date;
+    if (document.body.dataset.tab === 'tab-stats' || $('dayModal').classList.contains('open')) statSel = date;
     closeModal('logModal');
-    renderTimer(); renderStats();
+    afterSessionsChange();
     toast(`已補登 ${fmtHM(minutes)}`);
 });
 
@@ -4169,6 +4265,7 @@ function onAuthChanged(user) {
     // 即時監聽：手機改了，電腦畫面也會自動更新
     unsubscribe = fb.fs.onSnapshot(ref, (snap) => {
         if (snap.metadata.hasPendingWrites) return;          // 自己剛寫入的，不用重畫
+        if (!first && savePending) return;                   // 這台剛改了還沒送出：等送出後雲端會回傳合併後的資料
         if (first && snap.metadata.fromCache && !snap.exists()) return; // 本機沒快取，等雲端回應
         const cloud = snap.exists() ? normalize(snap.data()) : null;
         const dupes = removedDupes;
