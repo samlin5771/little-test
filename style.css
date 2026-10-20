@@ -2302,3 +2302,97 @@ body.sorting, body.sorting * { -webkit-user-select: none !important; user-select
 .cdm-row.fixed { background: transparent; }
 /* 電腦、平板：打開聊天室時，後面房間頁的標題列也收起來，不會出現兩個標題 */
 @media (min-width: 900px) { body.chat-open .topbar { visibility: hidden; } }
+
+/* =====================================================
+ * v52：聊天室回覆、表情、往右滑回覆、連點兩下愛心
+ * ===================================================== */
+.chat-screen .chat-list { touch-action: pan-y; }
+/* 頭像對齊訊息泡泡（跟 IG 一樣對齊最後一行的中間）；下面有表情時跟著往上，不會對到表情 */
+.msg.them { align-items: flex-end; }
+.msg.them .chat-av, .msg.them .chat-av-sp { margin-bottom: 5px; }
+.msg.them.has-r .chat-av, .msg.them.has-r .chat-av-sp { margin-bottom: 19px; }
+.msg { position: relative; }
+.msg-line { align-items: flex-end; }
+.mb { display: flex; flex-direction: column; min-width: 0; max-width: 100%; }
+.msg.mine .msg-line { max-width: min(88%, 600px); min-width: 0; }
+.msg.them .msg-col { max-width: min(calc(100% - 38px), 640px); }
+.msg.mine .mb { align-items: flex-end; max-width: 100%; min-width: 0; }
+.msg-line .chat-meta { flex-shrink: 0; }
+.msg.mine .mb .bubble { max-width: 100%; }
+.msg.them .mb { align-items: flex-start; }
+.bw { position: relative; display: flex; flex-direction: column; max-width: 100%; min-width: 0; }
+.msg.mine .bw { align-items: flex-end; }
+.msg.them .bw { align-items: flex-start; }
+/* 被回覆的那則：在泡泡上面的小卡，點一下跳過去 */
+.msg-rlab { display: flex; align-items: center; gap: 4px; margin: 0 4px 4px; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.msg-rlab svg { width: 12px; height: 12px; flex-shrink: 0; }
+.msg-quote {
+    display: block; max-width: min(240px, 66vw); margin-bottom: 4px; padding: 8px 12px;
+    border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--muted); text-align: left; cursor: pointer;
+    font: 400 13px/1.45 'Noto Sans TC', sans-serif; opacity: .9;
+}
+.msg-quote span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+.msg-quote:active { opacity: .7; }
+.mb.has-q .bubble, .mb.has-q .chat-img { position: relative; }
+/* 表情：貼在泡泡右下角（自己的在左下角），只疊到泡泡下緣的留白，不會蓋到字 */
+.msg-reacts {
+    position: relative; z-index: 1; box-sizing: border-box;
+    display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 7px; margin-top: -8px; border-radius: 12px;
+    border: 2px solid var(--bg); background: var(--modal-bg); color: var(--text); cursor: pointer; flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .18); animation: reactIn .28s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+.msg.them .msg-reacts { align-self: flex-end; margin-right: -6px; }
+.msg.mine .msg-reacts { align-self: flex-start; margin-left: -6px; }
+.msg-reacts.mine { box-shadow: 0 2px 8px rgba(0,0,0,.18), inset 0 0 0 1px rgba(var(--accent-rgb), .7); }
+.mr-e { font-size: 14px; line-height: 1; letter-spacing: 1px; }
+.mr-n { font-size: 11px; font-weight: 700; line-height: 1; color: var(--text); }
+.msg.has-r .chat-meta { margin-bottom: 14px; }
+.msg.them.has-r .chat-meta { margin-left: 8px; }
+.msg.mine.has-r .chat-meta { margin-right: 8px; }
+@keyframes reactIn { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+/* 往右滑回覆 */
+.msg > .swipe-reply {
+    position: absolute; left: 0; top: 50%; width: 30px; height: 30px; margin-top: -15px; border-radius: 15px;
+    display: flex; align-items: center; justify-content: center; color: var(--accent-text); background: var(--accent-soft);
+    opacity: 0; transform: scale(.6); pointer-events: none; transition: opacity .15s, transform .15s;
+}
+.msg > .swipe-reply svg { width: 16px; height: 16px; }
+.msg.swiping > .swipe-reply { opacity: calc(var(--sw, 0px) / 58px); transform: scale(.85); transition: none; }
+.msg.sw-hit > .swipe-reply { opacity: 1; transform: scale(1.05); transition: transform .15s; }
+.msg > :not(.swipe-reply) { transition: transform .22s cubic-bezier(0.22, 1, 0.36, 1); }
+.msg.swiping > :not(.swipe-reply) { transform: translate3d(var(--sw, 0px), 0, 0); transition: none; }
+.msg.flash .bubble, .msg.flash .chat-img { animation: msgFlash 1.1s ease; }
+@keyframes msgFlash { 0%, 100% { filter: none; } 25%, 60% { filter: brightness(1.25) saturate(1.2); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .45); } }
+/* 連點兩下的大愛心 */
+.heart-burst { position: fixed; z-index: 160; font-size: 54px; line-height: 1; pointer-events: none; transform: translate(-50%, -50%) scale(.2); animation: heartPop .75s cubic-bezier(0.2, 1.4, 0.4, 1) forwards; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .35)); }
+@keyframes heartPop { 0% { transform: translate(-50%, -50%) scale(.2); opacity: 0; } 35% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; } 60% { transform: translate(-50%, -50%) scale(.95); } 100% { transform: translate(-50%, -80%) scale(1); opacity: 0; } }
+/* 長按：上面一排表情 */
+.pop-reacts { display: flex; gap: 2px; padding: 5px 6px; border-radius: 26px; background: var(--modal-bg); border: 1px solid var(--line); box-shadow: var(--shadow); transform: translateY(6px) scale(.9); opacity: 0; transition: transform .25s cubic-bezier(0.3, 1.5, 0.5, 1), opacity .2s; }
+.pop-reacts[hidden] { display: none; }
+.msg-pop.open .pop-reacts { transform: none; opacity: 1; }
+.pop-reacts button { width: 42px; height: 42px; border: none; border-radius: 21px; background: transparent; font-size: 25px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform .15s, background .15s; padding: 0; }
+.pop-reacts button:active { transform: scale(1.25); }
+.pop-reacts button.on { background: var(--accent-soft); }
+@media (hover: hover) { .pop-reacts button:hover { transform: scale(1.15); } }
+/* 傳送欄上面的「回覆 誰」 */
+.reply-bar { display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding: 8px 12px 8px 16px; background: var(--surface); border-top: 1px solid var(--line); transform: translateY(6px); opacity: 0; transition: transform .2s ease, opacity .2s ease; }
+.reply-bar[hidden] { display: none; }
+.reply-bar.show { transform: none; opacity: 1; }
+.reply-bar > i { width: 3px; align-self: stretch; border-radius: 2px; background: var(--accent); flex-shrink: 0; }
+.reply-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-family: 'Noto Sans TC', sans-serif; }
+.reply-tx b { font-size: 12.5px; color: var(--accent-text); }
+.reply-tx span { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reply-x { width: 32px; height: 32px; border-radius: 16px; border: none; background: var(--surface-2); color: var(--muted); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; }
+.reply-x svg { width: 14px; height: 14px; }
+.reply-bar + .chat-bar { border-top: none; }
+/* 導覽：回覆、表情 */
+.g-msg.q { flex-direction: column; align-items: flex-end; gap: 0; }
+.g-msg > span.g-quote { margin-bottom: -4px; padding: 4px 8px 7px; font-size: 8.5px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 9px; }
+.g-msg > span.g-rx-wrap { position: relative; margin-bottom: 9px; }
+.g-rx { position: absolute; right: -4px; bottom: -11px; padding: 1px 5px; border-radius: 8px; border: 1.5px solid var(--bg); background: var(--modal-bg); color: var(--text); font-style: normal; font-size: 8px; font-weight: 700; white-space: nowrap; }
+.g-rbar { display: flex; gap: 2px; padding: 3px 6px; border-radius: 14px; background: var(--modal-bg); border: 1px solid var(--line); font-size: 12px; }
+.g-rbar span { width: 18px; text-align: center; }
+/* 表情：優先用 iPhone／Mac 系統的表情字型 */
+.mr-e, .pop-reacts button, .heart-burst, .g-rbar { font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; }
+.bubble, #chatInput, .g-msg > span, .g-rx { font-family: 'Noto Sans TC', -apple-system, 'PingFang TC', 'Microsoft JhengHei', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; }
+.mr-n { font-family: 'Manrope', 'Noto Sans TC', sans-serif; }

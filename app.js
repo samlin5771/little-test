@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v51';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v52';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -3808,6 +3808,7 @@ function closeChat() {
     if (!chatRoom) return;
     if (readsUnsub) readsUnsub();
     readsUnsub = null; chatRoom = null;
+    clearReply();
     $('chatInput').blur();
     const el = $('chatScreen');
     el.classList.remove('open', 'kb-open');
@@ -3910,6 +3911,30 @@ const linkify = (t) => esc(t).replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${
 // 照片只接受真的圖片資料（data:image/...;base64,），其他內容一律不顯示、不能儲存
 const isPhoto = (v) => typeof v === 'string' && /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v);
 const photoExpired = (m) => m.img && Date.now() - m.at > PHOTO_KEEP;
+// 表情、回覆
+const REACTS = ['❤️', '😂', '😮', '😢', '👍', '🔥'];
+const canReact = (m) => !m.recalled && !(m.img && (photoExpired(m) || !isPhoto(m.img)));
+function reactSummary(m) {   // [{e, n, mine}]，照 REACTS 的順序
+    const r = m.reactions && typeof m.reactions === 'object' ? m.reactions : {};
+    const me = currentUser?.uid, cnt = {};
+    Object.entries(r).forEach(([u, e]) => { if (REACTS.includes(e)) { cnt[e] = cnt[e] || { e, n: 0, mine: false }; cnt[e].n++; if (u === me) cnt[e].mine = true; } });
+    return REACTS.map(e => cnt[e]).filter(Boolean);
+}
+function reactHtml(m) {
+    const list = reactSummary(m);
+    if (!list.length) return '';
+    const total = list.reduce((a, x) => a + x.n, 0);
+    return `<button class="msg-reacts ${list.some(x => x.mine) ? 'mine' : ''}" data-reacts="${esc(m.id)}" aria-label="表情 ${list.map(x => x.e + x.n).join(' ')}"><span class="mr-e">${list.map(x => x.e).join('')}</span>${total > 1 ? `<span class="mr-n num">${total}</span>` : ''}</button>`;
+}
+const REPLY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
+function quoteHtml(m) {
+    const q = m.replyTo;
+    if (!q || typeof q !== 'object' || !q.id) return '';
+    const me = currentUser?.uid;
+    const sender = m.uid === me ? '你' : esc(m.name || '同學');
+    const target = q.uid && q.uid === me ? (m.uid === me ? '自己' : '你') : (q.uid && q.uid === m.uid ? '自己' : esc(q.name || '同學'));
+    return `<p class="msg-rlab">${REPLY_SVG}${sender}回覆了${target}</p><button class="msg-quote" data-jump="${esc(q.id)}" aria-label="跳到被回覆的訊息"><span>${q.img ? '照片' : esc(String(q.text || '').slice(0, 80))}</span></button>`;
+}
 function msgBody(m) {
     const id = esc(m.id);
     if (m.img) return photoExpired(m) || !isPhoto(m.img) ? `<div class="bubble expired" data-mid="${id}">${photoExpired(m) ? '照片已過期' : '照片無法顯示'}</div>` : `<img class="chat-img" src="${m.img}" alt="照片" data-mid="${id}" loading="lazy">`;
@@ -3958,11 +3983,14 @@ function renderChatList(toEnd) {
         let readN = 0;
         if (mine) Object.entries(chatReads).forEach(([u, at]) => { if (u !== me && at >= m.at) readN++; });
         const meta = `<span class="chat-meta">${mine && readN ? `<span>已讀 ${readN}</span>` : ''}<span class="num">${tm}</span></span>`;
+        const quote = quoteHtml(m), reacts = reactHtml(m);
+        const mb = `<div class="mb${quote ? ' has-q' : ''}${reacts ? ' has-r' : ''}">${quote}<div class="bw">${msgBody(m)}${reacts}</div></div>`;
+        const swipe = '<span class="swipe-reply" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></span>';
         items.push([m.id, mine
-            ? `<div class="msg mine ${grouped ? 'grouped' : ''}">${meta}${msgBody(m)}</div>`
-            : `<div class="msg them ${grouped ? 'grouped' : ''}">
+            ? `<div class="msg mine ${grouped ? 'grouped' : ''} ${reacts ? 'has-r' : ''}" data-row="${esc(m.id)}">${swipe}<div class="msg-line">${meta}${mb}</div></div>`
+            : `<div class="msg them ${grouped ? 'grouped' : ''} ${reacts ? 'has-r' : ''}" data-row="${esc(m.id)}">${swipe}
                 ${grouped ? '<span class="chat-av-sp"></span>' : `<span class="chat-av" style="background:${avColor(m.uid)}">${esc(firstGlyph(m.name || '?'))}</span>`}
-                <div class="msg-col">${grouped ? '' : `<p class="chat-who">${esc(m.name || '同學')}</p>`}<div class="msg-line">${msgBody(m)}${meta}</div></div>
+                <div class="msg-col">${grouped || quoteHtml(m) ? '' : `<p class="chat-who">${esc(m.name || '同學')}</p>`}<div class="msg-line">${mb}${meta}</div></div>
             </div>`]);
         prev = m;
     });
@@ -3978,8 +4006,21 @@ async function sendChat(text, img) {
     try {
         const data = { uid: currentUser.uid, name: myName(), text: img ? '' : text, at: Date.now(), recalled: false };
         if (img) { data.img = img; data.expireAt = new Date(Date.now() + PHOTO_KEEP); }
+        if (replyTarget && replyTarget.room === chatRoom) {
+            const q = replyTarget.m;
+            data.replyTo = { id: q.id, uid: q.uid || '', name: String(q.name || '同學').slice(0, 20), text: q.img ? '' : String(q.text || '').slice(0, 60), img: !!q.img };
+        }
+        clearReply();
         // 網路慢或暫時離線時，不要卡住輸入框：訊息會先排隊，連上網路就自動送出
-        const p = fb.fs.addDoc(fb.fs.collection(fb.db, 'rooms', chatRoom, 'messages'), data);
+        const col = fb.fs.collection(fb.db, 'rooms', chatRoom, 'messages');
+        let p = fb.fs.addDoc(col, data);
+        // 還沒更新 Firestore 規則時，帶「回覆」的訊息會被擋：改成一般訊息再送一次，不會傳不出去
+        if (data.replyTo) p = p.catch(err => {
+            if (err.code !== 'permission-denied') throw err;
+            toast('回覆功能需要先更新 Firestore 規則，這則先當一般訊息送出');
+            const { replyTo, ...plain } = data;
+            return fb.fs.addDoc(col, plain);
+        });
         const r = await Promise.race([p, new Promise(res => setTimeout(res, 5000, 'slow'))]);
         if (r === 'slow') {
             toast('網路比較慢，訊息會在連上後送出');
@@ -4028,6 +4069,10 @@ function openMsgPop(id, srcEl) {
     if (!m || m.recalled) return;
     menuMsg = m;
     const mine = m.uid === currentUser?.uid;
+    const myR = m.reactions?.[currentUser?.uid];
+    $('popReacts').hidden = !canReact(m);
+    $('popReacts').innerHTML = REACTS.map(e => `<button class="${e === myR ? 'on' : ''}" data-react="${e}" aria-label="${e}" aria-pressed="${e === myR}">${e}</button>`).join('');
+    $('popReply').hidden = !canReact(m);
     const r = myRooms.find(x => x.id === chatRoom);
     const canRecall = mine && Date.now() - m.at < RECALL_MS;
     const d = new Date(m.at);
@@ -4039,13 +4084,20 @@ function openMsgPop(id, srcEl) {
     $('popDelete').hidden = mine || r?.owner !== currentUser?.uid;
     $('popNote').textContent = mine && !canRecall ? '超過 24 小時的訊息不能收回' : canRecall ? '收回後，大家會看到「你收回了一則訊息」' : '';
     $('msgPop').classList.toggle('mine', mine);
+    popDown = false;
     $('msgPop').classList.add('open');
     device.vibrate(12);
 }
+let popDown = false;   // 長按放開手指時的那一下「點擊」會落在選單背景上，不能讓它把選單關掉
+$('msgPop').addEventListener('pointerdown', () => { popDown = true; });
 function closeMsgPop() { $('msgPop').classList.remove('open'); menuMsg = null; }
 $('msgPop').addEventListener('click', async (e) => {
+    if (!popDown && e.detail !== 0) return;
+    const rb = e.target.closest('[data-react]');
+    if (rb && menuMsg) { const m = menuMsg; closeMsgPop(); toggleReact(m, rb.dataset.react); return; }
     const a = e.target.closest('[data-pop]')?.dataset.pop;
-    if (!a) { if (!e.target.closest('.pop-menu, .pop-msg')) closeMsgPop(); return; }
+    if (!a) { if (!e.target.closest('.pop-menu, .pop-msg, .pop-reacts')) closeMsgPop(); return; }
+    if (a === 'reply') { const m = menuMsg; closeMsgPop(); if (m) startReply(m); return; }
     const m = menuMsg; closeMsgPop();
     if (!m) return;
     const ref = fb.fs.doc(fb.db, 'rooms', chatRoom, 'messages', m.id);
@@ -4113,11 +4165,131 @@ chatList.addEventListener('contextmenu', (e) => {
     if (!t) return;
     e.preventDefault(); endPress(); openMsgPop(t.dataset.mid, t);
 });
+let lastTap = { id: '', at: 0 }, imgTapT = 0;
 chatList.addEventListener('click', (e) => {
-    if (pressed) { pressed = false; e.preventDefault(); return; }   // 長按放開，不要觸發點擊
+    if (pressed || swipedAt > Date.now() - 350) { pressed = false; e.preventDefault(); return; }   // 長按、滑動放開，不要觸發點擊
+    const rx = e.target.closest('[data-reacts]');
+    if (rx) { showReactors(rx.dataset.reacts); return; }
+    const jq = e.target.closest('[data-jump]');
+    if (jq) { jumpToMsg(jq.dataset.jump); return; }
+    const t = e.target.closest('[data-mid]');
+    if (!t) return;
+    // 連點兩下：愛心
+    const now = Date.now();
+    if (lastTap.id === t.dataset.mid && now - lastTap.at < 320) {
+        lastTap = { id: '', at: 0 }; clearTimeout(imgTapT);
+        const m = (chats[chatRoom]?.msgs || []).find(x => x.id === t.dataset.mid);
+        if (m && canReact(m)) { if (m.reactions?.[currentUser?.uid] !== '❤️') heartBurst(t); toggleReact(m, '❤️'); }   // 再連點兩下就取消
+        return;
+    }
+    lastTap = { id: t.dataset.mid, at: now };
     const im = e.target.closest('.chat-img');
-    if (im && isPhoto(im.getAttribute('src'))) { $('imgView').src = im.getAttribute('src'); openModal('imgModal'); }
+    if (im && isPhoto(im.getAttribute('src'))) {   // 照片：等一下確定不是連點兩下才打開
+        clearTimeout(imgTapT);
+        imgTapT = setTimeout(() => { $('imgView').src = im.getAttribute('src'); openModal('imgModal'); }, 330);
+    }
 });
+chatList.addEventListener('dblclick', (e) => { if (e.target.closest('[data-mid]')) e.preventDefault(); });
+
+/* --- 往右滑回覆（手機）：只左右移動，不會跟上下捲動打架 --- */
+let swipe = null, swipedAt = 0;
+chatList.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') return;
+    const row = e.target.closest('[data-row]');
+    if (!row) return;
+    swipe = { row, id: row.dataset.row, x: e.clientX, y: e.clientY, dx: 0, lock: null, hit: false };
+}, { passive: true });
+chatList.addEventListener('pointermove', (e) => {
+    if (!swipe) return;
+    const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y;
+    if (!swipe.lock) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        swipe.lock = Math.abs(dx) > Math.abs(dy) * 1.3 && dx > 0 ? 'x' : 'y';
+        if (swipe.lock === 'x') { endPress(); swipe.row.classList.add('swiping'); }
+    }
+    if (swipe.lock !== 'x') return;
+    const d = Math.max(0, Math.min(90, dx * (dx > 60 ? 0.55 : 1) + (dx > 60 ? 27 : 0)));
+    swipe.dx = d;
+    swipe.row.style.setProperty('--sw', d + 'px');
+    const hit = d >= 58;
+    if (hit !== swipe.hit) { swipe.hit = hit; swipe.row.classList.toggle('sw-hit', hit); if (hit) device.vibrate(10); }
+}, { passive: true });
+const endSwipe = () => {
+    if (!swipe) return;
+    const s = swipe; swipe = null;
+    if (s.lock !== 'x') return;
+    swipedAt = Date.now();
+    s.row.classList.remove('swiping', 'sw-hit');
+    s.row.style.removeProperty('--sw');
+    if (s.hit) { const m = (chats[chatRoom]?.msgs || []).find(x => x.id === s.id); if (m && canReact(m)) startReply(m); }
+};
+['pointerup', 'pointercancel'].forEach(n => chatList.addEventListener(n, endSwipe));
+
+/* --- 回覆 --- */
+let replyTarget = null;   // { room, m }
+function startReply(m) {
+    replyTarget = { room: chatRoom, m };
+    const mine = m.uid === currentUser?.uid;
+    $('replyWho').textContent = `回覆 ${mine ? '自己' : (m.name || '同學')}`;
+    $('replyText').textContent = m.img ? '照片' : (m.text || '');
+    $('replyBar').hidden = false;
+    requestAnimationFrame(() => $('replyBar').classList.add('show'));
+    $('chatInput').focus();
+    fitChatSoon();
+}
+function clearReply() {
+    replyTarget = null;
+    const b = $('replyBar');
+    b.classList.remove('show'); b.hidden = true;
+}
+$('replyX').addEventListener('click', () => { clearReply(); $('chatInput').focus(); });
+function jumpToMsg(id) {
+    const row = chatList.querySelector(`[data-row="${CSS.escape(id)}"]`);
+    if (!row) { toast('這則訊息太舊或已經刪除，找不到了'); return; }
+    chatStick = false;
+    row.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash');
+}
+
+/* --- 表情 --- */
+async function toggleReact(m, e) {
+    if (!fb || !currentUser || !chatRoom || !REACTS.includes(e)) return;
+    const me = currentUser.uid, cur = m.reactions?.[me];
+    const ref = fb.fs.doc(fb.db, 'rooms', chatRoom, 'messages', m.id);
+    // 先改畫面（不用等網路），失敗再改回來
+    const before = m.reactions ? { ...m.reactions } : null;
+    m.reactions = { ...(m.reactions || {}) };
+    if (cur === e) delete m.reactions[me]; else m.reactions[me] = e;
+    renderChatList(false);
+    try {
+        await fb.fs.updateDoc(ref, { [`reactions.${me}`]: cur === e ? fb.fs.deleteField() : e });
+    } catch (err) {
+        console.warn('表情失敗：', err);
+        m.reactions = before; renderChatList(false);
+        toast(err.code === 'permission-denied' ? '按表情需要先更新 Firestore 規則' : '表情沒有送出，請檢查網路');
+    }
+}
+function heartBurst(el) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const r = el.getBoundingClientRect(), h = document.createElement('span');
+    h.className = 'heart-burst'; h.textContent = '❤️';
+    h.style.left = (r.left + r.width / 2) + 'px'; h.style.top = (r.top + r.height / 2) + 'px';
+    document.body.appendChild(h);
+    device.vibrate(12);
+    setTimeout(() => h.remove(), 800);
+}
+function showReactors(id) {
+    const m = (chats[chatRoom]?.msgs || []).find(x => x.id === id);
+    if (!m?.reactions) return;
+    const me = currentUser?.uid, by = {};
+    Object.entries(m.reactions).forEach(([u, e]) => {
+        if (!REACTS.includes(e)) return;
+        const name = u === me ? '你' : (profiles[u]?.name || '同學');
+        (by[e] = by[e] || []).push(name);
+    });
+    const txt = REACTS.filter(e => by[e]).map(e => `${by[e].join('、')} 按了 ${e}`).join('，');
+    if (txt) toast(txt);
+}
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if ($('msgPop').classList.contains('open')) { e.stopImmediatePropagation(); closeMsgPop(); }

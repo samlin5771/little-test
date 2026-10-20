@@ -835,13 +835,13 @@
                 <p class="g-lead">每個房間都有自己的聊天室，按房間裡的「聊天室」進入。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-phone">
   <div class="g-notice"><i style="background:var(--s1)">華</i><div><b>小華<small>讀書會 · 剛剛</small></b><span>晚上 8 點一起開番茄鐘？</span></div></div>
-  <div class="g-msg them"><i style="background:var(--s0)">明</i><span>3-2 對數那題好難 😵‍💫</span></div>
-  <div class="g-msg mine"><span>我拍給你看 👇</span></div>
+  <div class="g-msg them"><i style="background:var(--s0)">明</i><span class="g-rx-wrap">3-2 對數那題好難 😵‍💫<em class="g-rx">😢 2</em></span></div>
+  <div class="g-msg mine q"><span class="g-quote">明：3-2 對數那題好難</span><span>我拍給你看 👇</span></div>
   <div class="g-msg mine"><span class="photo"></span></div>
   <p class="g-sys">哲哲 收回了一則訊息</p>
-  <div class="g-pop"><span class="g-msg mine solo"><span>好 👌 衝 ≥ 3 小時！</span></span><div class="menu"><span>複製文字</span><span class="red">收回訊息</span></div></div>
+  <div class="g-pop"><div class="g-rbar"><span>❤️</span><span>😂</span><span>😮</span><span>😢</span><span>👍</span><span>🔥</span></div><span class="g-msg mine solo"><span>好 👌 衝 ≥ 3 小時！</span></span><div class="menu"><span>回覆</span><span>複製文字</span><span class="red">收回訊息</span></div></div>
 </div></figure>
-                <ul class="g-points"><li>在房間裡，聊天室在<b>座位下面、今天排行上面</b>，有未讀訊息時會顯示數字。</li><li>可以傳文字、表情符號（用手機鍵盤就能打）和照片；照片會先壓縮，30 天後過期。</li><li><b>長按訊息</b>會浮出訊息卡片：複製文字、儲存照片；自己的訊息 24 小時內可以收回。</li><li>自己的訊息旁邊會顯示「已讀 N」。</li><li>在其他頁面有新訊息時，畫面<b>上方</b>會滑出通知（頭像、名字、房間和訊息），點一下直接打開聊天室，往上滑可以關掉；「計時」分頁也會出現紅點。通知樣式可以在個人設定的<b>訊息通知</b>選「頂部橫幅」或「頂部小膠囊」。</li><li>第一次進聊天室可以<b>開啟通知</b>：App 在背景時也會提醒你，點通知會直接打開那個聊天室（手機完全關掉時收不到）。</li></ul>
+                <ul class="g-points"><li>在房間裡，聊天室在<b>座位下面、今天排行上面</b>，有未讀訊息時會顯示數字。</li><li>可以傳文字、表情符號（用手機鍵盤就能打）和照片；照片會先壓縮，30 天後過期。</li><li><b>長按訊息</b>（電腦按右鍵）會浮出訊息卡片：上面一排可以<b>按表情</b>（❤️😂😮😢👍🔥），下面可以回覆、複製文字、儲存照片；自己的訊息 24 小時內可以收回。</li><li><b>回覆</b>：長按選「回覆」，或在手機上把訊息<b>往右滑</b>，輸入框上面會出現「回覆 某某」，按 ✕ 取消。送出後訊息上方會帶著原本那則，點一下就跳回去看。</li><li><b>連點兩下</b>訊息就會送出 ❤️，再連點兩下取消。表情會貼在訊息泡泡角落，不會蓋到字；點表情可以看是誰按的，每人一則只能按一個，按別的會換掉。</li><li>自己的訊息旁邊會顯示「已讀 N」。</li><li>在其他頁面有新訊息時，畫面<b>上方</b>會滑出通知（頭像、名字、房間和訊息），點一下直接打開聊天室，往上滑可以關掉；「計時」分頁也會出現紅點。通知樣式可以在個人設定的<b>訊息通知</b>選「頂部橫幅」或「頂部小膠囊」。</li><li>第一次進聊天室可以<b>開啟通知</b>：App 在背景時也會提醒你，點通知會直接打開那個聊天室（手機完全關掉時收不到）。</li></ul>
                 
             </section>
 
@@ -936,6 +936,11 @@
             <button class="icon-btn ghost" id="notifyClose" aria-label="不用了"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         </div>
         <div class="chat-list" id="chatList" aria-live="polite"></div>
+        <div class="reply-bar" id="replyBar" hidden>
+            <i aria-hidden="true"></i>
+            <div class="reply-tx"><b id="replyWho"></b><span id="replyText"></span></div>
+            <button type="button" class="reply-x" id="replyX" aria-label="取消回覆"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg></button>
+        </div>
         <form class="chat-bar" id="chatForm" autocomplete="off">
             <label class="icon-btn ghost chat-photo" aria-label="傳照片"><input type="file" accept="image/*" id="chatFile" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg></label>
             <textarea id="chatInput" rows="1" maxlength="1000" placeholder="輸入訊息…" aria-label="輸入訊息"></textarea>
@@ -946,8 +951,10 @@
     <!-- 聊天：長按訊息（訊息卡片浮起來＋選單） -->
     <div class="msg-pop" id="msgPop" role="dialog" aria-modal="true" aria-label="訊息選項">
         <div class="pop-inner">
+            <div class="pop-reacts" id="popReacts" role="group" aria-label="按表情"></div>
             <div class="pop-msg" id="popMsg"></div>
             <div class="pop-menu">
+                <button data-pop="reply" id="popReply"><span>回覆</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
                 <button data-pop="copy" id="popCopy"><span>複製文字</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button>
                 <button data-pop="save" id="popSave"><span>儲存照片</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
                 <button data-pop="recall" id="popRecall" class="danger"><span>收回訊息</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
