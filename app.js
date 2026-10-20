@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v49';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v50';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -131,21 +131,32 @@ function isExamDuplicate(ev) {
     });
 }
 let removedDupes = 0;
+// 讀書紀錄整理：沒有 id 的給固定的 id（每次讀到都一樣，兩台合併時才不會被當成不同筆）、
+// 同一筆重複出現（同 id，或同科目同開始時間同分鐘數）只留一筆、時間壞掉的拿掉
+function cleanSessions(list) {
+    const ids = new Set(), keys = new Set();
+    return (Array.isArray(list) ? list : []).filter(x => x && Number.isFinite(Number(x.start)) && Number(x.start) > 0 && x.minutes > 0).map(x => ({
+        id: String(x.id || `s_${Number(x.start)}_${x.subject | 0}`), subject: Math.min(4, Math.max(0, x.subject | 0)),
+        start: Number(x.start), minutes: Math.round(x.minutes), pomo: !!x.pomo, ...(x.edited ? { edited: true } : {})
+    })).filter(x => {
+        const k = `${x.subject}_${x.start}_${x.minutes}`;
+        if (ids.has(x.id) || keys.has(k)) return false;
+        ids.add(x.id); keys.add(k); return true;
+    });
+}
 function normalize(raw = {}) {
     removedDupes = 0;
     return {
-        todos: (raw.todos || []).map(t => typeof t === 'string'
-            ? { id: uid(), text: t }
-            : { id: t.id || uid(), text: t.text || '', ...(/^\d{4}-\d{2}-\d{2}$/.test(t.date || '') ? { date: t.date } : {}) }),
-        events: (raw.events || []).filter(e => e && e.start).map(e => ({
-            id: String(e.id || uid()), title: e.title || '', start: String(e.start).slice(0, 10), important: !!e.important,
+        // 舊資料沒有 id：用位置給固定的 id（每次讀到都一樣，合併時才對得上）
+        todos: (raw.todos || []).map((t, i) => typeof t === 'string'
+            ? { id: `t_${i}`, text: t }
+            : { id: t.id || `t_${i}`, text: t.text || '', ...(/^\d{4}-\d{2}-\d{2}$/.test(t.date || '') ? { date: t.date } : {}) }),
+        events: (raw.events || []).filter(e => e && e.start).map((e, i) => ({
+            id: String(e.id || `e_${String(e.start).slice(0, 10)}_${i}`), title: e.title || '', start: String(e.start).slice(0, 10), important: !!e.important,
             ...(e.end && String(e.end).slice(0, 10) > String(e.start).slice(0, 10) ? { end: String(e.end).slice(0, 10) } : {})
         })).filter(e => { if (isExamDuplicate(e)) { removedDupes++; return false; } return true; }),
         weekly: raw.weekly && typeof raw.weekly === 'object' ? raw.weekly : {},
-        sessions: (raw.sessions || []).filter(x => x && x.start && x.minutes > 0).map(x => ({
-            id: String(x.id || uid()), subject: Math.min(4, Math.max(0, x.subject | 0)),
-            start: Number(x.start), minutes: Math.round(x.minutes), pomo: !!x.pomo, ...(x.edited ? { edited: true } : {})
-        })),
+        sessions: cleanSessions(raw.sessions),
         syllabus: normSyllabus(raw.syllabus),
         countdowns: normCountdowns(raw.countdowns)
     };
@@ -157,8 +168,8 @@ const CD_COLORS = ['#F472B6', '#6CB4EE', '#34D399', '#E9B154', '#A99BF0', '#FF8B
 const isYmd = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
 function normCountdowns(c) {
     c = c && typeof c === 'object' ? c : {};
-    const items = (Array.isArray(c.items) ? c.items : []).filter(x => x && isYmd(x.date) && x.name).slice(0, 40).map(x => ({
-        id: String(x.id || 'c_' + uid()), name: String(x.name).slice(0, 30), short: String(x.short || x.name).slice(0, 4),
+    const items = (Array.isArray(c.items) ? c.items : []).filter(x => x && isYmd(x.date) && x.name).slice(0, 40).map((x, i) => ({
+        id: String(x.id || `c_${x.date}_${i}`), name: String(x.name).slice(0, 30), short: String(x.short || x.name).slice(0, 4),
         date: x.date, ...(isYmd(x.end) && x.end > x.date && !x.yearly ? { end: x.end } : {}),
         color: CD_COLORS.includes(x.color) ? x.color : CD_COLORS[0], yearly: !!x.yearly, cal: x.cal !== false
     }));
@@ -182,12 +193,14 @@ let cachedUid = null;     // 副本是哪個帳號的
 let authKnown = false;    // 已經知道有沒有登入
 let cloudBase = null;     // 雲端最後一次確認的資料（合併時用來分辨「誰改了什麼」）
 let cloudDirty = false;   // 這台裝置有還沒送上雲端的修改
+// 雲端資料的版本：每次送出 +1。收到比已知版本舊的資料（網路延遲、手機裡的舊快取）就不理它，避免剛加的紀錄被舊資料蓋掉
+let knownRev = 0, knownAt = 0;
 let cacheTimer = null;
 function writeCloudCache() {
     const id = currentUser?.uid || cachedUid;
     if (!id) return;
     clearTimeout(cacheTimer);
-    try { localStorage.setItem(CLOUD_CACHE, JSON.stringify({ uid: id, at: Date.now(), json: stateJson(state), base: cloudBase ? stateJson(cloudBase) : null, dirty: cloudDirty })); } catch (e) {}
+    try { localStorage.setItem(CLOUD_CACHE, JSON.stringify({ uid: id, at: Date.now(), json: stateJson(state), base: cloudBase ? stateJson(cloudBase) : null, dirty: cloudDirty, rev: knownRev, revAt: knownAt })); } catch (e) {}
 }
 function saveCloudCache() {
     if (!currentUser && !cachedUid) return;
@@ -199,7 +212,7 @@ function loadCloudCache() {
         const c = JSON.parse(localStorage.getItem(CLOUD_CACHE) || 'null');
         if (!(c && c.uid && c.json)) return null;
         // 舊版副本沒有 base：當成跟雲端一樣、沒有未送出的修改
-        return { uid: c.uid, state: normalize(JSON.parse(c.json)), base: normalize(JSON.parse(c.base || c.json)), dirty: !!c.dirty };
+        return { uid: c.uid, state: normalize(JSON.parse(c.json)), base: normalize(JSON.parse(c.base || c.json)), dirty: !!c.dirty, rev: Number(c.rev) || 0, revAt: Number(c.revAt) || 0 };
     } catch (e) { return null; }
 }
 const clearCloudCache = () => { clearTimeout(cacheTimer); try { localStorage.removeItem(CLOUD_CACHE); } catch (e) {} };
@@ -280,10 +293,11 @@ async function flushCloud() {
             const snap = await tx.get(ref);
             const remote = snap.exists() ? normalize(snap.data()) : normalize({});
             const m = mergeState(base, sent, remote);
+            const rev = (Number(snap.exists() && snap.data().syncRev) || 0) + 1, at = Date.now();
             // mergeFields：只覆蓋這幾個欄位，雲端其他資料（個人設定）不受影響
-            tx.set(ref, { ...pickSync(m), updatedAt: Date.now() }, { mergeFields: [...SYNC_KEYS, 'updatedAt'] });
-            return m;
-        });
+            tx.set(ref, { ...pickSync(m), updatedAt: at, syncRev: rev }, { mergeFields: [...SYNC_KEYS, 'updatedAt', 'syncRev'] });
+            return { m, rev, at };
+        }).then(r => { if (currentUser?.uid === who) { knownRev = Math.max(knownRev, r.rev); knownAt = Math.max(knownAt, r.at); } return r.m; });
         if (currentUser?.uid !== who) return;
         cloudBase = merged;
         if (stateJson(state) === sentJson) { cloudDirty = false; setSyncedState(merged); }
@@ -2496,11 +2510,12 @@ $('tab-stats').addEventListener('change', (e) => {
 /* --- 補登 --- */
 $('logSubject').innerHTML = SUBJECTS.map((n, i) => `<option value="${i}">${n}</option>`).join('');
 function openLogModal(date) {
-    const now = new Date();
+    // 預設：剛讀完 25 分鐘（開始時間＝現在往前 25 分鐘），按儲存就不會超過現在
+    const from = new Date(Date.now() - 25 * 60000);
     $('logSubject').value = String(tpref.subject);
-    $('logDate').value = date || (statSel && statSel <= todayStr() ? statSel : todayStr());
+    $('logDate').value = date || (statSel && statSel < todayStr() ? statSel : ymd(from));
     $('logDate').max = todayStr();
-    $('logTime').value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    $('logTime').value = `${pad(from.getHours())}:${pad(from.getMinutes())}`;
     $('logMinutes').value = 25;
     openModal('logModal');
 }
@@ -2513,11 +2528,14 @@ $('saveLogBtn').addEventListener('click', () => {
     const [hh, mm] = time.split(':').map(Number);
     const start = new Date(y, m - 1, d, hh, mm).getTime();
     if (start > Date.now()) { toast('不能補登未來的時間'); return; }
-    recordSession(Number($('logSubject').value), start, minutes, false);
+    if (start + minutes * 60000 > Date.now() + 60000) { toast('結束時間不能超過現在，請調短一點或改開始時間'); return; }   // 跟「修改紀錄」用一樣的規則
+    const rec = recordSession(Number($('logSubject').value), start, minutes, false);
     if (document.body.dataset.tab === 'tab-stats' || $('dayModal').classList.contains('open')) statSel = date;
     closeModal('logModal');
     afterSessionsChange();
-    toast(`已補登 ${fmtHM(minutes)}`);
+    // 補到別天時說清楚是哪天（計時頁只列今天，不然會以為不見了）
+    const day = date === todayStr() ? '' : `到 ${m}/${d}`;
+    toast(`已補登${day} ${fmtHM(minutes)}`, { label: '復原', fn: () => { state.sessions = state.sessions.filter(x => x.id !== rec.id); afterSessionsChange(); } });
 });
 
 
@@ -4780,7 +4798,7 @@ document.addEventListener('fullscreenchange', () => { /* 只是離開瀏覽器�
 state = loadLocal();
 if (removedDupes) saveLocal();
 // 上次是登入狀態：先用雲端副本畫出畫面，雲端回應後只在資料真的有變時才重畫
-{ const c = loadCloudCache(); if (c) { state = c.state; cachedUid = c.uid; cloudBase = c.base; cloudDirty = c.dirty; } }
+{ const c = loadCloudCache(); if (c) { state = c.state; cachedUid = c.uid; cloudBase = c.base; cloudDirty = c.dirty; knownRev = c.rev; knownAt = c.revAt; } }
 applyHome();
 renderExamChips();
 // 關掉 App 期間一輪已經結束的話，打開時直接記錄（不響）
@@ -4887,7 +4905,7 @@ function onAuthChanged(user) {
     if (!user) {
         setTimeout(warmLogin, 1500);
         roomStop(); lastProfile = '';
-        clearCloudCache(); cachedUid = null; cloudBase = null; cloudDirty = false;
+        clearCloudCache(); cachedUid = null; cloudBase = null; cloudDirty = false; knownRev = knownAt = 0;
         state = loadLocal();
         renderAll(); renderAccount(); renderRoom();
         return;
@@ -4897,7 +4915,7 @@ function onAuthChanged(user) {
     setTimeout(handlePendingJoin, 800);
     let first = true;
     // 副本是同一個帳號的才算數；換帳號就先清掉，避免看到別人的資料
-    if (cachedUid && cachedUid !== user.uid) { clearCloudCache(); cachedUid = null; cloudBase = null; cloudDirty = false; state = loadLocal(); renderAll(); }
+    if (cachedUid && cachedUid !== user.uid) { clearCloudCache(); cachedUid = null; cloudBase = null; cloudDirty = false; knownRev = knownAt = 0; state = loadLocal(); renderAll(); }
     cachedUid = user.uid;
     // 沒有副本（這台第一次登入）：以登入當下的畫面為準，之後的修改才算「這台改的」
     if (!cloudBase) cloudBase = cloneState(state);
@@ -4907,6 +4925,12 @@ function onAuthChanged(user) {
     unsubscribe = fb.fs.onSnapshot(ref, { includeMetadataChanges: true }, (snap) => {
         if (snap.metadata.hasPendingWrites) return;          // 自己剛寫入的（個人設定），不用重畫
         if (first && snap.metadata.fromCache && !snap.exists()) return; // 本機沒快取，等雲端回應
+        // 比這台已經送出的版本還舊（舊快取、延遲送達）：不理它，等新的來，不然剛加的紀錄會被蓋掉
+        if (snap.exists()) {
+            const d = snap.data(), rev = Number(d.syncRev) || 0, at = Number(d.updatedAt) || 0;
+            if (rev < knownRev && at < knownAt) { if (!first) renderAccount(snap.metadata.fromCache ? '離線中，連上網路後會自動同步' : ''); return; }
+            knownRev = Math.max(knownRev, rev); knownAt = Math.max(knownAt, at);
+        }
         const cloud = snap.exists() ? normalize(snap.data()) : normalize({});
         const dupes = removedDupes;
         if (snap.exists()) applyCloudPrefs(snap.data().prefs);
