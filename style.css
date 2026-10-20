@@ -2280,3 +2280,11 @@ body.sb-on .tabbar, body.sb-on .topbar, body.sb-on .main { visibility: hidden; }
     .day-row { gap: 8px; }
     .day-row .muted { display: none; }
 }
+
+/* v48：拖曳排序時不會選到文字（iPhone 長按會出現藍色選取框） */
+.cdm-list, .he-list, .cdm-row, .he-row { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+body.sorting, body.sorting * { -webkit-user-select: none !important; user-select: none !important; }
+.drag-h { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.cdm-lock { display: inline-flex; align-items: center; justify-content: center; color: var(--faint); width: 32px; }
+.cdm-lock svg { width: 16px; height: 16px; }
+.cdm-row.fixed { background: transparent; }

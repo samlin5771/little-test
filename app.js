@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v47';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v48';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -151,7 +151,7 @@ function normCountdowns(c) {
     const off = Array.isArray(c.off) ? [...new Set(c.off.filter(k => typeof k === 'string'))].slice(0, 60) : [];
     return { items, pins, off };
 }
-const isEmpty = (s) => !s.todos.length && !s.events.length && !Object.keys(s.weekly).length && !s.sessions.length && !s.syllabus.picked && !s.countdowns.items.length;
+const isEmpty = (s) => !s.todos.length && !s.events.length && !Object.keys(s.weekly).length && !s.sessions.length && !s.syllabus.picked && !s.countdowns.items.length && !s.countdowns.pins;
 const loadLocal = () => normalize({ todos: lsGet(LS.todos, []), events: lsGet(LS.events, []), weekly: lsGet(LS.weekly, {}), sessions: lsGet(LS.sessions, []), syllabus: lsGet(LS.syllabus, null), countdowns: lsGet('study_countdowns', null) });
 function saveLocal() {
     lsSet(LS.todos, state.todos); lsSet(LS.events, state.events); lsSet(LS.weekly, state.weekly); lsSet(LS.sessions, state.sessions); lsSet(LS.syllabus, state.syllabus); lsSet('study_countdowns', state.countdowns);
@@ -706,21 +706,18 @@ const cdEnded = (c, now = Date.now()) => examEndTime(c) <= now;
 function cdPins() {
     const all = cdAll(), now = Date.now();
     const byKey = new Map(all.map(c => [c.key, c]));
-    const live = (k) => { const c = byKey.get(k); return c && (k === CD_FIXED || !cdEnded(c, now)); };
     const off = new Set(state.countdowns.off || []);
-    const saved = (state.countdowns.pins || []).filter(k => byKey.has(k));
-    let keys = saved.filter(live);
-    if (!keys.includes(CD_FIXED)) keys = state.countdowns.pins ? [...keys, CD_FIXED] : keys;
-    // 自己排過：只補「過完了被拿掉」的空位；沒排過：直接照日期放滿
-    const room = state.countdowns.pins ? Math.min(CD_MAX - keys.length, saved.length - saved.filter(live).length) : CD_MAX - keys.length;
-    const upcoming = all.filter(c => !keys.includes(c.key) && !off.has(c.key) && !cdEnded(c, now)).sort((a, b) => a.date.localeCompare(b.date)).map(c => c.key);
-    keys.push(...upcoming.slice(0, Math.max(0, room)));
-    if (!keys.includes(CD_FIXED)) keys.push(CD_FIXED);
-    // 學測一定要在，超過就從後面拿掉別的
-    while (keys.length > CD_MAX) { const i = keys.map((k, j) => [k, j]).reverse().find(([k]) => k !== CD_FIXED)[1]; keys.splice(i, 1); }
-    // 沒自己排過：照日期排
-    if (!state.countdowns.pins) keys.sort((a, b) => byKey.get(a).date.localeCompare(byKey.get(b).date));
-    return keys;
+    const saved = state.countdowns.pins;
+    const others = (saved || []).filter(k => k !== CD_FIXED && byKey.has(k));
+    let keep = others.filter(k => !cdEnded(byKey.get(k), now));
+    // 自己排過：只補「過完了被拿掉」的空位；沒排過：照日期放滿
+    const room = saved ? Math.min(CD_MAX - 1 - keep.length, others.length - keep.length) : CD_MAX - 1 - keep.length;
+    const upcoming = all.filter(c => c.key !== CD_FIXED && !keep.includes(c.key) && !off.has(c.key) && !cdEnded(c, now))
+        .sort((x, y) => x.date.localeCompare(y.date)).map(c => c.key);
+    keep.push(...upcoming.slice(0, Math.max(0, room)));
+    keep = keep.slice(0, CD_MAX - 1);
+    if (!saved) keep.sort((x, y) => byKey.get(x).date.localeCompare(byKey.get(y).date));
+    return [...keep, CD_FIXED];   // 學測固定在最右邊
 }
 let cdPicked = false;   // 這次打開時自己從「⋯」點來看的（就算已經結束也讓你看）
 function renderExamChips() {
@@ -4285,6 +4282,9 @@ requestAnimationFrame(onScroll);   // 等第一次畫面排好再讀捲動位置
  * 拖曳排序（我的倒數、編輯首頁共用）：按住右邊的 ☰ 上下拖，放開就排好；鍵盤也可以用上下鍵
  * ===================================================== */
 function makeSortable(list, onMove) {
+    // iPhone：按住把手時不要變成選取文字或捲動整個視窗
+    list.addEventListener('touchstart', (e) => { if (e.target.closest('.drag-h')) e.preventDefault(); }, { passive: false });
+    list.addEventListener('selectstart', (e) => { if (list.classList.contains('sorting')) e.preventDefault(); });
     list.addEventListener('pointerdown', (e) => {
         const h = e.target.closest('.drag-h');
         if (!h || !list.contains(h)) return;
@@ -4298,6 +4298,8 @@ function makeSortable(list, onMove) {
         let to = from;
         row.classList.add('dragging');
         list.classList.add('sorting');
+        document.body.classList.add('sorting');
+        try { window.getSelection()?.removeAllRanges(); } catch (err) {}
         try { h.setPointerCapture(e.pointerId); } catch (err) {}
         const move = (ev) => {
             const dy = Math.max(rects[0].top - rects[from].top, Math.min(rects[rects.length - 1].top - rects[from].top, ev.clientY - startY));
@@ -4314,6 +4316,8 @@ function makeSortable(list, onMove) {
         const up = () => {
             h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
             list.classList.remove('sorting');
+            document.body.classList.remove('sorting');
+            try { window.getSelection()?.removeAllRanges(); } catch (err) {}
             rows.forEach(r => { r.style.transform = ''; });
             row.classList.remove('dragging');
             if (to !== from) { onMove(from, to); try { navigator.vibrate && navigator.vibrate(8); } catch (err) {} }
@@ -4351,14 +4355,14 @@ function renderCdManage() {
         const d = parseYmd(c.date);
         const tags = (c.key === CD_FIXED ? '<em class="cdm-tag">固定</em>' : c.builtin ? '<em class="cdm-tag">內建</em>' : '') + (c.yearly ? '<em class="cdm-tag yr">每年</em>' : '') + (cdEnded(c) ? '<em class="cdm-tag">已結束</em>' : '');
         const fixed = c.key === CD_FIXED;
-        return `<li class="cdm-row ${cdEnded(c) ? 'ended' : ''} ${c.key === examKey ? 'cur' : ''}" ${pinned ? `data-sort="${c.key}"` : ''}>
+        return `<li class="cdm-row ${cdEnded(c) ? 'ended' : ''} ${c.key === examKey ? 'cur' : ''} ${fixed ? 'fixed' : ''}" ${pinned && !fixed ? `data-sort="${c.key}"` : ''}>
             ${fixed ? `<span class="cdm-pin on lock" title="學測固定在上方" aria-label="學測固定在上方">${ICON_CHECK_SM}</span>` : `<button class="cdm-pin ${pinned ? 'on' : ''}" data-cdpin="${c.key}" aria-pressed="${pinned}" aria-label="${pinned ? '從上方移除' : '放到倒數頁上方'}">${ICON_CHECK_SM}</button>`}
             <button class="cdm-main" data-cdpick="${c.key}">
                 <span class="cdm-name"><i class="cd-dot" style="background:${c.color || 'var(--accent)'}"></i><b>${esc(c.name)}</b>${tags}</span>
                 <span class="cdm-sub num">${d.getMonth() + 1}/${d.getDate()}${c.end ? ` – ${shortDate(c.end)}` : ''}${cdEnded(c) ? '' : ` · ${cdRelText(c)}`}</span>
             </button>
             ${c.builtin ? '' : `<button class="cdm-edit" data-cdedit="${c.key}" aria-label="修改 ${esc(c.name)}">${ICON_PEN}</button>`}
-            ${pinned ? `<button class="drag-h" aria-label="拖曳排序（也可以用上下鍵）">${ICON_HANDLE}</button>` : '<span class="drag-sp"></span>'}
+            ${pinned && !fixed ? `<button class="drag-h" aria-label="拖曳排序（也可以用上下鍵）">${ICON_HANDLE}</button>` : fixed ? '<span class="drag-sp cdm-lock" title="固定在最右邊"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>' : '<span class="drag-sp"></span>'}
         </li>`;
     };
     $('cdmPinned').innerHTML = pins.map(k => all.find(c => c.key === k)).filter(Boolean).map(c => row(c, true)).join('') || '<li class="empty">還沒有放任何倒數，勾選下面的就會出現在上方</li>';
@@ -4368,11 +4372,11 @@ function renderCdManage() {
 }
 function openCdManage() { renderCdManage(); openModal('cdModal'); }
 function setPins(p, off) {
-    if (!p.includes(CD_FIXED)) p = [...p, CD_FIXED];
-    state.countdowns = { ...state.countdowns, pins: p.slice(0, CD_MAX), off: off || state.countdowns.off || [] };
+    p = p.filter(k => k !== CD_FIXED).slice(0, CD_MAX - 1);   // 學測不用存，永遠固定在最右邊
+    state.countdowns = { ...state.countdowns, pins: p, off: off || state.countdowns.off || [] };
     save(); renderExamChips(); renderCdManage();
 }
-makeSortable($('cdmPinned'), (from, to) => setPins(moveItem(cdPins(), from, to)));
+makeSortable($('cdmPinned'), (from, to) => setPins(moveItem(cdPins().filter(k => k !== CD_FIXED), from, to)));
 $('cdModal').addEventListener('click', (e) => {
     const pin = e.target.closest('[data-cdpin]');
     if (pin) {
@@ -4425,19 +4429,21 @@ function saveCdEdit() {
     if (end && end < date) { toast('結束日期要在開始日期之後'); return; }
     const item = { id: cdEditing || 'c_' + uid(), name: name.slice(0, 30), short: ($('cdeShort').value.trim() || name).slice(0, 4), date, ...(end && end > date ? { end } : {}), color: cdColor, yearly, cal: $('cdeCal').checked };
     const items = state.countdowns.items.slice();
-    let pins = cdPins();
+    let pins = cdPins().filter(k => k !== CD_FIXED);
     if (cdEditing) items[items.findIndex(x => x.id === cdEditing)] = item;
     else {
         items.push(item);
-        if (pins.length < CD_MAX) pins = [...pins, item.id];   // 上方滿了就只放在「⋯」裡
+        if (pins.length < CD_MAX - 1) pins = [...pins, item.id];   // 上方滿了就只放在「⋯」裡
     }
     state.countdowns = { items, pins, off: (state.countdowns.off || []).filter(k => k !== item.id) };
     save();
     closeModal('cdEditModal');
     renderCalendar();
     if ($('cdModal').classList.contains('open')) renderCdManage();
-    selectCd(item.id);
-    if (!cdEditing && !pins.includes(item.id)) toast('已新增；上方滿了，可以在「⋯」裡換位置');
+    // 有放到上方才直接切過去；上方滿了就留在原本看的那個，新的收在「⋯」裡（不會卡在「⋯」）
+    if (pins.includes(item.id)) { cdPicked = false; selectCd(item.id); }
+    else { renderExamChips(); tick(); }
+    if (!cdEditing && !pins.includes(item.id)) toast(`已新增「${item.name}」，上方滿了，收在「⋯」裡`);
     else toast(cdEditing ? '已更新' : `已新增「${item.name}」`);
 }
 $('cdeSave').addEventListener('click', saveCdEdit);
