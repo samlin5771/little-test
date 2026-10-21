@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v53';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v54';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -54,7 +54,7 @@ const RECAPTCHA_SITE_KEY = '6LeR9vQtAAAAAKsbIXmqZCd4sHONdH-mvcTx_qtJ';
 const LS = {
     todos: 'study_todos', weekly: 'study_weekly', events: 'study_events',
     exam: 'selectedExamKey', theme: 'study_theme', tab: 'study_tab', accent: 'study_accent',
-    sessions: 'study_sessions', timer: 'study_timer', tpref: 'study_timer_pref',
+    sessions: 'study_sessions', timer: 'study_timer', tpref: 'study_timer_pref', minTip: 'study_min_tip',
     aiPref: 'study_ai_pref', aiCount: 'study_ai_count', room: 'study_room',
     bg: 'study_bg', syllabus: 'study_syllabus',
     notify: 'study_notify',
@@ -723,12 +723,14 @@ function showTab(id) {
     if (id === 'tab-syllabus') { renderSyllabus(); if (!state.syllabus.picked) setTimeout(() => { if (document.body.dataset.tab === 'tab-syllabus' && !document.querySelector('.modal.open')) openSylPick(); }, 350); }
     if (id === 'tab-weekly' || id === 'tab-syllabus') lsSet(LS.progView, id);
     lsSet(LS.tab, id);
+    if (id === 'tab-timer') { timeUp = false; renderTimer(); }   // 碼錶／收起後的計時頁／休息畫面，依目前狀態重畫
     applyFocusMode();
     window.scrollTo({ top: 0 });
 }
 // 點「進度」：回到上次看的（本週進度或學測範圍）
 tabBtns.forEach(b => b.addEventListener('click', () => {
     let id = b.dataset.tab;
+    if (id === 'tab-timer' && (timer.phase === 'focus' || timeUp)) { focusMin = false; timeUp = false; }   // 計時中點「計時」＝回到碼錶
     if (id === 'tab-weekly' && document.body.dataset.tab !== 'tab-weekly' && document.body.dataset.tab !== 'tab-syllabus' && localStorage.getItem(LS.progView) === 'tab-syllabus') id = 'tab-syllabus';
     showTab(id);
 }));
@@ -1808,7 +1810,10 @@ window.addEventListener('storage', (e) => {
     if (e.key === LS.timer) {
         const ls = lsGet(LS.timer, null) || { phase: 'idle' };
         if (JSON.stringify(ls) === JSON.stringify(timer)) return;
+        const prev = timer;
         timer = ls;
+        // 另一個分頁先記錄了這一輪（時間到）：這邊也一樣帶回計時頁或讓膠囊提醒
+        if (prev.phase === 'focus' && ls.phase === 'break' && ls.breakStart >= prev.startAt && prev.duration && ls.breakStart - prev.startAt >= prev.duration) { if (timer.phase === 'focus' && !timer.pausedAt) requestWake(); else releaseWake(); renderTimer(); renderToday(); onTimeUp(); return; }
         if (timer.phase === 'focus' && !timer.pausedAt) requestWake(); else releaseWake();
         renderTimer(); renderToday();
     } else if (!currentUser && !cachedUid && [LS.todos, LS.events, LS.weekly, LS.sessions, LS.syllabus, LS.countdowns].includes(e.key)) {
@@ -2016,14 +2021,98 @@ const subjButtons = (sel, attr) => SUBJECTS.map((n, i) =>
     `<button class="subj-btn ${i === sel ? 'active' : ''}" ${attr}="${i}" aria-pressed="${i === sel}"><i class="sdot s${i}"></i>${n}</button>`).join('');
 
 function applyFocusMode() {
-    document.body.classList.toggle('focus-mode', timer.phase === 'focus' && document.body.dataset.tab === 'tab-timer');
+    document.body.classList.toggle('focus-mode', timer.phase === 'focus' && !focusMin && document.body.dataset.tab === 'tab-timer');
+    updatePill();
+}
+/* --- v54：收起計時（計時繼續跑，下方浮動膠囊） ---
+ * focusMin：在計時分頁時顯示一般的計時頁（不是碼錶）；點膠囊或「計時」分頁就回到碼錶
+ * timeUp：時間到時你正在打字、開著視窗或在聊天室，不硬跳，膠囊改成「時間已到」等你點 */
+let focusMin = false, timeUp = false;
+const ICON_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+function pillShown() {
+    const b = document.body;
+    if (b.classList.contains('guide-open')) return false;
+    if (timeUp && timer.phase === 'break') return true;
+    if (timer.phase !== 'focus') return false;
+    if (b.dataset.tab === 'tab-timer' && !focusMin) return false;   // 已經在碼錶畫面
+    if (b.classList.contains('chat-open') || isTyping(document.activeElement)) return false;   // 不要擋住輸入框
+    return true;
+}
+function updatePill() {
+    const el = $('focusPill');
+    if (!el) return;
+    const on = pillShown();
+    document.body.classList.toggle('pill-on', on);
+    el.classList.toggle('up', timeUp && timer.phase === 'break');
+    el.classList.toggle('in-chat', on && document.body.classList.contains('chat-open'));
+    if (on !== !el.hidden) {
+        if (on) { el.hidden = false; requestAnimationFrame(() => el.classList.add('show')); }
+        else { el.classList.remove('show'); el.hidden = true; }
+    }
+    // 下方「計時」分頁：計時中變成小圓環「專注中」
+    const tb = document.querySelector('.tab-btn[data-tab="tab-timer"]');
+    if (tb) {
+        const run = timer.phase === 'focus';
+        tb.classList.toggle('running', run);
+        const lab = tb.querySelector('.tb-lab');
+        if (lab) lab.textContent = run ? (timer.pausedAt ? '已暫停' : '專注中') : '計時';
+    }
+    if (on) pillLive();
+}
+function pillLive() {
+    const el = $('focusPill');
+    if (timer.phase === 'focus') {   // 下方「計時」分頁的小圓環也跟著跑
+        const e0 = focusElapsed();
+        const f0 = timer.duration ? Math.min(1, e0 / timer.duration) : (e0 % 3600000) / 3600000;
+        document.querySelector('.tab-btn[data-tab="tab-timer"]')?.style.setProperty('--fp', f0.toFixed(4));
+    }
+    if (!el || el.hidden) return;
+    if (el.classList.contains('up')) {
+        $('fpSub').textContent = `${SUBJECTS[timer.subject] ?? ''} · 完成一輪`;
+        $('fpTime').textContent = '時間已到！點我回到計時';
+        el.setAttribute('aria-label', '時間已到，點一下回到計時');
+        el.style.setProperty('--fp', '1');
+        $('fpDot').className = `sdot s${timer.subject}`;
+        return;
+    }
+    const el2 = focusElapsed();
+    const text = timer.duration ? fmtClock(timer.duration - el2) : fmtClock(el2);
+    const frac = timer.duration ? Math.min(1, el2 / timer.duration) : (el2 % 3600000) / 3600000;
+    $('fpSub').textContent = `${SUBJECTS[timer.subject]} · ${timer.pausedAt ? '已暫停' : '專注中'}`;
+    $('fpTime').textContent = text;
+    $('fpDot').className = `sdot s${timer.subject}`;
+    el.style.setProperty('--fp', frac.toFixed(4));
+    el.classList.toggle('paused', !!timer.pausedAt);
+    el.setAttribute('aria-label', `${SUBJECTS[timer.subject]} ${timer.pausedAt ? '已暫停' : '專注中'}，${timer.duration ? '還剩' : '已經'} ${text}，點一下回到計時`);
+}
+function openFocusFull() {
+    focusMin = false; timeUp = false;
+    if (chatRoom) closeChat();
+    showTab('tab-timer');
+}
+$('focusPill').addEventListener('click', openFocusFull);
+// 打字、打開聊天室、導覽時膠囊要躲起來：body 的 class 一變就更新
+document.addEventListener('focusin', () => updatePill());
+document.addEventListener('focusout', () => setTimeout(updatePill, 0));
+new MutationObserver(() => updatePill()).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+// 時間到（這台或另一個分頁記錄的都算）：在別的頁面就帶回計時頁；正在忙就只讓膠囊提醒
+function onTimeUp() {
+    const onTimer = document.body.dataset.tab === 'tab-timer';
+    focusMin = false;
+    if (onTimer) { renderTimer(); return; }
+    const busy = !!chatRoom || !!document.querySelector('.modal.open') || isTyping(document.activeElement)
+        || document.body.classList.contains('guide-open') || $('msgPop')?.classList.contains('open');
+    if (busy) { timeUp = true; device.vibrate?.([30, 60, 30]); updatePill(); }
+    else showTab('tab-timer');
 }
 
 function renderTimer() {
     const el = $('tab-timer');
     if (!el) return;
     const t = todayStr();
-    if (timer.phase === 'focus') {
+    if (timer.phase !== 'break') timeUp = false;
+    if (timer.phase !== 'focus') focusMin = false;
+    if (timer.phase === 'focus' && !focusMin) {
         const paused = !!timer.pausedAt;
         const task = taskFor(timer.subject);
         const done = roundsOn(t);
@@ -2032,8 +2121,9 @@ function renderTimer() {
             <div class="timer-head">
                 <span class="chip-subj"><i class="sdot s${timer.subject}"></i>${SUBJECTS[timer.subject]}</span>
                 <p class="label">${paused ? '已暫停' : '專注中'}</p>
-                <button class="icon-btn" data-act="cancel" aria-label="結束這一輪">${ICON_X}</button>
+                <button class="icon-btn min-btn" data-act="minimize" aria-label="收起，計時會繼續" title="收起（計時會繼續）">${ICON_DOWN}</button>
             </div>
+            ${lsGet(LS.minTip, false) ? '' : '<p class="min-tip">收起後計時會繼續，可以去別的頁面</p>'}
             <p class="task-line">${task && !task.done ? `<b>${esc(task.text)}</b>` : esc(MODES[timer.mode].hint)}</p>
             <div class="ring-wrap">${ringSvg(paused ? 'paused' : '')}
                 <div class="ring-center"><span class="ring-time num" id="tmTime"></span><span class="ring-sub" id="tmSub"></span></div>
@@ -2046,8 +2136,10 @@ function renderTimer() {
             <div class="focus-extra">
                 <div class="focus-tools">
                     <button class="tool-btn" data-act="standby"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/></svg>全螢幕時鐘</button>
+                    <button class="tool-btn" data-act="room">${ICON_ROOM.replace('style="width:16px;height:16px"', '')}讀書房間</button>
                     ${pipSupported ? '<button class="tool-btn" data-act="pip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><rect x="12" y="11" width="6.5" height="5" rx="1.2" fill="currentColor" stroke="none"/></svg>子母畫面</button>' : ''}
                 </div>
+                <button class="end-link" data-act="cancel">結束這一輪（已讀的時間會記錄）</button>
                 <p class="hint">關掉 App 也沒關係，回來時會自動算好經過的時間</p>
             </div>
         </div>`;
@@ -2080,11 +2172,12 @@ function renderTimer() {
         let weekMin = 0;
         for (let i = 0; i < 7; i++) { const d = new Date(wk); d.setDate(d.getDate() + i); weekMin += dayMinutes(ymd(d)); }
         const live = roomLiveCount();
-        el.innerHTML = `<div class="timer-wrap">
+        const mini = timer.phase === 'focus';   // 收起計時：只留房間、統計和今天的紀錄（不能再開始另一輪）
+        el.innerHTML = `<div class="timer-wrap${mini ? ' mini-wrap' : ''}">
             <div class="go-row">
                 <button class="go-btn room" data-act="room">
                     <span class="go-ic">${ICON_ROOM.replace('style="width:16px;height:16px"', '')}</span>
-                    <span class="go-tx"><b>讀書房間</b><small>${live === null ? '和朋友一起讀' : live ? `● ${live} 人在讀` : '目前沒人在讀'}</small></span>
+                    <span class="go-tx"><b>讀書房間</b><small>${live === null ? '和朋友一起讀' : live ? `● ${live}${mini ? ' 位朋友' : ' 人'}在讀` : (mini ? '目前只有你在讀' : '目前沒人在讀')}</small></span>
                     <svg class="go-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
                 </button>
                 <button class="go-btn" data-act="stats">
@@ -2093,7 +2186,7 @@ function renderTimer() {
                     <svg class="go-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
                 </button>
             </div>
-            <div class="subj-grid">${subjButtons(tpref.subject, 'data-subj')}</div>
+            ${mini ? `<button class="mini-now" data-act="expand"><span class="mn-ring" style="--fp:0"></span><span class="mn-tx"><b>${SUBJECTS[timer.subject]} ${timer.pausedAt ? '已暫停' : '專注中'}</b><small>計時在背景繼續，點這裡回到碼錶</small></span>${ICON_DOWN.replace('M6 9l6 6 6-6', 'M6 15l6-6 6 6')}</button>` : `<div class="subj-grid">${subjButtons(tpref.subject, 'data-subj')}</div>
             <div class="seg" role="tablist" aria-label="計時模式" style="margin-top:12px">${MODES.map((x, i) =>
                 `<button role="tab" aria-selected="${i === tpref.mode}" class="${i === tpref.mode ? 'active' : ''}" data-mode="${i}">${x.label}</button>`).join('')}</div>
             <div class="ring-wrap">${ringSvg()}
@@ -2103,10 +2196,10 @@ function renderTimer() {
             <p class="task-line">${task && !task.done ? `今天的${SUBJECTS[tpref.subject]}進度：<b>${esc(task.text)}</b>` : ''}</p>
             <button class="btn btn-accent btn-wide" data-act="start" style="margin-top:14px">
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>開始專注
-            </button>
+            </button>`}
             ${todayLogsHtml(t, todayMin)}
         </div>`;
-        if (pipWin) { try { pipWin.close(); } catch (e) {} }
+        if (pipWin && !mini) { try { pipWin.close(); } catch (e) {} }
     }
     applyFocusMode();
     updateTimerLive();
@@ -2240,11 +2333,19 @@ function updateTimerLive() {
 }
 
 function timerTick() {
-    if (timer.phase === 'focus' && timer.duration && !timer.pausedAt && focusElapsed() >= timer.duration) { finishFocus(true); return; }
+    if (timer.phase === 'focus' && timer.duration && !timer.pausedAt && focusElapsed() >= timer.duration) {
+        const st = timer.startAt;   // 這一輪開始的時間（用來確認是這一輪結束了）
+        finishFocus(true);
+        if (timer.phase === 'break' && timer.breakStart >= st) onTimeUp();
+        return;
+    }
     if (timer.phase === 'break' && !timer.chimed && Date.now() - timer.breakStart >= timer.breakLen) {
         timer.chimed = true; saveTimer(); chime();
     }
     if (timer.phase !== 'idle') updateTimerLive();
+    pillLive();
+    const mr = document.querySelector('#tab-timer .mn-ring');
+    if (mr && timer.phase === 'focus') mr.style.setProperty('--fp', $('focusPill').style.getPropertyValue('--fp') || 0);
 }
 
 /* --- 電腦子母畫面 --- */
@@ -2329,7 +2430,9 @@ $('tab-timer').addEventListener('click', (e) => {
     else if (act === 'stats') { statOffset = 0; statSel = null; renderStats(); showTab('tab-stats'); }
     else if (act === 'pip') openPip();
     else if (act === 'standby') openStandby();
-    else if (act === 'room') { roomView = null; showTab('tab-room'); }
+    else if (act === 'room') { if (timer.phase === 'focus') focusMin = true; roomView = null; showTab('tab-room'); }
+    else if (act === 'minimize') { focusMin = true; lsSet(LS.minTip, true); renderTimer(); window.scrollTo({ top: 0 }); }
+    else if (act === 'expand') openFocusFull();
 });
 $('tab-timer').addEventListener('change', (e) => {
     const key = e.target.dataset.task;
@@ -2633,11 +2736,11 @@ document.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (isTyping(document.activeElement) || document.querySelector('.modal.open') || document.body.classList.contains('chat-open') || document.body.classList.contains('guide-open')) return;
     const tab = document.body.dataset.tab;
-    if (/^[1-5]$/.test(e.key)) { showTab(TAB_ORDER[Number(e.key) - 1]); return; }
+    if (/^[1-5]$/.test(e.key)) { if (e.key === '3' && (timer.phase === 'focus' || timeUp)) { focusMin = false; timeUp = false; } showTab(TAB_ORDER[Number(e.key) - 1]); return; }
     if (e.key === '?') { openModal('keysModal'); return; }
     if (e.key === 't' || e.key === 'T') { $('themeBtn').click(); return; }
     if (e.key === ' ') {
-        if (timer.phase === 'focus') { e.preventDefault(); togglePause(); }
+        if (timer.phase === 'focus' && tab === 'tab-timer' && !focusMin) { e.preventDefault(); togglePause(); }
         else if (tab === 'tab-timer' && timer.phase === 'idle') { e.preventDefault(); startFocus(); }
         else if (tab === 'tab-timer' && timer.phase === 'break') { e.preventDefault(); endBreak(true); }
         return;
@@ -3211,6 +3314,14 @@ let profTimer = null;
 // 別人寫的資料不能直接相信：科目只接受 0～4 的整數，其他一律當成沒有
 const safeSubject = (v) => Number.isInteger(v) && v >= 0 && v < SUBJECTS.length ? v : null;
 // 其他人的狀態（已經很久沒更新的視為不在讀）
+// 自己的狀態直接用這台裝置的計時（不用等雲端更新，收起計時後在房間馬上看得到自己亮著）
+function statusOf(u, now = Date.now()) {
+    if (u !== currentUser?.uid) return liveStatus(profiles[u], now);
+    const t = todayStr();
+    return liveStatus({ ...(profiles[u] || {}), status: timer.phase, subject: timer.subject, startAt: timer.startAt, pausedAt: timer.pausedAt || null,
+        pausedTotal: timer.pausedTotal || 0, duration: timer.duration || 0, breakStart: timer.breakStart, breakLen: timer.breakLen || 0,
+        todayMin: Math.round(dayMinutes(t)), todayDate: t }, now);
+}
 function liveStatus(p, now = Date.now()) {
     if (!p) return { phase: 'idle', min: 0 };
     const today = p.todayDate === todayStr() ? (p.todayMin || 0) : 0;
@@ -3247,7 +3358,7 @@ function roomLiveCount() {
     const now = Date.now();
     const uids = new Set(myRooms.flatMap(r => r.members || []));
     uids.delete(currentUser.uid);
-    return [...uids].filter(u => liveStatus(profiles[u], now).phase === 'focus').length;
+    return [...uids].filter(u => statusOf(u, now).phase === 'focus').length;
 }
 
 // 把自己的計時狀態寫到 profiles（只有用過讀書房間才會寫）
@@ -3535,7 +3646,7 @@ function rerenderHistory() {
     const r = myRooms.find(x => x.id === roomView);
     if (!r) return;
     const now = Date.now();
-    const ms = (r.members || []).map(u => ({ u, p: profiles[u], s: liveStatus(profiles[u], now) }));
+    const ms = (r.members || []).map(u => ({ u, p: profiles[u], s: statusOf(u, now) }));
     el.outerHTML = roomHistoryHtml(ms, now);
     $('tab-room')._html = null;   // 畫面已經改了，下次整頁重畫要重新比對
 }
@@ -3610,7 +3721,7 @@ function renderRoom(errMsg) {
         }
         $('pageTitle').textContent = r.name;
         setTopExtra('tab-room', `<button class="icon-btn" data-top="room-menu" aria-label="房間選項"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>`);
-        const ms = (r.members || []).map(u => ({ u, p: profiles[u], s: liveStatus(profiles[u], now) }));
+        const ms = (r.members || []).map(u => ({ u, p: profiles[u], s: statusOf(u, now) }));
         const order = { focus: 0, break: 1, idle: 2 };
         const seats = ms.slice().sort((a, b) => order[a.s.phase] - order[b.s.phase] || (b.s.el || 0) - (a.s.el || 0));
         const total = (m) => Math.round(m.s.min + (m.s.phase === 'focus' ? m.s.el / 60000 : 0));   // 正在讀的那一輪也算進去
@@ -3655,7 +3766,7 @@ function renderRoom(errMsg) {
                 </div>`).join('')}
             </section>
             <p class="hint" style="margin-top:16px">房間裡的人看得到你的暱稱、正在讀的科目和今天的時數</p>
-            <div class="sticky-cta room-cta"><button class="btn btn-accent btn-wide" data-room="focus"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>${timer.phase === 'focus' ? '回到計時' : '開始讀書'}</button></div>
+            ${timer.phase === 'focus' ? '' : `<div class="sticky-cta room-cta"><button class="btn btn-accent btn-wide" data-room="focus"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>開始讀書</button></div>`}
             ${roomHistoryHtml(ms, now)}
         </div>`);
         return;
@@ -3664,7 +3775,7 @@ function renderRoom(errMsg) {
     const tickets = `<div class="sec-head" style="margin:6px 0 14px"><h3>我的房間</h3><span>${myRooms.length ? myRooms.length + ' 間' : ''}</span></div>
         ${myRooms.length ? myRooms.map(r => {
             const ms = (r.members || []);
-            const n = ms.filter(u => liveStatus(profiles[u], now).phase === 'focus').length;
+            const n = ms.filter(u => statusOf(u, now).phase === 'focus').length;
             return `<button class="ticket ${n ? 'hot' : ''}" data-open="${esc(r.id)}">
                 <span class="tk-main">
                     <b class="zh">${esc(r.name)}</b>
@@ -3822,7 +3933,7 @@ function closeChat() {
 function renderChatHead() {
     const r = myRooms.find(x => x.id === chatRoom);
     if (!r) return;
-    const n = (r.members || []).filter(u => liveStatus(profiles[u]).phase === 'focus').length;
+    const n = (r.members || []).filter(u => statusOf(u).phase === 'focus').length;
     const html = `${(r.members || []).length} 位成員${n ? ` · <span class="live-dot"></span>${n} 人在讀` : ''}`;
     if ($('chatSub').dataset.h !== html) { $('chatSub').dataset.h = html; $('chatSub').innerHTML = html; }
 }
@@ -4307,7 +4418,7 @@ function roomTick() {
     if (document.body.dataset.tab !== 'tab-room' || !roomView) return;
     const now = Date.now();
     document.querySelectorAll('#tab-room [data-clock]').forEach(n => {
-        const st = liveStatus(profiles[n.dataset.clock], now);
+        const st = statusOf(n.dataset.clock, now);
         const txt = memberClock(st);
         if (n.textContent === txt) return;   // 沒變就不碰畫面
         n.textContent = txt;
@@ -4358,7 +4469,7 @@ $('tab-room').addEventListener('click', (e) => {
     else if (act === 'join') joinRoom(codeDraft);
     else if (act === 'create') openRoomModal('create');
     else if (act === 'share') shareRoom(roomView);
-    else if (act === 'focus') showTab('tab-timer');
+    else if (act === 'focus') { focusMin = false; showTab('tab-timer'); }
 });
 $('tab-room').addEventListener('keydown', (e) => {
     if (e.target.id === 'roomCodeInput' && e.key === 'Enter' && !e.isComposing) { e.preventDefault(); joinRoom(codeDraft); }
@@ -4901,7 +5012,7 @@ function renderHomeRoom() {
     else {
         const now = Date.now();
         const uids = [...new Set(myRooms.flatMap(r => r.members || []))].filter(u => u !== currentUser.uid && profiles[u]);
-        const list = uids.map(u => ({ u, p: profiles[u], s: liveStatus(profiles[u], now) }))
+        const list = uids.map(u => ({ u, p: profiles[u], s: statusOf(u, now) }))
             .sort((a, b) => (b.s.phase === 'focus') - (a.s.phase === 'focus') || b.s.min - a.s.min).slice(0, 5);
         const live = list.filter(x => x.s.phase === 'focus').length;
         html = list.length ? `<p class="hr-sum">${live ? `<i></i>${live} 人正在讀` : '現在沒有人在讀'}</p>` + list.map(({ u, p, s }) => {

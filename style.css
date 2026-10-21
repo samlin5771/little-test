@@ -2413,3 +2413,94 @@ body.sorting, body.sorting * { -webkit-user-select: none !important; user-select
 @supports (-webkit-touch-callout: none) and (not (text-box: trim-both cap alphabetic)) {
     .mr-e { transform: translateY(-1px); }
 }
+
+/* =====================================================
+ * v54：收起計時（計時繼續）＋下方浮動膠囊
+ * ===================================================== */
+.min-btn { border-color: rgba(var(--accent-rgb), .6) !important; background: var(--accent-soft) !important; color: var(--accent-text) !important; }
+.min-tip {
+    align-self: flex-end; margin: -2px 0 6px; padding: 7px 12px; border-radius: 12px; max-width: 80%;
+    background: var(--text); color: var(--bg); font-size: 12.5px; font-weight: 500; line-height: 1.45; text-align: left;
+    font-family: 'Noto Sans TC', sans-serif; animation: tipIn .3s ease-out both .4s;
+}
+.focus-wrap .min-tip { margin-left: auto; width: max-content; }
+@keyframes tipIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.end-link {
+    border: none; background: transparent; color: var(--muted); padding: 8px 6px; min-height: 40px; cursor: pointer;
+    font: 500 13px 'Noto Sans TC', sans-serif; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--faint);
+}
+.end-link:hover { color: var(--text); }
+
+/* 收起後的計時頁：最上面一張「正在專注」小卡 */
+.mini-now {
+    display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 14px; padding: 12px 14px; border-radius: 18px; text-align: left; cursor: pointer;
+    border: 1px solid rgba(var(--accent-rgb), .45); background: var(--accent-soft); color: var(--text); font-family: 'Noto Sans TC', sans-serif;
+}
+.mini-now > svg { width: 20px; height: 20px; color: var(--accent-text); flex-shrink: 0; }
+.mn-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mn-tx b { font-size: 15px; }
+.mn-tx small { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.mn-ring, .fp-ring, .tb-ring {
+    position: relative; flex-shrink: 0; border-radius: 50%;
+    background: conic-gradient(var(--accent) calc(var(--fp, 0) * 360deg), rgba(var(--accent-rgb), .18) 0);
+}
+.mn-ring { width: 38px; height: 38px; }
+.fp-ring::after { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: var(--modal-bg); }
+/* 圓環中間挖空（用遮罩，不管背景是什麼主題都看得到後面） */
+.mn-ring, .tb-ring { -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px)); mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px)); }
+
+/* 浮動膠囊 */
+.focus-pill {
+    position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 42;
+    display: flex; align-items: center; gap: 10px; height: 52px; max-width: calc(100vw - 32px); padding: 0 8px 0 7px; box-sizing: border-box;
+    border: 1px solid rgba(var(--accent-rgb), .55); border-radius: 26px; cursor: pointer;
+    background: var(--modal-bg); color: var(--text); box-shadow: 0 10px 28px rgba(0, 0, 0, .35);
+    font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent;
+    transform: translate(-50%, 14px) scale(.96); opacity: 0;
+    transition: transform .28s cubic-bezier(.2, 1.2, .4, 1), opacity .2s;
+}
+.focus-pill[hidden] { display: none; }
+.focus-pill.show { transform: translate(-50%, 0); opacity: 1; }
+.focus-pill:active { transform: translate(-50%, 0) scale(.97); }
+.fp-ring { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
+.fp-ring .sdot { position: relative; z-index: 1; width: 9px; height: 9px; }
+.fp-tx { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; line-height: 1.15; }
+.fp-tx small { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.fp-tx b { font-family: 'Manrope', 'Noto Sans TC', sans-serif; font-size: 18px; font-weight: 700; letter-spacing: .02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fp-go { width: 32px; height: 32px; border-radius: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); }
+.fp-go svg { width: 16px; height: 16px; }
+.focus-pill.paused .fp-ring { background: conic-gradient(var(--muted) calc(var(--fp, 0) * 360deg), var(--line) 0); }
+/* 時間到：整顆變成主色，輕輕跳動提醒 */
+.focus-pill.up { background: var(--accent); color: var(--on-accent); border-color: transparent; animation: fpPulse 1.6s ease-in-out infinite; }
+.focus-pill.up .fp-tx small { color: var(--on-accent); opacity: .8; }
+.focus-pill.up .fp-tx b { font-family: 'Noto Sans TC', sans-serif; font-size: 15px; letter-spacing: 0; }
+.focus-pill.up .fp-ring { background: var(--on-accent); }
+.focus-pill.up .fp-ring::after { background: var(--accent); }
+.focus-pill.up .fp-go { background: rgba(0, 0, 0, .14); color: var(--on-accent); }
+@keyframes fpPulse { 0%, 100% { box-shadow: 0 10px 28px rgba(0, 0, 0, .35), 0 0 0 0 rgba(var(--accent-rgb), .5); } 50% { box-shadow: 0 10px 28px rgba(0, 0, 0, .35), 0 0 0 8px rgba(var(--accent-rgb), 0); } }
+/* 聊天室裡（只有時間到才會出現）：放在標題下面，不擋輸入框 */
+.focus-pill.in-chat { top: calc(env(safe-area-inset-top) + 78px); bottom: auto; z-index: 95; }
+@media (prefers-reduced-motion: reduce) { .focus-pill { transition: opacity .2s; } .focus-pill.up { animation: none; } }
+/* 膠囊出現時：頁面底部多留空間、提示訊息和固定按鈕往上移，不會疊在一起 */
+body.pill-on .main::after { content: ''; display: block; height: 64px; }
+body.pill-on .toast { bottom: calc(140px + env(safe-area-inset-bottom)); }
+body.pill-on:has(.tab.active .sticky-cta) .toast { bottom: calc(200px + env(safe-area-inset-bottom)); }
+body.pill-on .sticky-cta { bottom: calc(126px + env(safe-area-inset-bottom)); }
+body.pill-on.chat-open .toast { bottom: calc(86px + env(safe-area-inset-bottom)); }
+@media (min-width: 900px) {
+    .focus-pill { bottom: calc(24px + env(safe-area-inset-bottom)); }
+    body.pill-on .toast, body.pill-on:has(.tab.active .sticky-cta) .toast { bottom: 92px; }
+}
+/* 下方「計時」分頁：計時中換成會跑的小圓環 */
+.tb-ring { display: none; width: 22px; height: 22px; }
+.tab-btn.running > svg { display: none; }
+.tab-btn.running .tb-ring { display: block; }
+.tab-btn.running { color: var(--accent-text); }
+@media (min-width: 900px) { .tb-ring { width: 18px; height: 18px; } }
+/* 導覽：收起後的浮動膠囊示意 */
+.g-fpill { align-self: center; display: flex; align-items: center; gap: 7px; margin: 8px auto 0; width: max-content; padding: 4px 6px 4px 5px; border-radius: 16px; border: 1px solid rgba(var(--accent-rgb), .55); background: var(--modal-bg); box-shadow: 0 6px 16px rgba(0, 0, 0, .25); }
+.g-fp-ring { width: 20px; height: 20px; border-radius: 50%; background: conic-gradient(var(--accent) 0 70%, rgba(var(--accent-rgb), .18) 0); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px)); mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px)); }
+.g-fpill span { display: flex; flex-direction: column; line-height: 1.1; }
+.g-fpill small { font-size: 7.5px; color: var(--muted); }
+.g-fpill b { font-size: 11px; }
+.g-fpill em { font-style: normal; width: 18px; height: 18px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-text); font-size: 10px; display: flex; align-items: center; justify-content: center; }
