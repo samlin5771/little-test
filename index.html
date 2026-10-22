@@ -290,6 +290,16 @@
         <span class="fp-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></span>
     </button>
 
+    <!-- v55：離線提示 -->
+    <div class="net-pill" id="netPill" hidden role="status" aria-live="polite">
+        <span class="np-ic" aria-hidden="true">
+            <svg class="np-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.8a15 15 0 0 1 4.2-2.6M9.6 5.2A15 15 0 0 1 22 8.8M5 12.5a10 10 0 0 1 3.4-2.1M15.4 10.4A10 10 0 0 1 19 12.5M8.5 16a5 5 0 0 1 7 0M12 20h.01M3 3l18 18"/></svg>
+            <svg class="np-sync" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M3 21v-5h5"/></svg>
+            <svg class="np-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+        </span>
+        <span id="netText"></span>
+    </div>
+
     <!-- 底部分頁列 -->
     <nav class="tabbar" aria-label="主選單">
         <button class="tab-btn active" data-tab="tab-countdown" data-title="倒數計時">
@@ -545,8 +555,13 @@
                     <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg></span>
                     <span class="acct-label">新增到主畫面</span><span class="grow"></span><span class="acct-value" id="installState"></span><svg class="acct-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
                 </button>
+                <a class="acct-row" id="privacyRow" href="./privacy.html">
+                    <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+                    <span class="acct-label">隱私權政策</span><span class="grow"></span><span class="acct-value">資料怎麼使用</span><svg class="acct-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+                </a>
             </div>
             <button class="btn btn-wide acct-login" id="loginBtn">使用 Google 登入</button>
+            <button class="acct-del" id="delAcctBtn" type="button" hidden>刪除帳號與資料</button>
             <p class="acct-ver" id="appVersion"></p>
         </div>
     </div>
@@ -608,6 +623,29 @@
                 <span class="spacer"></span>
                 <button class="btn" data-close>取消</button>
                 <button class="btn btn-accent" id="sessSave">儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- v55：刪除帳號 -->
+    <div class="modal" id="delModal" role="dialog" aria-modal="true" aria-labelledby="delTitle">
+        <div class="sheet del-sheet">
+            <span class="del-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></span>
+            <h2 id="delTitle">刪除帳號與所有資料？</h2>
+            <p class="del-sub" id="delSub">刪除後沒辦法復原，下面這些都會永久清掉：</p>
+            <ul class="del-list">
+                <li>讀書紀錄、每週進度、學測範圍、行事曆、待辦、倒數</li>
+                <li>讀書房間裡的暱稱、頭像顏色和讀書狀態</li>
+                <li>你在聊天室傳過的訊息和照片</li>
+                <li>你會離開所有房間（最後一個人離開時房間會一起刪除）</li>
+                <li>這台裝置上的讀書資料，以及 Google 登入的帳號連結</li>
+            </ul>
+            <label class="field-label" for="delInput">輸入「刪除」確認</label>
+            <input class="field del-input" id="delInput" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="刪除">
+            <p class="del-note" id="delNote">Google 可能會要求你再登入一次，確認是本人。</p>
+            <div class="sheet-btns del-btns">
+                <button class="btn" data-close id="delCancel">取消</button>
+                <button class="btn del-go" id="delGo" disabled>永久刪除</button>
             </div>
         </div>
     </div>
@@ -879,7 +917,7 @@
   <div class="g-acct-row">網站導覽<span>›</span></div>
   <div class="g-acct-row">新增到主畫面<span>›</span></div>
 </div></figure>
-                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。手機和電腦<b>同時使用</b>、或是沒網路時改的東西，連上網路後會一筆一筆合併，不會互相蓋掉。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 8 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>訊息通知</b>：選聊天訊息要用<b>頂部橫幅</b>（顯示誰傳的和兩行訊息）還是<b>頂部小膠囊</b>（最不佔空間，點一下展開），按「試試看」可以先看效果。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
+                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。手機和電腦<b>同時使用</b>、或是沒網路時改的東西，連上網路後會一筆一筆合併，不會互相蓋掉。</li><li><b>沒有網路</b>時畫面下方會出現「離線中」的小提示，照樣可以計時、改進度；連上網路後會顯示「同步中」，同步好就自己收起來。</li><li>個人設定裡的<b>隱私權政策</b>，寫清楚收集了哪些資料、誰看得到、怎麼刪除。</li><li>不想用了可以按個人設定最下面的<b>刪除帳號與資料</b>：雲端資料、聊天訊息和照片都會永久刪除，並離開所有房間（要輸入「刪除」確認，Google 可能會請你再登入一次）。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 8 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>訊息通知</b>：選聊天訊息要用<b>頂部橫幅</b>（顯示誰傳的和兩行訊息）還是<b>頂部小膠囊</b>（最不佔空間，點一下展開），按「試試看」可以先看效果。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
                 
             </section>
 

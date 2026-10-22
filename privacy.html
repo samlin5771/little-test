@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>隱私權政策｜學測倒數 &amp; 讀書計畫</title>
+    <meta name="description" content="學測倒數 & 讀書計畫的隱私權政策：收集哪些資料、存在哪裡、誰看得到、怎麼刪除。">
+    <meta name="theme-color" content="#050608">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <script>
+        // 跟 App 用同一個深淺色和主題色設定
+        (function () {
+            var t = null, a = null;
+            try { t = localStorage.getItem('study_theme'); a = localStorage.getItem('study_accent'); } catch (e) {}
+            if (t !== 'light' && t !== 'dark') t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+            var c = { amber: '#E9B154', mint: '#5ED3A8', violet: '#A99BF0', sakura: '#F4A3BE', ocean: '#6CB4EE', coral: '#FF8B74', matcha: '#A9C46C', moon: '#C3CAD6' };
+            document.documentElement.style.setProperty('--accent', c[a] || c.amber);
+            var m = document.querySelector('meta[name="theme-color"]');
+            if (m) m.setAttribute('content', t === 'light' ? '#F7F6F2' : '#050608');
+        })();
+    </script>
+    <style>
+        :root {
+            --accent: #E9B154;
+            --bg: #050608; --surface: rgba(255, 255, 255, .045); --line: rgba(242, 240, 233, .1);
+            --text: #F2F0E9; --muted: #A8A59C;
+            --head: var(--accent);
+        }
+        :root[data-theme="light"] {
+            --bg: #F7F6F2; --surface: rgba(22, 20, 15, .04); --line: rgba(22, 20, 15, .1);
+            --text: #1B1A17; --muted: #5E5B54;
+            --head: color-mix(in srgb, var(--accent) 50%, #1B1A17);
+        }
+        * { box-sizing: border-box; }
+        html { -webkit-text-size-adjust: 100%; }
+        body {
+            margin: 0; background: var(--bg); color: var(--text);
+            font-family: 'Noto Sans TC', -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+            line-height: 1.75; font-size: 15px;
+        }
+        .wrap { max-width: 720px; margin: 0 auto; padding: calc(16px + env(safe-area-inset-top)) 20px calc(48px + env(safe-area-inset-bottom)); }
+        .top { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+        .back {
+            width: 44px; height: 44px; border-radius: 22px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+            border: 1px solid var(--line); background: var(--surface); color: var(--text); text-decoration: none;
+        }
+        .back svg { width: 20px; height: 20px; }
+        h1 { margin: 0; font-size: 21px; letter-spacing: .06em; }
+        .date { margin: 4px 0 20px; font-size: 13px; color: var(--muted); }
+        .lead { margin: 0 0 8px; padding: 14px 16px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
+        h2 { margin: 28px 0 8px; font-size: 16.5px; color: var(--head); display: flex; align-items: center; gap: 8px; }
+        h2::before { content: ''; width: 4px; height: 16px; border-radius: 2px; background: var(--accent); }
+        h3 { margin: 16px 0 4px; font-size: 15px; }
+        p { margin: 6px 0; }
+        ul { margin: 6px 0; padding-left: 22px; }
+        li { margin: 4px 0; }
+        .muted { color: var(--muted); font-size: 14px; }
+        a { color: var(--head); text-underline-offset: 3px; }
+        b { font-weight: 700; }
+        .contact { margin-top: 10px; padding: 14px 16px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
+    </style>
+</head>
+<body>
+<main class="wrap">
+    <div class="top">
+        <a class="back" href="./" id="backLink" aria-label="回到 App"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></a>
+        <h1>隱私權政策</h1>
+    </div>
+    <p class="date">最後更新：2026 年 10 月 22 日</p>
+
+    <p class="lead">「學測倒數 &amp; 讀書計畫」是個人開發的讀書工具。我們只收集讓功能運作需要的資料，<b>不放廣告、不做追蹤分析、也不賣資料</b>。</p>
+
+    <h2>我們收集哪些資料</h2>
+    <h3>沒有登入時</h3>
+    <p>所有資料（讀書紀錄、進度、行事曆、待辦、倒數、設定）只存在你這台裝置的瀏覽器裡，我們收不到。</p>
+    <h3>用 Google 登入後</h3>
+    <ul>
+        <li><b>帳號資料</b>：Google 提供的帳號代號、名字、Email 和頭像，用來登入和在個人設定裡顯示。</li>
+        <li><b>讀書資料</b>：讀書紀錄、每週進度、學測範圍、行事曆、待辦、倒數和首頁設定，存在雲端，換手機或電腦都能同步。</li>
+    </ul>
+    <h3>使用讀書房間時</h3>
+    <ul>
+        <li>你的暱稱、頭像顏色、加入了哪些房間。</li>
+        <li>讀書狀態：正在讀的科目、這一輪開始和暫停的時間、休息狀態。</li>
+        <li>今天和最近 3 個月每天讀了多久（只有總分鐘數，不含讀了什麼內容）。</li>
+        <li>聊天室的訊息、照片（傳送前會先壓縮）、回覆、表情，以及你讀到哪一則。</li>
+    </ul>
+    <h3>網站出錯時</h3>
+    <p>程式出錯時會自動記下錯誤訊息、出錯的程式位置、App 版本、當時在哪個分頁、手機或電腦的型號與螢幕大小，以及一個隨機產生的裝置代號（只用來判斷是不是同一台裝置一直出錯）。<b>不包含你的帳號、名字或任何讀書內容</b>。</p>
+
+    <h2>誰看得到</h2>
+    <ul>
+        <li><b>只有你</b>：你的讀書紀錄、進度、行事曆、待辦等個人資料。</li>
+        <li><b>同一個房間的成員</b>：你的暱稱、頭像顏色、讀書狀態、每天讀了多久、你傳的聊天訊息和照片。開啟「隱身」後，大家看不到你正在讀什麼，但仍看得到你的暱稱和每天的總時數。</li>
+        <li><b>開發者</b>：可以進入資料庫後台，只會在修正錯誤、維護網站或處理不當內容時查看。</li>
+    </ul>
+
+    <h2>使用的外部服務</h2>
+    <ul>
+        <li><b>Google Firebase</b>：登入、雲端資料庫，以及防止濫用的 App Check（使用 Google reCAPTCHA）。</li>
+        <li><b>Google Gemini（透過 Firebase AI Logic）</b>：只有按「AI 排計畫」時才會送出排計畫需要的資料：要排的日期、可讀書時間、各科自評、最近 14 天各科讀書時間和進度完成率，以及下一場考試的名稱、日期和範圍。不會送出你的名字或帳號。</li>
+        <li><b>Google Fonts</b>：載入字型時，你的瀏覽器會連到 Google 的伺服器。</li>
+    </ul>
+    <p class="muted">這些服務由 Google 提供，Google 如何處理資料請見 <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google 隱私權政策</a>。</p>
+
+    <h2>資料保存多久</h2>
+    <ul>
+        <li>讀書資料：保存到你自己刪除、刪除帳號，或請我們刪除為止。</li>
+        <li>聊天室照片：30 天後自動刪除。</li>
+        <li>聊天訊息：24 小時內可以收回，收回後內容會被清空。</li>
+        <li>錯誤紀錄：只用來修正問題，會定期清理。</li>
+    </ul>
+
+    <h2>你可以怎麼管理和刪除資料</h2>
+    <ul>
+        <li>在 App 裡可以修改或刪除讀書紀錄、進度、待辦和行事曆。</li>
+        <li>可以在讀書房間開啟隱身、離開房間，或收回 24 小時內的訊息。</li>
+        <li>沒有登入時，清除瀏覽器的網站資料就會刪除所有資料。</li>
+        <li><b>刪除帳號</b>：在 App 的「個人設定 → 刪除帳號與資料」可以自己永久刪除帳號、所有雲端資料、你在聊天室傳過的訊息和照片，並離開所有房間。刪除後沒辦法復原。</li>
+        <li>沒辦法自己操作時，也可以寫信給我們，我們會在 14 天內處理。</li>
+    </ul>
+
+    <h2>資料安全</h2>
+    <p>網站和資料庫之間的連線都經過加密（HTTPS）。資料庫設有權限規則：個人資料只有你自己能讀寫，房間資料只有房間成員看得到。</p>
+
+    <h2>未成年使用者</h2>
+    <p>這個 App 主要給準備學測的高中生使用。如果你未滿 18 歲，建議讓家長或監護人知道你在使用，並一起看過這份說明。</p>
+
+    <h2>政策更新</h2>
+    <p>如果這份政策有重要的變更，會更新上面的日期，並在 App 裡提醒。</p>
+
+    <h2>聯絡我們</h2>
+    <div class="contact">
+        <p>對隱私有任何問題，或需要協助刪除帳號與資料，請寫信到 <a href="mailto:samlin5771@gmail.com">samlin5771@gmail.com</a>。</p>
+    </div>
+</main>
+<script>
+    // 從 App 點進來：按返回就回到剛剛的畫面
+    (function () {
+        var b = document.getElementById('backLink');
+        b.addEventListener('click', function (e) {
+            try {
+                if (document.referrer && new URL(document.referrer).origin === location.origin && history.length > 1) { e.preventDefault(); history.back(); }
+            } catch (x) {}
+        });
+    })();
+</script>
+</body>
+</html>

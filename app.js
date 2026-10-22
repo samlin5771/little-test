@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v54';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v55';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -94,8 +94,77 @@ const device = {
 const appShowFns = [], appHideFns = [];
 const onAppShow = (fn) => appShowFns.push(fn), onAppHide = (fn) => appHideFns.push(fn);
 document.addEventListener('visibilitychange', () => {
-    (document.visibilityState === 'visible' ? appShowFns : appHideFns).forEach(fn => { try { fn(); } catch (e) { console.error(e); } });
+    (document.visibilityState === 'visible' ? appShowFns : appHideFns).forEach(fn => { try { fn(); } catch (e) { console.error(e); reportErr(e, 'appShow/Hide'); } });
 });
+
+/* =====================================================
+ * v55：錯誤回報（程式出錯時自動記到 Firebase 的 errors，不含個人資料）
+ * 在 Firebase 主控台 → Firestore → errors 就看得到：哪個版本、哪一頁、什麼手機、錯在哪一行
+ * ===================================================== */
+const ERR_Q = 'study_err_queue', ERR_DAY = 'study_err_day', ERR_DEV = 'study_err_dev';
+const errSeen = new Set();
+let errSent = 0;
+// 這些不是程式的錯（沒網路、使用者自己取消、瀏覽器擋聲音或螢幕常亮），不用回報
+const ERR_SKIP_CODE = /^(unavailable|cancelled|deadline-exceeded|failed-precondition|aborted|auth\/(popup-closed-by-user|cancelled-popup-request|network-request-failed|popup-blocked|user-cancelled))$/;
+const ERR_SKIP_MSG = /ResizeObserver loop|^Script error\.?$|Load failed|Failed to fetch|NetworkError|network error|The operation was aborted|AbortError|NotAllowedError|play\(\) request was interrupted|Wake Lock|QuotaExceeded|client is offline|ChunkLoadError/i;
+function errDevice() {
+    try {
+        let d = localStorage.getItem(ERR_DEV);
+        if (!d) { d = Math.random().toString(36).slice(2, 10); localStorage.setItem(ERR_DEV, d); }   // 隨機代號：只用來看「是不是同一台」，跟帳號無關
+        return d;
+    } catch (e) { return 'x'; }
+}
+function reportErr(err, where) {
+    try {
+        const e = err && typeof err === 'object' ? err : { message: String(err) };
+        const code = String(e.code || '');
+        const msg = String(e.message || e.reason || e || '').slice(0, 500);
+        if (!msg || ERR_SKIP_CODE.test(code) || ERR_SKIP_MSG.test(msg) || e.name === 'AbortError' || e.name === 'NotAllowedError') return;
+        const src = String(where || '').slice(0, 200);
+        // 外掛程式（擴充功能）造成的錯不算
+        if (/^(chrome|moz|safari)-extension:/.test(src) || /extension:\/\//.test(String(e.stack || ''))) return;
+        const key = msg + '|' + src;
+        if (errSeen.has(key) || errSent >= 10) return;   // 同一個錯只記一次，一次打開最多記 10 筆
+        errSeen.add(key);
+        const today = new Date().toISOString().slice(0, 10);
+        const day = lsGet(ERR_DAY, {});
+        if (day.d !== today) { day.d = today; day.n = 0; }
+        if (day.n >= 30) return;   // 一台裝置一天最多 30 筆，避免一直重複送
+        day.n++; errSent++;
+        lsSet(ERR_DAY, day);
+        const mode = (window.matchMedia && (matchMedia('(display-mode: standalone)').matches || navigator.standalone === true)) ? 'app' : 'web';
+        const item = {
+            msg, code: code.slice(0, 60), src, stack: String(e.stack || '').slice(0, 2000), ver: APP_VERSION,
+            ua: String(navigator.userAgent || '').slice(0, 300), mode, tab: String(document.body?.dataset.tab || '').slice(0, 30),
+            w: Math.round(innerWidth), h: Math.round(innerHeight), online: navigator.onLine !== false, dev: errDevice(), at: Date.now()
+        };
+        const q = lsGet(ERR_Q, []);
+        q.push(item);
+        lsSet(ERR_Q, q.slice(-20));   // 先存在這台，Firebase 準備好再一起送
+        flushErrors();
+    } catch (x) { /* 回報本身出錯就算了，不能影響 App */ }
+}
+let errFlushing = false;
+async function flushErrors() {
+    let f = null;
+    try { f = fb; } catch (x) { return; }
+    if (!f || errFlushing || navigator.onLine === false) return;
+    const q = lsGet(ERR_Q, []);
+    if (!q.length) return;
+    errFlushing = true;
+    lsSet(ERR_Q, []);
+    try {
+        const col = f.fs.collection(f.db, 'errors');
+        await Promise.all(q.map(it => f.fs.addDoc(col, it).catch(() => {})));   // 規則還沒設定（沒有權限）也不要一直重試
+    } catch (x) { /* 算了 */ }
+    errFlushing = false;
+}
+window.addEventListener('error', (ev) => {
+    const where = ev.filename ? `${String(ev.filename).replace(location.origin, '')}:${ev.lineno}:${ev.colno}` : '';
+    if (ev.filename && !String(ev.filename).startsWith(location.origin) && !/gstatic\.com\/firebasejs/.test(ev.filename)) return;   // 別的網站的程式（擴充功能等）
+    reportErr(ev.error || { message: ev.message }, where);
+});
+window.addEventListener('unhandledrejection', (ev) => reportErr(ev.reason || { message: 'unhandledrejection' }, 'promise'));
 
 function lsGet(k, fb) { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fb; } catch { return fb; } }
 function lsSet(k, v) { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch {} }
@@ -117,6 +186,7 @@ function toast(msg, action) {
 let state = { todos: [], events: [], weekly: {}, sessions: [], syllabus: { picked: null, custom: {}, status: {}, flags: [] }, countdowns: { items: [], pins: null } };
 let currentUser = null;
 let fb = null; // Firebase（動態載入，離線時 App 照常可用）
+let deletingAccount = false;   // 正在刪除帳號：停止所有雲端寫入，避免刪掉又被寫回去
 
 // 相容舊版資料：舊的待辦是純文字、舊的行程可能沒有 id
 // 自己加過、和內建考試同一天又同名的行程（例如 1/22「學測」）視為重複，自動移除
@@ -267,7 +337,7 @@ function scheduleFlush(ms = 400) { clearTimeout(cloudTimer); cloudTimer = setTim
 // 送上雲端：先讀雲端最新的，跟這台的修改合併後再寫回（交易，中途有人改會自動重來）
 let flushing = false, flushAgain = false, flushRetry = 0;
 async function flushCloud() {
-    if (!cloudDirty || !currentUser || !fb || !cloudReady) return;
+    if (!cloudDirty || !currentUser || !fb || !cloudReady || deletingAccount) return;
     if (flushing) { flushAgain = true; return; }
     flushing = true; flushAgain = false;
     clearTimeout(flushRetry);
@@ -293,14 +363,59 @@ async function flushCloud() {
         publishProfile();   // 別台裝置的讀書紀錄合併進來了，房間裡的今日時數也更新
     } catch (e) {
         console.warn('雲端儲存失敗，連上網路後會自動再送：', e);
-        if (!['unavailable', 'deadline-exceeded', 'aborted', 'failed-precondition', 'cancelled'].includes(e?.code)) toast('雲端儲存失敗，請檢查網路');
+        if (!['unavailable', 'deadline-exceeded', 'aborted', 'failed-precondition', 'cancelled'].includes(e?.code)) { toast('雲端儲存失敗，請檢查網路'); reportErr(e, 'flushCloud'); }
         flushRetry = setTimeout(flushCloud, 20000);
     } finally {
         flushing = false;
         if (cloudDirty && flushAgain) scheduleFlush();
     }
 }
-window.addEventListener('online', () => { if (cloudDirty) scheduleFlush(1000); });
+window.addEventListener('online', () => { if (cloudDirty) scheduleFlush(1000); flushErrors(); });
+
+/* --- v55：離線提示（沒網路時，畫面下方出現小膠囊；連回來後顯示同步進度） --- */
+let netTimer = 0, netWait = 0;
+function setNetPill(kind, text) {
+    const el = $('netPill');
+    if (!el) return;
+    clearTimeout(netTimer);
+    if (!kind) { el.classList.remove('show'); netTimer = setTimeout(() => { el.hidden = true; document.body.classList.remove('net-on'); }, 250); return; }
+    const [head, tail] = text.split('|');   // 「|」後面是螢幕太窄時可以省略的部分，保持一行
+    $('netText').innerHTML = esc(head) + (tail ? `<span class="nt-tail">${esc(tail)}</span>` : '');
+    el.dataset.kind = kind;
+    el.hidden = false;
+    document.body.classList.add('net-on');
+    requestAnimationFrame(() => el.classList.add('show'));
+}
+function netOffline() {
+    clearInterval(netWait);
+    const signed = !!(currentUser || cachedUid);
+    setNetPill('off', signed ? '離線中 · 記錄存在本裝置|，連上網路後自動同步' : '離線中 · 記錄存在本裝置|，可以照常使用');
+}
+function netOnline() {
+    clearInterval(netWait);
+    const el = $('netPill');
+    if (!el || el.hidden) return;   // 本來就沒顯示離線，不用多說
+    if (!(currentUser && fb) || !cloudDirty) {
+        setNetPill('ok', currentUser ? '已連上網路 · 資料都同步好了' : '已連上網路');
+        netTimer = setTimeout(() => setNetPill(null), 2200);
+        return;
+    }
+    setNetPill('sync', '已連上網路 · 同步中…');
+    const t0 = Date.now();
+    netWait = setInterval(() => {
+        if (!navigator.onLine) { clearInterval(netWait); return; }
+        if (!cloudDirty) {
+            clearInterval(netWait);
+            setNetPill('ok', '已同步完成');
+            netTimer = setTimeout(() => setNetPill(null), 2200);
+        } else if (Date.now() - t0 > 30000) {   // 太久沒同步好：先收起來，之後還是會自動再送
+            clearInterval(netWait);
+            setNetPill(null);
+        }
+    }, 500);
+}
+window.addEventListener('offline', netOffline);
+window.addEventListener('online', netOnline);
 // 切到背景、關掉 App：副本馬上存好，還沒送出的修改趕快送
 const syncOnLeave = () => { if (currentUser || cachedUid) writeCloudCache(); if (cloudDirty) flushCloud(); };
 onAppHide(syncOnLeave);
@@ -2177,7 +2292,7 @@ function renderTimer() {
             <div class="go-row">
                 <button class="go-btn room" data-act="room">
                     <span class="go-ic">${ICON_ROOM.replace('style="width:16px;height:16px"', '')}</span>
-                    <span class="go-tx"><b>讀書房間</b><small>${live === null ? '和朋友一起讀' : live ? `● ${live}${mini ? ' 位朋友' : ' 人'}在讀` : (mini ? '目前只有你在讀' : '目前沒人在讀')}</small></span>
+                    <span class="go-tx"><b>讀書房間</b><small>${live === null ? '和朋友一起讀' : live ? `● ${live}${mini ? ' 位朋友' : ' 人'}在讀` : (mini ? '只有你在讀' : '目前沒人在讀')}</small></span>
                     <svg class="go-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
                 </button>
                 <button class="go-btn" data-act="stats">
@@ -3374,7 +3489,7 @@ function recentDays(n) {
     return out;
 }
 function publishProfile(force) {
-    if (!currentUser || !fb || !roomPref.enabled) return;
+    if (!currentUser || !fb || !roomPref.enabled || deletingAccount) return;
     const t = todayStr();
     const hide = roomPref.hidden;
     const data = {
@@ -3998,7 +4113,7 @@ function markChatSeen() {
     if (!msgs.length) return;
     const latest = msgs[msgs.length - 1].at || 0;
     if ((chatSeen[chatRoom] || 0) < latest) { chatSeen[chatRoom] = latest; lsSet(LS.chatSeen, chatSeen); updateChatBadges(); }
-    if (latest > lastReadSent) {
+    if (latest > lastReadSent && !deletingAccount) {
         lastReadSent = latest;
         fb.fs.setDoc(fb.fs.doc(fb.db, 'rooms', chatRoom, 'reads', currentUser.uid), { at: latest }).catch(() => { lastReadSent = 0; });
     }
@@ -4632,6 +4747,7 @@ function renderAccount(statusText) {
     $('accentName').textContent = ACCENT_NAME[localStorage.getItem(LS.accent) || 'amber'] || '琥珀';
     $('installState').textContent = isStandalone() ? '已加入 ✓' : '教學';
     $('loginBtn').textContent = u ? '登出' : '使用 Google 登入';
+    $('delAcctBtn').hidden = !u;
     $('loginBtn').classList.toggle('btn-accent', !u);
     $('loginBtn').classList.toggle('btn-logout', !!u);
 }
@@ -5149,6 +5265,7 @@ onAppShow(() => {
 });
 window.addEventListener('pagehide', markActive);
 setInterval(() => { if (document.visibilityState === 'visible') markActive(); }, 60000);
+if (navigator.onLine === false) netOffline();   // 打開時就沒網路
 markActive();
 setTimeout(() => { nudgeSoon(); handlePendingJoin(); }, 300);
 
@@ -5206,6 +5323,7 @@ async function initFirebase() {
         }
         fb = { app, auth, provider, authM, db, fs: fsM };
         renderAccount();
+        setTimeout(flushErrors, 3000);   // 打開前就出的錯，等 Firebase 準備好再送
         // 只有剛用「整頁跳轉」登入回來時才需要讀結果（平常打開不用多載一個登入用的網頁框）
         let redirected = false;
         try { redirected = sessionStorage.getItem('study_redirect') === '1'; sessionStorage.removeItem('study_redirect'); } catch (e) {}
@@ -5219,6 +5337,12 @@ async function initFirebase() {
 
 function onAuthChanged(user) {
     authKnown = true;
+    try {
+        if (user && sessionStorage.getItem(DEL_PENDING) === '1') {
+            sessionStorage.removeItem(DEL_PENDING);
+            setTimeout(() => { openModal('accountModal'); openDelSheet('已確認是本人，再輸入一次「刪除」並按下去就會完成。'); }, 900);
+        }
+    } catch (e) {}
     currentUser = user;
     cloudReady = false;
     if (unsubscribe) { unsubscribe(); unsubscribe = null; }
@@ -5315,6 +5439,93 @@ $('loginBtn').addEventListener('click', async () => {
         if (!currentUser) renderAccount();
     }
 });
+
+/* --- v55：刪除帳號與所有資料 --- */
+const DEL_PENDING = 'study_del_pending';
+const LOCAL_DATA_KEYS = () => [LS.todos, LS.weekly, LS.events, LS.sessions, LS.syllabus, LS.countdowns, LS.timer, LS.tpref, LS.room,
+    LS.chatSeen, LS.photoCount, LS.home, LS.cloud, LS.aiPref, LS.aiCount, LS.exam, LS.progView, LS.sylOpen, LS.minTip, SESS_JOURNAL];
+function openDelSheet(note) {
+    if (!currentUser) return;
+    $('delInput').value = '';
+    $('delGo').disabled = true;
+    $('delGo').textContent = '永久刪除';
+    $('delGo').classList.remove('busy');
+    $('delNote').textContent = note || 'Google 可能會要求你再登入一次，確認是本人。';
+    $('delNote').classList.toggle('err', false);
+    openModal('delModal');
+}
+$('delAcctBtn').addEventListener('click', () => openDelSheet());
+$('delInput').addEventListener('input', () => { $('delGo').disabled = $('delInput').value.trim() !== '刪除'; });
+const delSay = (t, bad) => { $('delNote').textContent = t; $('delNote').classList.toggle('err', !!bad); };
+$('delGo').addEventListener('click', () => { if ($('delInput').value.trim() === '刪除') deleteAccount(); });
+async function deleteAccount() {
+    const user = currentUser;
+    if (!user || !fb || deletingAccount) return;
+    if (navigator.onLine === false) { delSay('刪除帳號需要網路，請連上網路後再試。', true); return; }
+    const { fs, db, authM, provider } = fb;
+    const btn = $('delGo');
+    // Google 規定：刪除帳號前要「剛登入過」。太久以前登入的話，先請他再登入一次
+    const last = Date.parse(user.metadata?.lastSignInTime || '') || 0;
+    if (!last || Date.now() - last > 4 * 60000) {
+        delSay('請在跳出的視窗再登入一次，確認是本人…');
+        try { await authM.reauthenticateWithPopup(user, provider); }
+        catch (err) {
+            if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'].includes(err?.code)) {
+                // 加到主畫面的 App 常擋彈出視窗：改用整頁跳轉，回來後自動打開這個視窗，再按一次就好
+                try { sessionStorage.setItem(DEL_PENDING, '1'); sessionStorage.setItem('study_redirect', '1'); } catch (e) {}
+                authM.reauthenticateWithRedirect(user, provider);
+                return;
+            }
+            delSay(err?.code === 'auth/popup-closed-by-user' ? '需要再登入一次才能刪除帳號，資料都還在。' : '確認身分失敗，資料都還在，請再試一次。', true);
+            if (err?.code !== 'auth/popup-closed-by-user') reportErr(err, 'deleteAccount/reauth');
+            return;
+        }
+    }
+    deletingAccount = true;
+    btn.classList.add('busy'); btn.textContent = '刪除中…';
+    $('delCancel').disabled = true;
+    const me = user.uid;
+    try {
+        clearTimeout(cloudTimer); clearTimeout(flushRetry); clearTimeout(profTimer);
+        if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+        // 1. 房間：先刪自己的訊息和已讀，再離開（最後一個人就把房間刪掉）
+        const rooms = [...myRooms];
+        for (let i = 0; i < rooms.length; i++) {
+            const code = rooms[i].id;
+            delSay(`正在清除房間資料（${i + 1}/${rooms.length}）…`);
+            const snap = await fs.getDocs(fs.query(fs.collection(db, 'rooms', code, 'messages'), fs.where('uid', '==', me)));
+            await Promise.all(snap.docs.map(d => fs.deleteDoc(fs.doc(db, 'rooms', code, 'messages', d.id))));
+            await fs.deleteDoc(fs.doc(db, 'rooms', code, 'reads', me)).catch(() => {});
+            const rs = await fs.getDoc(fs.doc(db, 'rooms', code));
+            if (rs.exists()) {
+                const mem = rs.data().members || [];
+                if (mem.length <= 1) await fs.deleteDoc(fs.doc(db, 'rooms', code));
+                else await fs.updateDoc(fs.doc(db, 'rooms', code), { members: fs.arrayRemove(me) });
+            }
+        }
+        roomStop();
+        // 2. 房間裡的個人狀態、3. 雲端的讀書資料
+        delSay('正在刪除雲端資料…');
+        await fs.deleteDoc(fs.doc(db, 'profiles', me)).catch(() => {});
+        await fs.deleteDoc(fs.doc(db, 'users', me));
+        // 4. 這台裝置上的讀書資料（主題色、深淺色等外觀設定保留）
+        LOCAL_DATA_KEYS().forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+        cloudDirty = false; cachedUid = null; cloudBase = null;
+        // 5. Google 登入的帳號
+        try { await authM.deleteUser(user); }
+        catch (err) { reportErr(err, 'deleteAccount/deleteUser'); try { await authM.signOut(fb.auth); } catch (e) {} }
+        try { sessionStorage.removeItem(DEL_PENDING); } catch (e) {}
+        delSay('已刪除，正在重新整理…');
+        toast('帳號和所有資料都已刪除');
+        setTimeout(() => location.reload(), 1200);
+    } catch (err) {
+        deletingAccount = false;
+        reportErr(err, 'deleteAccount');
+        btn.classList.remove('busy'); btn.textContent = '永久刪除';
+        $('delCancel').disabled = false;
+        delSay('刪除到一半失敗了（可能是網路不穩）。請再按一次「永久刪除」，會從剩下的部分繼續。', true);
+    }
+}
 
 initFirebase();
 

@@ -387,7 +387,7 @@ html.bg-still .bg-fx *, html.bg-still .bg-fx *::before, html.bg-still .bg-fx *::
 .slot.c-pink { background: var(--mark-pink-bg); color: var(--mark-pink); }
 
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.week-table { width: 100%; min-width: 860px; border-collapse: collapse; table-layout: fixed; }
+.week-table { width: 100%; min-width: 720px; border-collapse: collapse; table-layout: fixed; }
 .week-table th, .week-table td { padding: 5px; vertical-align: top; border-bottom: 1px solid var(--line); }
 .week-table th { font-size: 14px; font-weight: 700; padding: 10px 5px; text-align: left; font-family: 'Noto Sans TC', sans-serif; }
 .week-table th .d { display: block; font-size: 12px; font-weight: 500; color: var(--muted); font-family: 'Manrope', sans-serif; }
@@ -2482,7 +2482,8 @@ body.sorting, body.sorting * { -webkit-user-select: none !important; user-select
 .focus-pill.in-chat { top: calc(env(safe-area-inset-top) + 78px); bottom: auto; z-index: 95; }
 @media (prefers-reduced-motion: reduce) { .focus-pill { transition: opacity .2s; } .focus-pill.up { animation: none; } }
 /* 膠囊出現時：頁面底部多留空間、提示訊息和固定按鈕往上移，不會疊在一起 */
-body.pill-on .main::after { content: ''; display: block; height: 64px; }
+body.pill-on .main::after, body.net-on .main::after { content: "" ; display: block; height: 64px; }
+body.pill-on.net-on .main::after { height: 120px; }
 body.pill-on .toast { bottom: calc(140px + env(safe-area-inset-bottom)); }
 body.pill-on:has(.tab.active .sticky-cta) .toast { bottom: calc(200px + env(safe-area-inset-bottom)); }
 body.pill-on .sticky-cta { bottom: calc(126px + env(safe-area-inset-bottom)); }
@@ -2504,3 +2505,97 @@ body.pill-on.chat-open .toast { bottom: calc(86px + env(safe-area-inset-bottom))
 .g-fpill small { font-size: 7.5px; color: var(--muted); }
 .g-fpill b { font-size: 11px; }
 .g-fpill em { font-style: normal; width: 18px; height: 18px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-text); font-size: 10px; display: flex; align-items: center; justify-content: center; }
+
+/* =====================================================
+ * v55：離線提示小膠囊（畫面下方中間；聊天室裡在標題下面）
+ * ===================================================== */
+.net-pill {
+    position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 43;
+    display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 32px); box-sizing: border-box;
+    padding: 8px 14px 8px 10px; border-radius: 18px; border: 1px solid var(--line);
+    background: var(--modal-bg); color: var(--text); box-shadow: 0 8px 22px rgba(0, 0, 0, .3);
+    font: 500 13px/1.4 'Noto Sans TC', sans-serif; pointer-events: none;
+    transform: translate(-50%, 10px); opacity: 0; transition: transform .25s ease, opacity .2s;
+}
+.net-pill[hidden] { display: none; }
+.net-pill.show { transform: translate(-50%, 0); opacity: 1; }
+.net-pill #netText { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.np-ic { width: 22px; height: 22px; border-radius: 11px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.np-ic svg { width: 14px; height: 14px; display: none; }
+.net-pill[data-kind="off"] .np-ic { background: rgba(229, 72, 77, .16); color: #E5484D; }
+.net-pill[data-kind="off"] .np-off { display: block; }
+.net-pill[data-kind="sync"] .np-ic { background: var(--accent-soft); color: var(--accent-text); }
+.net-pill[data-kind="sync"] .np-sync { display: block; animation: npSpin 1s linear infinite; }
+.net-pill[data-kind="ok"] .np-ic { background: rgba(48, 164, 108, .16); color: #30A46C; }
+.net-pill[data-kind="ok"] .np-ok { display: block; }
+@keyframes npSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .net-pill[data-kind="sync"] .np-sync { animation: none; } }
+/* 計時膠囊也在時：疊在它上面 */
+body.pill-on .net-pill { bottom: calc(138px + env(safe-area-inset-bottom)); }
+/* 碼錶畫面（沒有分頁列） */
+body.focus-mode .net-pill { bottom: calc(18px + env(safe-area-inset-bottom)); }
+/* 聊天室：放在標題下面，不擋輸入框 */
+body.chat-open .net-pill { top: calc(env(safe-area-inset-top) + 76px); bottom: auto; z-index: 96; }
+body.chat-open.pill-on .net-pill { top: calc(env(safe-area-inset-top) + 136px); }
+/* 提示訊息往上移，不要疊在一起 */
+body.net-on .toast { bottom: calc(140px + env(safe-area-inset-bottom)); }
+body.net-on.pill-on .toast { bottom: calc(196px + env(safe-area-inset-bottom)); }
+body.net-on.chat-open .toast { bottom: calc(86px + env(safe-area-inset-bottom)); }
+@media (min-width: 900px) {
+    .net-pill { bottom: calc(24px + env(safe-area-inset-bottom)); }
+    body.pill-on .net-pill { bottom: 86px; }
+    body.net-on .toast { bottom: 80px; }
+    body.net-on.pill-on .toast { bottom: 140px; }
+}
+/* 窄螢幕：只留「離線中 · 記錄存在本裝置」，維持一行 */
+@media (max-width: 370px) { .net-pill .nt-tail { display: none; } }
+/* 個人設定裡的連結列（隱私權政策）：長得跟其他列一樣 */
+a.acct-row { text-decoration: none; color: inherit; }
+a.acct-row:hover { background: var(--surface-2); }
+
+/* =====================================================
+ * v55：刪除帳號
+ * ===================================================== */
+.acct-del {
+    display: block; margin: 6px auto 0; min-height: 40px; padding: 8px 12px; border: none; background: none; cursor: pointer;
+    color: var(--muted); font: 500 13px 'Noto Sans TC', sans-serif; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--faint);
+}
+.acct-del[hidden] { display: none; }
+.acct-del:hover { color: #E5484D; }
+.del-sheet { text-align: left; }
+.del-ic { display: flex; width: 56px; height: 56px; margin: 4px auto 10px; border-radius: 28px; align-items: center; justify-content: center; background: rgba(229, 72, 77, .14); color: #E5484D; }
+.del-ic svg { width: 26px; height: 26px; }
+.del-sheet h2 { text-align: center; }
+.del-sub { margin: 4px 0 10px; text-align: center; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.del-list { margin: 0 0 14px; padding: 12px 14px 12px 32px; border-radius: 14px; background: var(--surface-2); font-size: 14px; line-height: 1.75; }
+.del-input { width: 100%; box-sizing: border-box; }
+.del-input:focus { border-color: #E5484D; }
+.del-note { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.del-note.err { color: #E5484D; }
+.del-btns { margin-top: 16px; }
+.del-btns .btn { flex: 1; }
+.btn.del-go { background: #E5484D; border-color: #E5484D; color: #fff; font-weight: 700; }
+.btn.del-go[disabled] { opacity: .45; cursor: not-allowed; }
+.btn.del-go.busy { opacity: .8; pointer-events: none; }
+/* v55：手機橫放的碼錶畫面：右邊改成上下排好（v54 多了「讀書房間」和「結束這一輪」後會疊在一起） */
+@media (orientation: landscape) and (max-height: 540px) {
+    .focus-wrap { position: relative; grid-template-areas: "head head" "ring dots" "ring btns" "ring extra"; grid-template-rows: auto 1fr auto 1fr; row-gap: 0; }
+    /* 第一次的小提示：放在收起按鈕左邊，不另外佔一排 */
+    .focus-wrap .min-tip { position: absolute; right: 0; top: 58px; margin: 0; max-width: 40%; font-size: 12px; padding: 6px 10px; z-index: 2; }
+    .focus-wrap .ring-wrap { grid-area: ring; align-self: center; }
+    .focus-wrap .round-dots { grid-area: dots; align-self: end; margin: 0 0 2px; }
+    .focus-wrap .focus-btns { grid-area: btns; align-self: center; margin: 10px 0 0; }
+    .focus-wrap .focus-extra { grid-area: extra; align-self: start; margin: 10px 0 0; gap: 4px; }
+    .focus-wrap .end-link { min-height: 34px; padding: 4px 6px; }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+    .focus-wrap .min-tip { white-space: nowrap; max-width: none; }
+    .focus-wrap .focus-btns { flex-wrap: nowrap; gap: 10px; }
+    .focus-wrap .focus-btns .btn-big { min-width: 0; flex: 0 1 150px; padding-left: 12px; padding-right: 12px; }
+}
+/* v55：最窄的手機（320 寬）通知樣式說明維持一行 */
+@media (max-width: 359px) {
+    .notify-grid { gap: 8px; padding-left: 10px; padding-right: 10px; }
+    .notify-opt { padding: 9px 8px; }
+    .nt-sub { white-space: nowrap; font-size: 11px; letter-spacing: -0.01em; }
+}
