@@ -2599,3 +2599,22 @@ a.acct-row:hover { background: var(--surface-2); }
     .notify-opt { padding: 9px 8px; }
     .nt-sub { white-space: nowrap; font-size: 11px; letter-spacing: -0.01em; }
 }
+
+/* =====================================================
+ * v56：個人設定視窗固定大小、內容可以往下捲；隱私權政策在 App 裡滑進來
+ * ===================================================== */
+.acct-sheet { max-height: min(722px, 90vh, 90dvh); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.acct-del { margin: -6px auto -8px; min-height: 34px; padding: 4px 12px; }
+.privacy-screen {
+    position: fixed; inset: 0; z-index: 110; display: flex; flex-direction: column; background: var(--bg);
+    transform: translateX(100%); transition: transform .3s cubic-bezier(.2, .8, .2, 1), box-shadow .3s;
+    will-change: transform;
+}
+.privacy-screen[hidden] { display: none; }
+.privacy-screen.open { transform: none; box-shadow: -12px 0 30px rgba(0, 0, 0, .25); }
+.privacy-body { position: relative; flex: 1; min-height: 0; }
+.privacy-body iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; opacity: 0; transition: opacity .2s; }
+.privacy-body iframe.ready { opacity: 1; }
+.privacy-load { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.privacy-load[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .privacy-screen { transition: opacity .2s; transform: none; opacity: 0; } .privacy-screen.open { opacity: 1; } }

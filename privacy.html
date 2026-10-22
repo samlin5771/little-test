@@ -17,6 +17,8 @@
             document.documentElement.setAttribute('data-theme', t);
             var c = { amber: '#E9B154', mint: '#5ED3A8', violet: '#A99BF0', sakura: '#F4A3BE', ocean: '#6CB4EE', coral: '#FF8B74', matcha: '#A9C46C', moon: '#C3CAD6' };
             document.documentElement.style.setProperty('--accent', c[a] || c.amber);
+            // 在 App 裡打開（嵌在 App 的畫面中）：App 自己有標題和返回鍵，這頁就不用再顯示
+            if (/[?&]embed=1/.test(location.search)) document.documentElement.classList.add('embed');
             var m = document.querySelector('meta[name="theme-color"]');
             if (m) m.setAttribute('content', t === 'light' ? '#F7F6F2' : '#050608');
         })();
@@ -59,6 +61,9 @@
         .muted { color: var(--muted); font-size: 14px; }
         a { color: var(--head); text-underline-offset: 3px; }
         b { font-weight: 700; }
+        .embed .top { display: none; }
+        .embed .wrap { padding-top: 16px; }
+        .embed body { background: transparent; }
         .contact { margin-top: 10px; padding: 14px 16px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
     </style>
 </head>

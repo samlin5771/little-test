@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v55';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v56';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -871,7 +871,11 @@ $('topExtra').addEventListener('click', (e) => {
  * ===================================================== */
 // 彈窗開著時，後面的頁面不跟著捲動
 const syncScrollLock = () => document.body.classList.toggle('modal-open', !!document.querySelector('.modal.open'));
-function openModal(id) { $(id).classList.add('open'); syncScrollLock(); }
+function openModal(id) {
+    // 個人設定：每次打開都從最上面（帳號資料）開始；順便先在背景載好隱私權政策，點進去不用等
+    if (id === 'accountModal') { const sh = $(id).querySelector('.sheet'); if (sh) sh.scrollTop = 0; setTimeout(preloadPrivacy, 400); }
+    $(id).classList.add('open'); syncScrollLock();
+}
 function closeModal(id) {
     $(id).classList.remove('open');
     // 關掉視窗時讓輸入框失去焦點，快捷鍵才會恢復作用
@@ -4690,6 +4694,42 @@ $('installModal').addEventListener('click', (e) => {
         if (tourAfterInstall) { tourAfterInstall = false; setTimeout(openTour, 260); }   // 接著顯示簡易導覽
     }
 });
+
+/* --- v56：隱私權政策：在 App 裡從右邊滑進來，返回時滑出去（不離開 App，不會重新載入） --- */
+const privacyKey = () => { try { return `${document.documentElement.getAttribute('data-theme')}|${localStorage.getItem(LS.accent) || ''}`; } catch (e) { return ''; } };
+let privacyLoadedKey = '';
+function preloadPrivacy() {
+    const f = $('privacyFrame');
+    if (!f) return;
+    const k = privacyKey();
+    if (f.getAttribute('src') && privacyLoadedKey === k) return;   // 已經載好，而且深淺色、主題色沒變
+    privacyLoadedKey = k;
+    $('privacyLoad').hidden = false;
+    f.classList.remove('ready');
+    f.setAttribute('src', 'privacy.html?embed=1');
+}
+$('privacyFrame').addEventListener('load', () => { $('privacyLoad').hidden = true; $('privacyFrame').classList.add('ready'); });
+let privacyCloseT = 0;
+function openPrivacy() {
+    preloadPrivacy();
+    clearTimeout(privacyCloseT);
+    const el = $('privacyScreen');
+    el.hidden = false;
+    try { $('privacyFrame').contentWindow?.scrollTo(0, 0); } catch (e) {}
+    document.body.classList.add('privacy-open');
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('open')));
+    setTimeout(() => $('privacyBack').focus({ preventScroll: true }), 300);
+}
+function closePrivacy() {
+    const el = $('privacyScreen');
+    if (el.hidden) return;
+    el.classList.remove('open');
+    document.body.classList.remove('privacy-open');
+    privacyCloseT = setTimeout(() => { el.hidden = true; }, 300);
+}
+$('privacyRow').addEventListener('click', (e) => { e.preventDefault(); openPrivacy(); });
+$('privacyBack').addEventListener('click', closePrivacy);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('privacyScreen').hidden) { e.stopImmediatePropagation(); closePrivacy(); } }, true);
 
 /* --- 簡易導覽（第一次打開）與完整網站導覽 --- */
 function openTour() { lsSet(LS.tour, '1'); openModal('tourModal'); }

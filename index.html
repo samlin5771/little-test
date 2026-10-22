@@ -755,6 +755,18 @@
     </div>
 
     <!-- 完整網站導覽（整頁往下滑） -->
+    <!-- v56：隱私權政策（在 App 裡打開，不用離開頁面，返回不會重新載入） -->
+    <section class="privacy-screen" id="privacyScreen" role="dialog" aria-modal="true" aria-labelledby="privacyTitle" hidden>
+        <header class="guide-head">
+            <button class="icon-btn ghost" id="privacyBack" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <h2 id="privacyTitle">隱私權政策</h2>
+        </header>
+        <div class="privacy-body">
+            <span class="privacy-load" id="privacyLoad" aria-hidden="true"><span class="ai-spin"></span></span>
+            <iframe id="privacyFrame" title="隱私權政策內容"></iframe>
+        </div>
+    </section>
+
     <section class="guide-screen" id="guideScreen" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
         <header class="guide-head">
             <button class="icon-btn ghost" id="guideBack" aria-label="關閉導覽"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
