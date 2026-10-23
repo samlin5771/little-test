@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v57';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v58';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -1923,7 +1923,25 @@ const BASE_TITLE = document.title;
 // 計時狀態只存在這台裝置；記錄下來的讀書時間（sessions）會同步到雲端
 let timer = lsGet(LS.timer, null) || { phase: 'idle' };
 let tpref = Object.assign({ subject: 0, mode: 0, goal: 180 }, lsGet(LS.tpref, {}));
-const saveTimer = () => { lsSet(LS.timer, timer); publishProfile(); };   // 同時更新讀書房間裡的狀態
+// 這台裝置開始過的專注／休息（開始時間）。同一個帳號用兩台裝置時，用來分辨雲端上的「讀書中」是不是這台的：
+// 不是這台的，沒在計時的這台就不能把它蓋成「沒在讀」
+// （每次都從本機讀：同一台的其他分頁開始的也算這台的）
+const OWN_STARTS = 'study_own_starts';
+const ownStarts = () => { const a = lsGet(OWN_STARTS, []); return Array.isArray(a) ? a : []; };
+function noteOwnStart() {
+    const t = timer.phase === 'focus' ? timer.startAt : timer.phase === 'break' ? timer.breakStart : null;
+    const a = ownStarts();
+    if (!t || a.includes(t)) return;
+    lsSet(OWN_STARTS, [...a, t].slice(-30));
+}
+// 雲端上自己的狀態是「別台裝置正在專注／休息」（這台沒在計時時才算）：回傳那份狀態，不然回傳 null
+function otherDeviceStatus() {
+    if (timer.phase !== 'idle' || !currentUser) return null;
+    const p = profiles[currentUser.uid];
+    const t = p && (p.status === 'focus' ? p.startAt : p.status === 'break' ? p.breakStart : null);
+    return t && !p.hidden && !ownStarts().includes(t) ? p : null;
+}
+const saveTimer = () => { lsSet(LS.timer, timer); noteOwnStart(); publishProfile(); };   // 同時更新讀書房間裡的狀態
 // 另一個分頁改了計時或（沒登入時的）資料：這個分頁跟著更新，不會用舊的資料蓋回去
 window.addEventListener('storage', (e) => {
     if (e.key === LS.timer) {
@@ -3437,6 +3455,9 @@ const safeSubject = (v) => Number.isInteger(v) && v >= 0 && v < SUBJECTS.length 
 function statusOf(u, now = Date.now()) {
     if (u !== currentUser?.uid) return liveStatus(profiles[u], now);
     const t = todayStr();
+    // 這台沒在計時、但同一個帳號在別台裝置正在讀：顯示別台的狀態（今天讀了多久用這台合併好的紀錄）
+    const other = otherDeviceStatus();
+    if (other) return liveStatus({ ...other, todayMin: Math.max(Math.round(dayMinutes(t)), other.todayDate === t ? other.todayMin || 0 : 0), todayDate: t }, now);
     return liveStatus({ ...(profiles[u] || {}), status: timer.phase, subject: timer.subject, startAt: timer.startAt, pausedAt: timer.pausedAt || null,
         pausedTotal: timer.pausedTotal || 0, duration: timer.duration || 0, breakStart: timer.breakStart, breakLen: timer.breakLen || 0,
         todayMin: Math.round(dayMinutes(t)), todayDate: t }, now);
@@ -3494,10 +3515,21 @@ function recentDays(n) {
 }
 function publishProfile(force) {
     if (!currentUser || !fb || !roomPref.enabled || deletingAccount) return;
+    noteOwnStart();
     const t = todayStr();
     const hide = roomPref.hidden;
-    const data = {
+    const base = {
         name: myName(), hidden: !!hide, color: AV_COLORS.includes(roomPref.color) ? roomPref.color : null,
+        todayMin: Math.round(dayMinutes(t)), todayDate: t,
+        days: recentDays(92)   // 最近 3 個月每天讀了幾分鐘（只有總時數），房間的讀書紀錄用
+    };
+    // 讀書狀態（專注、休息）只有「這台有在計時」或「雲端上的是這台自己剛結束的」才寫。
+    // 同一個帳號在別台正在讀時，這台沒在計時就不能把它蓋成「沒在讀」（不然朋友和自己都看不到在讀）
+    const cloud = profiles[currentUser.uid];
+    const cStart = cloud && (cloud.status === 'focus' ? cloud.startAt : cloud.status === 'break' ? cloud.breakStart : null);
+    const mine = hide || timer.phase !== 'idle' || !cloud || (cStart ? ownStarts().includes(cStart) : cloud.status !== 'idle');
+    const data = mine ? {
+        ...base,
         status: hide ? 'idle' : timer.phase,
         subject: !hide && timer.phase !== 'idle' ? (timer.subject ?? null) : null,
         startAt: !hide && timer.phase === 'focus' ? timer.startAt : null,
@@ -3505,16 +3537,15 @@ function publishProfile(force) {
         pausedTotal: !hide && timer.phase === 'focus' ? (timer.pausedTotal || 0) : 0,
         duration: !hide && timer.phase === 'focus' ? (timer.duration || 0) : 0,
         breakStart: !hide && timer.phase === 'break' ? timer.breakStart : null,
-        breakLen: !hide && timer.phase === 'break' ? timer.breakLen : 0,
-        todayMin: Math.round(dayMinutes(t)), todayDate: t,
-        days: recentDays(92)   // 最近 3 個月每天讀了幾分鐘（只有總時數），房間的讀書紀錄用
-    };
+        breakLen: !hide && timer.phase === 'break' ? timer.breakLen : 0
+    } : base;
     const sig = JSON.stringify(data);
     if (!force && sig === lastProfile) return;
     lastProfile = sig;
     clearTimeout(profTimer);
     profTimer = setTimeout(() => {
-        fb.fs.setDoc(fb.fs.doc(fb.db, 'profiles', currentUser.uid), { ...data, updatedAt: Date.now() })
+        // 不寫狀態時用合併寫入：只更新名字、今日時數這些，雲端上的讀書狀態保持原樣
+        fb.fs.setDoc(fb.fs.doc(fb.db, 'profiles', currentUser.uid), { ...data, updatedAt: Date.now() }, ...(mine ? [] : [{ merge: true }]))
             .catch(e => { console.warn('房間狀態更新失敗：', e); lastProfile = ''; });
     }, 300);
 }
@@ -4658,6 +4689,7 @@ async function loadRoomProfile(user) {
         const snap = await fb.fs.getDoc(fb.fs.doc(fb.db, 'profiles', user.uid));
         if (snap.exists()) {
             const p = snap.data();
+            if (!profiles[user.uid]) profiles[user.uid] = p;   // 先知道雲端上自己的狀態（別台裝置可能正在讀），才不會被這台蓋掉
             roomPref = { ...roomPref, enabled: true, name: roomPref.name || p.name || '', hidden: !!p.hidden, color: roomPref.color || (AV_COLORS.includes(p.color) ? p.color : '') };
             saveRoomPref();
         }
