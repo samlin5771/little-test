@@ -2588,6 +2588,14 @@ a.acct-row:hover { background: var(--surface-2); }
     .focus-wrap .focus-extra { grid-area: extra; align-self: start; margin: 10px 0 0; gap: 4px; }
     .focus-wrap .end-link { min-height: 34px; padding: 4px 6px; }
 }
+/* v57：右邊（輪數圓點、按鈕、工具列）整組跟圓環一起上下置中。
+   自由計時沒有輪數圓點時，按鈕原本會被排在圓環正中間、工具列掛在下面，整組看起來往下掉 */
+@media (orientation: landscape) and (max-height: 540px) {
+    .focus-wrap { grid-template-areas: "head head" "ring ." "ring dots" "ring btns" "ring extra" "ring ."; grid-template-rows: auto 1fr auto auto auto 1fr; }
+    .focus-wrap .round-dots { align-self: center; margin: 0 0 12px; }
+    .focus-wrap .focus-btns { align-self: center; margin: 0; }
+    .focus-wrap .focus-extra { align-self: center; margin: 12px 0 0; }
+}
 @media (orientation: landscape) and (max-height: 540px) {
     .focus-wrap .min-tip { white-space: nowrap; max-width: none; }
     .focus-wrap .focus-btns { flex-wrap: nowrap; gap: 10px; }
