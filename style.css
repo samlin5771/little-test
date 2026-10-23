@@ -1504,6 +1504,8 @@ body.chat-open .toast { bottom: calc(86px + env(safe-area-inset-bottom)); }
 
 /* --- 流暢度 --- */
 html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影響捲動 */
+/* v57：關掉整頁的橡皮筋回彈。iPhone 滑到最底再往上拉時，會把固定在下面的分頁列一起拉起來、下面露出空白 */
+html, body { overscroll-behavior-y: none; }
 .bg-glow { contain: strict; }
 .g-sec { content-visibility: auto; contain-intrinsic-size: auto 900px; }   /* 導覽頁：看不到的段落先不畫 */
 .event-list, .todo-list, .seats { contain: layout paint; }
