@@ -4608,7 +4608,7 @@ function renderPoke() {
     let btn;
     if (me) btn = '<p class="pk-note">這是你自己</p>';
     else if (s.phase === 'focus' && !s.paused) btn = '<button class="pk-btn done" disabled>他正在讀書中 📖</button>';
-    else if (left > 0) btn = `<button class="pk-btn done" disabled>已經叫過了 ✓（${Math.ceil(left / 60000)} 分鐘後可以再叫）</button>`;
+    else if (left > 0) btn = `<button class="pk-btn done" disabled>已經叫過了✓（${Math.ceil(left / 60000)} 分鐘後可再試）</button>`;
     else btn = '<button class="pk-btn" data-pk="go">📣 叫他讀書！</button>';
     const sub = s.phase === 'focus' ? `${s.subject != null ? SUBJECTS[s.subject] : ''}${s.paused ? '暫停中' : '專注中'}` : s.phase === 'break' ? '番茄鐘休息中' : s.min > 0 ? '休息中' : '今天還沒開始';
     pop.innerHTML = `<div class="pk-head"><span class="pk-av" style="background:${avColor(u)}">${esc(firstGlyph(name))}</span><div class="pk-who"><b>${esc(name)}${me ? '（你）' : ''}</b><small>${esc(sub)}</small></div></div>
