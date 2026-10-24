@@ -1706,7 +1706,7 @@ html, body { overscroll-behavior-y: none; }
 .np-btns { display: flex; gap: 7px; }
 .np-btns button { flex: 1; height: 34px; border-radius: 17px; border: none; font-size: 12.5px; font-weight: 700; background: rgba(242, 240, 233, 0.12); color: #F2F0E9; font-family: 'Noto Sans TC', sans-serif; }
 .np-btns button.go { background: var(--accent); color: var(--on-accent); }
-.npill.open { width: min(400px, calc(100vw - 28px)); height: 166px; border-radius: 28px; padding: 2px 12px 0; cursor: default; }
+.npill.open { width: min(400px, calc(100vw - 28px)); height: 166px; /* 實際高度由程式照內容設定 */ border-radius: 28px; padding: 2px 12px 0; cursor: default; }
 .npill.open .np-t { white-space: nowrap; }
 .npill.open .np-exp { opacity: 1; transition-delay: 0.12s; }
 @media (prefers-reduced-motion: reduce) {
@@ -2769,3 +2769,120 @@ body.cal-tt .cal-layout, body.cal-tt #calFab { display: none !important; }
 .push-time .field { width: auto; min-width: 96px; margin: 0; padding-top: 8px; padding-bottom: 8px; }
 .push-time .field:disabled { opacity: .45; }
 .push-off { margin-top: 6px; padding-left: 0; color: var(--exam-text); }
+
+/* v62 待辦：選了日期之後的時間列 */
+.todo-time-row { display: flex; align-items: center; gap: 6px; margin: -2px 0 10px; flex-wrap: wrap; }
+.todo-time-row[hidden] { display: none; }
+.todo-time-btn { height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); color: var(--muted);
+    display: inline-flex; align-items: center; gap: 6px; font: 600 13px 'Noto Sans TC', 'Manrope', sans-serif; }
+.todo-time-btn svg { width: 17px; height: 17px; }
+.todo-time-btn.has { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); font-family: 'Manrope', 'Noto Sans TC', sans-serif; font-size: 14px; }
+.todo-time-row .todo-date-x { width: 30px; height: 30px; color: var(--muted); }
+.todo-time-hint { font-size: 12px; color: var(--faint); font-family: 'Noto Sans TC', sans-serif; }
+.todo-time-hint[hidden] { display: none; }
+
+/* =====================================================
+ * v62：通知設定頁、時間滾輪、叫朋友讀書
+ * ===================================================== */
+.nf-body { padding-top: 4px; }
+.nf-sec { margin: 22px 0 0; }
+.nf-sec:first-child { margin-top: 16px; }
+.nf-sec > h3 { margin: 0 0 8px 6px; font-size: 12.5px; font-weight: 700; color: var(--muted); letter-spacing: .06em; font-family: 'Noto Sans TC', sans-serif; }
+.nf-foot { margin: 8px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.6; font-family: 'Noto Sans TC', sans-serif; }
+.nf-card { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; }
+.nf-dev { display: flex; align-items: center; gap: 12px; padding: 14px 16px; font-family: 'Noto Sans TC', sans-serif; }
+.nf-dev .dot { width: 10px; height: 10px; border-radius: 5px; background: var(--mark-green); box-shadow: 0 0 0 4px var(--mark-green-bg); flex-shrink: 0; margin: 0 4px; }
+.nf-dev .dot.off { background: var(--faint); box-shadow: 0 0 0 4px var(--surface-2); }
+.nf-dev .btn { flex-shrink: 0; }
+.nf-test { width: 100%; margin-top: 10px; }
+.nf-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; min-height: 64px; cursor: pointer; font-family: 'Noto Sans TC', sans-serif; position: relative; }
+.nf-card > * + .nf-row { border-top: 1px solid var(--line); }
+.nf-ic { width: 34px; height: 34px; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); flex-shrink: 0; }
+.nf-ic svg { width: 19px; height: 19px; }
+.nf-tx { flex: 1; min-width: 0; font-family: 'Noto Sans TC', sans-serif; }
+.nf-tx b { display: block; font-size: 15px; font-weight: 700; line-height: 1.35; }
+.nf-tx small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.5; }
+.nf-row input { position: absolute; opacity: 0; pointer-events: none; }
+.nf-sw { width: 48px; height: 29px; border-radius: 15px; background: var(--surface-2); border: 1px solid var(--line); position: relative; flex-shrink: 0; transition: background .2s, border-color .2s; }
+.nf-sw::after { content: ''; position: absolute; top: 3px; left: 3px; width: 21px; height: 21px; border-radius: 11px; background: var(--text); opacity: .75; transition: transform .22s cubic-bezier(0.22, 1, 0.36, 1), background .2s; }
+.nf-row input:checked + .nf-sw { background: var(--accent); border-color: var(--accent); }
+.nf-row input:checked + .nf-sw::after { transform: translateX(19px); background: var(--on-accent); opacity: 1; }
+.nf-row input:focus-visible + .nf-sw { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 開關下面的細項：從文字開頭那條線對齊；值一律靠右、同樣寬度 */
+.nf-sub { padding: 0 16px 12px 62px; display: flex; flex-direction: column; gap: 8px; margin-top: -4px; }
+.nf-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; font-size: 13.5px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
+.nf-line > span { min-width: 0; line-height: 1.45; }
+.nf-line.col { flex-direction: column; align-items: stretch; gap: 8px; min-height: 0; padding-top: 2px; }
+.nf-val { flex-shrink: 0; min-width: 104px; height: 40px; padding: 0 8px 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg);
+    display: inline-flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--text);
+    font: 700 15px 'Manrope', 'Noto Sans TC', sans-serif; font-variant-numeric: tabular-nums; cursor: pointer; }
+.nf-val span { white-space: nowrap; }
+.nf-val svg { width: 16px; height: 16px; color: var(--faint); flex-shrink: 0; }
+.nf-val:active { transform: scale(0.97); }
+.nf-warn { margin: -2px 0 0; font-size: 12px; color: var(--exam-text); font-family: 'Noto Sans TC', sans-serif; text-align: right; }
+.nf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.nf-chip { height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border-radius: 16px; border: 1px solid var(--line); background: var(--bg); color: var(--muted); font: 600 12.5px 'Noto Sans TC', sans-serif; }
+.nf-chip i { width: 7px; height: 7px; border-radius: 4px; }
+.nf-chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); font-weight: 700; }
+.nf-style.notify-grid { padding: 12px 14px 4px; }
+.nf-card .nt-try { margin: 0 14px 12px; }
+/* 時間滾輪 */
+.wh-note { margin: -8px 0 10px; font-size: 12.5px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
+.wh-note[hidden] { display: none; }
+.wh-cols { display: grid; align-items: center; gap: 8px; margin: 4px 0 14px; }
+.wh-sep { font-size: 26px; font-weight: 800; color: var(--muted); font-family: 'Manrope', sans-serif; }
+.wh-col { height: 200px; overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none; border-radius: 16px; background: var(--surface); position: relative; overscroll-behavior: contain; outline: none;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent); }
+.wh-col::-webkit-scrollbar { display: none; }
+.wh-col:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.wh-pad { height: 80px; }
+.wh-item { height: 40px; display: flex; align-items: center; justify-content: center; gap: 3px; scroll-snap-align: center; font: 600 20px 'Manrope', 'Noto Sans TC', sans-serif; color: var(--faint); cursor: pointer; font-variant-numeric: tabular-nums; }
+.wh-item small { font-size: 13px; font-weight: 600; font-family: 'Noto Sans TC', sans-serif; }
+.wh-item.on { color: var(--text); font-size: 26px; font-weight: 800; }
+.wh-cols::before { content: none; }
+.wh-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.wh-quick button { height: 34px; padding: 0 13px; border-radius: 17px; border: 1px solid var(--line); background: transparent; color: var(--text); font: 600 13px 'Manrope', 'Noto Sans TC', sans-serif; }
+.wh-quick button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
+.wh-sheet .sheet-btns { margin-top: 14px; }
+/* 房間：點朋友的頭像 */
+.pk-pop { position: absolute; z-index: 60; width: 248px; padding: 14px; border-radius: 20px; background: var(--modal-bg); border: 1px solid var(--line); box-shadow: var(--shadow); font-family: 'Noto Sans TC', sans-serif; animation: pkIn .18s ease-out; }
+.pk-pop[hidden] { display: none; }
+.pk-pop::before { content: ''; position: absolute; top: -7px; left: var(--ax, 50%); width: 12px; height: 12px; background: var(--modal-bg); border-left: 1px solid var(--line); border-top: 1px solid var(--line); transform: translateX(-50%) rotate(45deg); }
+.pk-pop.up::before { top: auto; bottom: -7px; transform: translateX(-50%) rotate(225deg); }
+@keyframes pkIn { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
+.pk-head { display: flex; align-items: center; gap: 10px; }
+.pk-av { width: 40px; height: 40px; border-radius: 20px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 16px; flex-shrink: 0; }
+.pk-who { min-width: 0; }
+.pk-who b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pk-who small { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
+.pk-stat { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 12px 0; }
+.pk-stat div { padding: 8px 6px; border-radius: 12px; background: var(--surface); text-align: center; }
+.pk-stat b { display: block; font-size: 16px; font-weight: 800; }
+.pk-stat b small { font-size: 11px; font-weight: 600; margin-left: 1px; font-family: 'Noto Sans TC', sans-serif; }
+.pk-stat span { font-size: 11px; color: var(--muted); }
+.pk-btn { width: 100%; min-height: 44px; padding: 6px 10px; border-radius: 22px; border: none; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 14.5px; font-family: 'Noto Sans TC', sans-serif; line-height: 1.35; }
+.pk-btn.done { background: var(--surface-2); color: var(--muted); font-size: 13px; }
+.pk-btn:not(:disabled):active { transform: scale(0.97); }
+.pk-note { margin: 8px 0 0; text-align: center; font-size: 11.5px; color: var(--faint); line-height: 1.5; }
+.seat { cursor: pointer; }
+/* 通知上面「回覆了你」那一行 */
+.nb-q { margin-top: 2px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-exp p.np-q { font-size: 12px; color: rgba(242, 240, 233, 0.6); -webkit-line-clamp: 1; }
+/* v62 導覽：通知設定示意圖 */
+.g-nfp { gap: 5px; }
+.g-nfdev { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.g-nfdev i { width: 6px; height: 6px; border-radius: 3px; background: var(--mark-green); box-shadow: 0 0 0 3px var(--mark-green-bg); flex-shrink: 0; }
+.g-nfdev b { display: block; font-size: 10px; }
+.g-nfdev small { font-size: 8.5px; color: var(--muted); }
+.g-nfh { margin: 4px 0 0 2px; font-size: 8.5px; font-weight: 700; color: var(--muted); letter-spacing: .05em; }
+.g-nfr { display: flex; align-items: center; justify-content: space-between; padding: 5px 9px; border-radius: 8px; background: var(--surface); font-size: 10px; }
+.g-nfr.sub { background: transparent; padding: 0 9px 0 18px; color: var(--muted); font-size: 9px; }
+.g-nfr u { width: 22px; height: 13px; border-radius: 7px; background: var(--surface-2); position: relative; }
+.g-nfr u.on { background: var(--accent); }
+.g-nfr u::after { content: ''; position: absolute; top: 2px; left: 2px; width: 9px; height: 9px; border-radius: 5px; background: var(--bg); }
+.g-nfr u.on::after { left: 11px; }
+.g-nfr em { font-style: normal; font-weight: 700; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-family: 'Manrope', sans-serif; }
+
+/* 叫朋友讀書小卡：橫的手機放在頭像旁邊 */
+.pk-pop.side-r::before, .pk-pop.side-l::before { top: var(--ay, 50%); left: -7px; transform: translateY(-50%) rotate(-45deg); }
+.pk-pop.side-l::before { left: auto; right: -7px; transform: translateY(-50%) rotate(135deg); }

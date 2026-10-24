@@ -47,7 +47,7 @@ const FIREBASE_VER = '12.19.0';
 // v61 推播：Firebase 主控台 → 專案設定 → Cloud Messaging → Web Push 憑證 的「金鑰組」（公開的，可以放在這裡）
 const VAPID_KEY = 'BGD80hd0Xdk6Irow67T2c0x6txEOqT_dnwv3r5IaByGhq86PDQm47egvg_Dni2uHyRfv_ZSECzdnpFc_Fs0wagE';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v61';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v63';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -63,7 +63,7 @@ const LS = {
     install: 'study_install_seen', tour: 'study_tour_seen', chatSeen: 'study_chat_seen', photoCount: 'study_photo_count',
     countdowns: 'study_countdowns', home: 'study_home', progView: 'study_prog_view', sylOpen: 'study_syl_open',
     lastActive: 'study_last_active', cloud: 'study_cloud_cache',
-    tt: 'study_timetable', calView: 'study_cal_view', heat: 'study_heat_range', seenVer: 'study_seen_ver', push: 'study_push', pushId: 'study_push_id'   // v60 課表、行事曆／課表切換、熱力圖範圍
+    tt: 'study_timetable', calView: 'study_cal_view', heat: 'study_heat_range', seenVer: 'study_seen_ver', push: 'study_push', pushId: 'study_push_id', notif: 'study_notif', pokes: 'study_pokes'   // v60 課表、行事曆／課表切換、熱力圖範圍
 };   // 這台裝置存的所有設定都在這裡（改名字會讓舊資料讀不到，不要改）
 // 沒有頭像時的預設圖（顏色跟著主題色）
 function defaultAvatar() {
@@ -209,7 +209,7 @@ function normalize(raw = {}) {
     return {
         todos: (raw.todos || []).map(t => typeof t === 'string'
             ? { id: uid(), text: t }
-            : { id: t.id || uid(), text: t.text || '', ...(/^\d{4}-\d{2}-\d{2}$/.test(t.date || '') ? { date: t.date } : {}) }),
+            : { id: t.id || uid(), text: t.text || '', ...(/^\d{4}-\d{2}-\d{2}$/.test(t.date || '') ? { date: t.date, ...(/^([01]\d|2[0-3]):[0-5]\d$/.test(t.time || '') ? { time: t.time } : {}) } : {}) }),
         events: (raw.events || []).filter(e => e && e.start).map(e => ({
             id: String(e.id || uid()), title: e.title || '', start: String(e.start).slice(0, 10), important: !!e.important,
             ...(e.end && String(e.end).slice(0, 10) > String(e.start).slice(0, 10) ? { end: String(e.end).slice(0, 10) } : {})
@@ -482,7 +482,7 @@ function setFold(row, fold, open) {
     $(fold).inert = !open;
     $(row).setAttribute('aria-expanded', open);
 }
-function closeFolds() { setFold('accentRow', 'accentFold', false); setFold('bgRow', 'bgFold', false); setFold('notifyRow', 'notifyFold', false); if ($('pushFold')) setFold('pushRow', 'pushFold', false); }
+function closeFolds() { setFold('accentRow', 'accentFold', false); setFold('bgRow', 'bgFold', false); }
 $('accentRow').addEventListener('click', () => setFold('accentRow', 'accentFold', !$('accentFold').classList.contains('open')));
 
 $('themeBtn').addEventListener('click', () => {
@@ -691,7 +691,8 @@ function savePrefs() {
     clearTimeout(prefsTimer);
     prefsTimer = setTimeout(() => {
         fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), {
-            prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow', notify: localStorage.getItem(LS.notify) || 'banner', home: homePref, tt }
+            prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow', notify: localStorage.getItem(LS.notify) || 'banner', home: homePref, tt, notif,
+                room: { name: roomPref.name || '', color: AV_COLORS.includes(roomPref.color) ? roomPref.color : '', hidden: !!roomPref.hidden } }
         }, { mergeFields: ['prefs'] }).catch(e => console.warn('設定同步失敗：', e));
     }, 400);
 }
@@ -707,6 +708,19 @@ function applyCloudPrefs(p) {
         const x = normTT(p.tt);
         if (JSON.stringify(x) !== JSON.stringify(tt)) { tt = x; lsSet(LS.tt, tt); renderTT(); renderHomeClass(); }
     } else if (ttHasData()) savePrefs();
+    // v62 通知設定、房間暱稱也跟著帳號（新登入、換裝置都一樣）
+    if (p.notif && typeof p.notif === 'object') {
+        const x = normNotif(p.notif);
+        if (JSON.stringify(x) !== JSON.stringify(notif)) { notif = x; lsSet(LS.notif, notif); renderNotif(); renderNotifRow(); }
+        schedSync();
+    } else savePrefs();
+    if (p.room && typeof p.room === 'object') {
+        const nm = String(p.room.name || '').slice(0, 20), col = AV_COLORS.includes(p.room.color) ? p.room.color : '';
+        if (nm !== (roomPref.name || '') || col !== (roomPref.color || '') || !!p.room.hidden !== !!roomPref.hidden) {
+            roomPref = { ...roomPref, name: nm, color: col, hidden: !!p.room.hidden }; saveRoomPref();
+            publishProfile(); renderRoom(); renderHomeRoom();
+        }
+    }
     if (p.home) {   // 首頁排法也跟著帳號
         const h = normHome(p.home);
         if (JSON.stringify(h) !== JSON.stringify(homePref)) { homePref = h; lsSet(LS.home, h); applyHome(); }
@@ -723,16 +737,8 @@ function applyNotify(k) {
     notifyStyle = NOTIFY_NAME[k] ? k : 'banner';
     lsSet(LS.notify, notifyStyle);
     document.querySelectorAll('.notify-opt').forEach(b => { const on = b.dataset.notify === notifyStyle; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on); });
-    $('notifyName').textContent = NOTIFY_NAME[notifyStyle];
 }
 applyNotify(notifyStyle);
-$('notifyRow').addEventListener('click', () => setFold('notifyRow', 'notifyFold', !$('notifyFold').classList.contains('open')));
-$('notifyGrid').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-notify]');
-    if (!b) return;
-    applyNotify(b.dataset.notify); savePrefs(); demoNotice();
-});
-$('notifyTry').addEventListener('click', demoNotice);
 function demoNotice() {
     showChatNotice({ code: null, uid: 'demo', name: '同學', room: '讀書房間', text: '這是訊息通知的樣子，點一下就會打開聊天室；往上滑可以關掉。', count: 2 });
 }
@@ -747,11 +753,26 @@ function hideNotice(immediate) {
     clearTimeout(notice.timer);
     if (!el) return;
     el.classList.remove('show', 'open', 'dragging');
+    el.style.height = '';
     el.style.transform = '';
     clearTimeout(notice.hideTimer);
     // 等滑出動畫跑完才設成 hidden；中途又有新通知就不會被藏起來
     notice.hideTimer = setTimeout(() => { if (!el.classList.contains('show')) el.hidden = true; }, immediate ? 0 : 520);
     notice.el = null;
+}
+// 膠囊展開：高度照內容（訊息一行或兩行、有沒有「回覆了你」），下面不會多出空白
+function openPill(el) {
+    el.classList.add('open');
+    const exp = el.querySelector('.np-exp'), row = el.querySelector('.np-row');
+    if (!exp || !row) return;
+    // 展開時寬度會變（動畫），先用展開後的寬度量好內容高度
+    const w = Math.min(400, document.documentElement.clientWidth - 28) - 24;
+    const probe = exp.cloneNode(true);
+    probe.style.cssText = `position:absolute;left:0;top:0;width:${w}px;visibility:hidden;opacity:0;pointer-events:none;box-sizing:border-box`;
+    el.appendChild(probe);
+    const h = probe.offsetHeight;
+    probe.remove();
+    el.style.height = Math.ceil(2 + row.offsetHeight + h + 14) + 'px';
 }
 function armNotice(ms) { clearTimeout(notice.timer); notice.timer = setTimeout(() => hideNotice(), ms); }
 function showChatNotice(d) {
@@ -762,18 +783,19 @@ function showChatNotice(d) {
     const g = esc(firstGlyph(d.name || '同學'));
     const more = d.count > 1 ? d.count - 1 : 0;
     if (notifyStyle === 'pill') {
-        el.innerHTML = `<div class="np-row"><span class="np-av" style="${av}">${g}</span><span class="np-t">${esc(d.name || '同學')}：${esc(d.text)}</span>${d.count > 0 ? `<span class="np-n">${d.count > 99 ? '99+' : d.count}</span>` : ''}</div>
-            <div class="np-exp"><small>${esc(d.room || '')} · 剛剛</small><p>${esc(d.text)}</p>
-            <div class="np-btns"><button data-np="later">稍後</button><button class="go" data-np="open">打開聊天室</button></div></div>`;
+        const lead = d.reply ? `回覆了你：「${d.reply}」` : '';
+        el.innerHTML = `<div class="np-row"><span class="np-av" style="${av}">${g}</span><span class="np-t">${esc(d.name || '同學')}${lead ? ' 回覆了你' : ''}：${esc(d.text)}</span>${d.count > 0 ? `<span class="np-n">${d.count > 99 ? '99+' : d.count}</span>` : ''}</div>
+            <div class="np-exp"><small>${esc(d.room || '')} · 剛剛</small>${lead ? `<p class="np-q">${esc(lead)}</p>` : ''}<p>${esc(d.text)}</p>
+            <div class="np-btns"><button data-np="later">稍後</button><button class="go" data-np="open">${d.kind === 'poke' ? '開始讀書' : '打開聊天室'}</button></div></div>`;
         el.setAttribute('aria-label', `${d.name}：${d.text}`);
     } else {
         el.innerHTML = `<span class="nb-av" style="${av}">${g}<span class="nb-room">${ICON_CHAT_SM}</span></span>
             <div class="nb-tx"><div class="nb-hd"><b>${esc(d.name || '同學')}</b><small>${esc(d.room || '')}</small><em>剛剛</em></div>
-            <div class="nb-msg">${esc(d.text)}</div>${more ? `<div class="nb-more">還有 ${more} 則新訊息</div>` : ''}</div><span class="nb-grab"></span>`;
+            ${d.reply ? `<div class="nb-q">回覆了你：「${esc(d.reply)}」</div>` : ''}<div class="nb-msg">${esc(d.text)}</div>${more ? `<div class="nb-more">還有 ${more} 則新訊息</div>` : ''}</div><span class="nb-grab"></span>`;
     }
     notice.data = d;
     clearTimeout(notice.hideTimer);
-    el.classList.remove('open', 'dragging'); el.style.transform = '';
+    el.classList.remove('open', 'dragging'); el.style.transform = ''; el.style.height = '';
     const wasShown = el.classList.contains('show');
     el.hidden = false;
     if (!wasShown) { void el.offsetWidth; }   // 先畫出收起的位置，再加 show 才會有滑下來的動畫
@@ -782,8 +804,9 @@ function showChatNotice(d) {
     armNotice(notifyStyle === 'pill' ? 5000 : 4200);
 }
 function openNoticeChat() {
-    const code = notice.data?.code;
+    const d = notice.data, code = d?.code;
     hideNotice();
+    if (d?.kind === 'poke') { focusMin = false; showTab('tab-timer'); return; }   // 朋友叫你讀書：打開計時
     if (code) openChat(code);
 }
 // 手勢：點一下＝打開（膠囊是展開），往上滑＝關掉；按著的時候不會自動收起
@@ -809,7 +832,7 @@ function openNoticeChat() {
             if (moved && dy < -28) { hideNotice(); return; }
             el.style.transform = '';
             if (!moved) {
-                if (id === 'nPill' && !el.classList.contains('open')) { el.classList.add('open'); armNotice(6500); return; }
+                if (id === 'nPill' && !el.classList.contains('open')) { openPill(el); armNotice(6500); return; }
                 if (id === 'nBanner') { openNoticeChat(); return; }
             }
             armNotice(el.classList.contains('open') ? 6500 : 3000);
@@ -839,6 +862,7 @@ function showTab(id) {
     $('pageTitle').textContent = { 'tab-stats': '讀書統計', 'tab-room': '讀書房間', 'tab-ai': 'AI 讀書計畫', 'tab-syllabus': '學測範圍' }[id] || btn.dataset.title;
     document.body.classList.toggle('sub', !!SUB[id] && id !== 'tab-syllabus');   // 學測範圍和每週進度是並排切換，不需要返回鍵   // 子頁面：頂部左邊出現返回鍵
     $('topExtra').innerHTML = '';
+    try { if (pokeFor) closePoke(); } catch (e) {}   // 換頁時收起朋友小視窗
     if (id === 'tab-stats') renderStats();
     if (id === 'tab-calendar') applyCalView();
     if (id === 'tab-countdown') tick();
@@ -862,7 +886,7 @@ tabBtns.forEach(b => b.addEventListener('click', () => {
 function setTopExtra(tab, html) { if (document.body.dataset.tab === tab) $('topExtra').innerHTML = html; }
 function goBack() {
     const tab = document.body.dataset.tab;
-    if (tab === 'tab-room' && roomView) { roomView = null; renderRoom(); window.scrollTo({ top: 0 }); return; }
+    if (tab === 'tab-room' && roomView) { try { if (pokeFor) closePoke(); } catch (e) {} roomView = null; renderRoom(); window.scrollTo({ top: 0 }); return; }
     showTab(tab === 'tab-ai' ? 'tab-weekly' : 'tab-timer');
 }
 $('backBtn').addEventListener('click', goBack);
@@ -882,7 +906,7 @@ $('topExtra').addEventListener('click', (e) => {
 const syncScrollLock = () => document.body.classList.toggle('modal-open', !!document.querySelector('.modal.open'));
 function openModal(id) {
     // 個人設定：每次打開都從最上面（帳號資料）開始；順便先在背景載好隱私權政策，點進去不用等
-    if (id === 'accountModal') { const sh = $(id).querySelector('.sheet'); if (sh) sh.scrollTop = 0; setTimeout(preloadPrivacy, 400); renderPushRow(); }
+    if (id === 'accountModal') { const sh = $(id).querySelector('.sheet'); if (sh) sh.scrollTop = 0; setTimeout(preloadPrivacy, 400); renderNotifRow(); }
     $(id).classList.add('open'); syncScrollLock();
 }
 function closeModal(id) {
@@ -1843,14 +1867,15 @@ function todoDateText(ds) {
     const diff = daysBetween(todayStr(), ds), d = parseYmd(ds);
     return diff === 0 ? '今天' : diff === 1 ? '明天' : diff === -1 ? '昨天' : `${d.getMonth() + 1}/${d.getDate()}（${WEEK_ZH[d.getDay()]}）`;
 }
-function todoDateTag(ds) {
+function todoDateTag(ds, tm) {
     if (!ds) return '';
     const diff = daysBetween(todayStr(), ds);
-    return `<span class="todo-date ${diff < 0 ? 'late' : diff === 0 ? 'today' : ''}">${diff < 0 ? '逾期 · ' : ''}${todoDateText(ds)}</span>`;
+    const late = diff < 0 || (diff === 0 && tm && tm < `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}`);
+    return `<span class="todo-date ${late ? 'late' : diff === 0 ? 'today' : ''}">${late ? '逾期 · ' : ''}${todoDateText(ds)}${tm ? ' ' + tm : ''}</span>`;
 }
 const todosOn = (ds) => state.todos.filter(t => t.date === ds);
 // 有日期的排前面（越早越前面），沒日期的照新增順序
-const sortedTodos = () => [...state.todos.filter(t => t.date).sort((a, b) => a.date.localeCompare(b.date)), ...state.todos.filter(t => !t.date)];
+const sortedTodos = () => [...state.todos.filter(t => t.date).sort((a, b) => (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99'))), ...state.todos.filter(t => !t.date)];
 function renderTodos() {
     $('todoList').innerHTML = state.todos.length
         ? sortedTodos().map(t => `
@@ -1861,7 +1886,7 @@ function renderTodos() {
                 </div>
                 <div class="swipe-fg">
                     <input type="checkbox" class="checkbox" aria-label="完成">
-                    <span class="text">${esc(t.text)}${todoDateTag(t.date)}</span>
+                    <span class="text">${esc(t.text)}${todoDateTag(t.date, t.time)}</span>
                     <button class="del-btn" aria-label="刪除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
                 </div>
             </li>`).join('') + '<li class="swipe-hint">往右滑完成，往左滑刪除</li>'
@@ -1893,20 +1918,36 @@ $('todoList').addEventListener('click', (e) => { if (e.target.closest('.del-btn'
 function addTodo() {
     const text = $('todoInput').value.trim();
     if (!text) return;
-    const date = $('todoDate').value;
-    state.todos.push({ id: uid(), text, ...(date ? { date } : {}) });
+    const date = $('todoDate').value, time = date ? todoTime : '';
+    state.todos.push({ id: uid(), text, ...(date ? { date, ...(time ? { time } : {}) } : {}) });
     $('todoInput').value = '';
     setTodoDate('');
     save(); renderTodosEverywhere();
-    if (date) toast(`已排在${todoDateText(date)}，行事曆上也看得到`);
+    if (date) toast(`已排在${todoDateText(date)}${time ? ' ' + time : ''}，行事曆上也看得到`);
 }
 // 待辦日期：按日曆圖示選日期，選好後顯示在按鈕上，按 ✕ 取消
+let todoTime = '';
 function setTodoDate(v) {
     $('todoDate').value = v || '';
     $('todoDateBtn').classList.toggle('has', !!v);
     $('todoDateLabel').textContent = v ? todoDateText(v).replace(/（.）/, '') : '';
     $('todoDateClear').hidden = !v;
+    $('todoTimeRow').hidden = !v;
+    if (!v) setTodoTime('');
 }
+function setTodoTime(v) {
+    todoTime = v || '';
+    $('todoTimeBtn').classList.toggle('has', !!todoTime);
+    $('todoTimeLabel').textContent = todoTime || '加上時間（可不選）';
+    $('todoTimeClear').hidden = !todoTime;
+    $('todoTimeHint').hidden = !!todoTime;
+}
+$('todoTimeBtn').addEventListener('click', async () => {
+    const now = new Date(), def = todoTime || `${pad(Math.min(23, now.getHours() + 1))}:00`;
+    const v = await pickTime('待辦時間', def, ['08:00', '12:00', '17:00', '20:00', '22:00']);
+    if (v) setTodoTime(v);
+});
+$('todoTimeClear').addEventListener('click', () => setTodoTime(''));
 $('todoDate').addEventListener('change', () => setTodoDate($('todoDate').value));
 $('todoDate').addEventListener('input', () => setTodoDate($('todoDate').value));
 // 電腦版：點透明的日期欄位不一定會打開日曆，直接叫出來
@@ -1950,7 +1991,7 @@ function otherDeviceStatus() {
     const t = p && (p.status === 'focus' ? p.startAt : p.status === 'break' ? p.breakStart : null);
     return t && !p.hidden && !ownStarts().includes(t) ? p : null;
 }
-const saveTimer = () => { lsSet(LS.timer, timer); noteOwnStart(); publishProfile(); };   // 同時更新讀書房間裡的狀態
+const saveTimer = () => { lsSet(LS.timer, timer); noteOwnStart(); publishProfile(); try { schedSync(); } catch (e) {} };   // 同時更新讀書房間裡的狀態
 // 另一個分頁改了計時或（沒登入時的）資料：這個分頁跟著更新，不會用舊的資料蓋回去
 window.addEventListener('storage', (e) => {
     if (e.key === LS.timer) {
@@ -1966,7 +2007,7 @@ window.addEventListener('storage', (e) => {
         state = loadLocal(); renderAll();
     }
 });
-const saveTpref = () => { lsSet(LS.tpref, tpref); try { pushSync(); } catch (e) {} };   // 每日目標也給每日提醒用
+const saveTpref = () => { lsSet(LS.tpref, tpref); try { schedSync(); } catch (e) {} };   // 每日目標也給每日提醒用
 
 const fmtClock = (ms) => {
     const sec = Math.max(0, Math.round(ms / 1000));
@@ -3620,6 +3661,7 @@ function roomStop() {
     if (roomUnsub) { roomUnsub(); roomUnsub = null; }
     profUnsubs.forEach(u => u()); profUnsubs = []; profKey = '';
     myRooms = []; profiles = {}; roomsLoaded = false; roomView = pendingRoom = null;
+    try { if (pokeFor) closePoke(); } catch (e) {}
     closeChat(); chatStopAll();
 }
 
@@ -3862,7 +3904,7 @@ let codeDraft = '';
 let roomRenderTimer = 0;
 function renderRoomSoon() {
     if (roomRenderTimer) return;
-    roomRenderTimer = setTimeout(() => { roomRenderTimer = 0; requestAnimationFrame(() => { renderRoom(); renderHomeRoom(); }); }, 120);
+    roomRenderTimer = setTimeout(() => { roomRenderTimer = 0; requestAnimationFrame(() => { renderRoom(); renderHomeRoom(); if (pokeFor) renderPoke(); }); }, 120);
 }
 // 內容跟上次一樣就不動畫面（不重新排版），只有真的變了才更新
 function setRoomHtml(el, html) {
@@ -4010,8 +4052,18 @@ function chatListen(code) {
     const q = fs.query(fs.collection(db, 'rooms', code, 'messages'), fs.orderBy('at', 'desc'), fs.limit(CHAT_LIMIT));
     c.unsub = fs.onSnapshot(q, (snap) => {
         const prevIds = new Set(c.msgs.map(m => m.id));
+        const prevReact = new Map(c.msgs.map(m => [m.id, m.reactions || {}]));
         c.msgs = snap.docs.map(d => ({ id: d.id, ...d.data() })).reverse();
         const fresh = c.first ? [] : c.msgs.filter(m => !prevIds.has(m.id) && m.uid !== currentUser?.uid && !m.recalled);
+        // v62：有人對「我的訊息」按了新的表情
+        if (!c.first && currentUser) {
+            const me = currentUser.uid;
+            c.msgs.forEach(m => {
+                if (m.uid !== me || m.recalled || !prevReact.has(m.id)) return;
+                const before = prevReact.get(m.id), after = m.reactions || {};
+                Object.keys(after).forEach(u => { if (u !== me && after[u] && after[u] !== before[u]) onReacted(code, m, u, after[u]); });
+            });
+        }
         c.first = false;
         onChatUpdate(code, fresh);
     }, (err) => {
@@ -4038,13 +4090,21 @@ function onChatUpdate(code, fresh) {
     if (!m || chatVisible(code)) return;
     const room = myRooms.find(x => x.id === code);
     const body = m.img ? '傳了一張照片' : m.text;
+    const replyMe = m.replyTo && m.replyTo.uid === currentUser?.uid ? (m.replyTo.img ? '照片' : String(m.replyTo.text || '').slice(0, 30)) : '';
     if (document.visibilityState === 'visible') {
-        showChatNotice({ code, uid: m.uid, name: m.name || '同學', room: room?.name || '讀書房間', text: body, count: unreadOf(code) });
+        showChatNotice({ code, uid: m.uid, name: m.name || '同學', room: room?.name || '讀書房間', text: body, count: unreadOf(code), reply: replyMe });
         device.vibrate(30);
     } else {
         document.title = `(${totalUnread()}) ${room?.name || BASE_TITLE}`;
         systemNotify(`${m.name || '同學'} · ${room?.name || '讀書房間'}`, body, code);
     }
+}
+// 有人對我的訊息按表情：網站開著、沒在看那個聊天室時，在畫面上方提醒
+function onReacted(code, m, u, emoji) {
+    if (chatVisible(code) || document.visibilityState !== 'visible' || !notif.react) return;
+    const room = myRooms.find(x => x.id === code);
+    const quote = m.img ? '照片' : String(m.text || '').slice(0, 24);
+    showChatNotice({ code, uid: u, name: memberName({ u, p: profiles[u] }), room: room?.name || '讀書房間', text: `對你的訊息按了 ${emoji}：「${quote}」`, count: 0, kind: 'react' });
 }
 // 分頁列「計時」上的紅點＝所有房間的未讀數
 function updateChatBadges() {
@@ -4058,7 +4118,7 @@ function updateChatBadges() {
 function systemNotify(title, body, code) {
     try {
         if (!('Notification' in window) || Notification.permission !== 'granted') return;
-        if (pushPref.on && pushPref.chat && localStorage.getItem(LS.pushId)) return;   // 有開推播：交給推播伺服器，不重複通知
+        if (pushOn() && notif.chat) return;   // 有開推播：交給推播伺服器，不重複通知
         const opt = { body: body.slice(0, 120), tag: 'room-' + code, renotify: true, icon: 'icon-192.png', badge: 'favicon-32.png', data: { room: code } };
         if (navigator.serviceWorker?.controller) navigator.serviceWorker.ready.then(reg => reg.showNotification(title, opt));
         else new Notification(title, opt);
@@ -4070,25 +4130,54 @@ navigator.serviceWorker?.addEventListener('message', (e) => {
 });
 
 /* =====================================================
- * v61 推播通知：網站沒開也收得到聊天訊息、每日讀書提醒
- *   這台裝置的推播 token 存在 Firestore 的 pushTokens（只有自己讀寫得到），由 Cloud Functions 發送
+ * v62 通知：推播（網站沒開也收得到）＋通知設定頁
+ *   每台裝置：pushTokens/{雜湊}（推播 token，只有自己讀寫得到）
+ *   每個帳號：通知設定存在 users/{uid}.prefs.notif（跟著帳號同步）
+ *            發送需要的資料整理成 pushSched/{uid}，由 Cloud Functions 每分鐘檢查、發送
  *   iPhone 要先「加入主畫面」，從主畫面打開才收得到（iOS 16.4 以上）
  * ===================================================== */
-let pushPref = Object.assign({ on: false, chat: true, daily: true, time: '20:00' }, lsGet(LS.push, {}));
-const PUSH_TIMES = ['18:00', '19:00', '20:00', '20:30', '21:00', '21:30', '22:00', '22:30'];
-if (!PUSH_TIMES.includes(pushPref.time)) pushPref.time = '20:00';
-const savePushPref = () => lsSet(LS.push, pushPref);
+const NOTIF_DEF = {
+    chat: true, reply: true, react: true, poke: true, pomo: true, focus: true,
+    daily: { on: true, time: '18:00' },
+    morning: { on: true, time: '07:00', keys: ['gsat', 'next'] },
+    event: { on: true, days: 1, time: '20:00' },
+    todo: { on: true, lead: 60, day: '07:30' },
+    quiet: { on: true, from: '23:00', to: '06:30' }
+};
+const hmOk = (t) => typeof t === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
+const hmMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+const minHm = (m) => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
+function normNotif(x) {
+    const d = NOTIF_DEF, o = (x && typeof x === 'object') ? x : {};
+    const b = (v, def) => typeof v === 'boolean' ? v : def;
+    const t = (v, def) => hmOk(v) ? v : def;
+    const n = (v, lo, hi, def) => Number.isInteger(v) && v >= lo && v <= hi ? v : def;
+    return {
+        chat: b(o.chat, d.chat), reply: b(o.reply, d.reply), react: b(o.react, d.react), poke: b(o.poke, d.poke), pomo: b(o.pomo, d.pomo), focus: b(o.focus, d.focus),
+        daily: { on: b(o.daily?.on, d.daily.on), time: t(o.daily?.time, d.daily.time) },
+        morning: { on: b(o.morning?.on, d.morning.on), time: t(o.morning?.time, d.morning.time),
+            keys: Array.isArray(o.morning?.keys) ? o.morning.keys.filter(k => typeof k === 'string').slice(0, 4) : d.morning.keys.slice() },
+        event: { on: b(o.event?.on, d.event.on), days: n(o.event?.days, 0, 7, d.event.days), time: t(o.event?.time, d.event.time) },
+        todo: { on: b(o.todo?.on, d.todo.on), lead: n(o.todo?.lead, 0, 7 * 1440 + 23 * 60 + 55, d.todo.lead), day: t(o.todo?.day, d.todo.day) },
+        quiet: { on: b(o.quiet?.on, d.quiet.on), from: t(o.quiet?.from, d.quiet.from), to: t(o.quiet?.to, d.quiet.to) }
+    };
+}
+let notif = normNotif(lsGet(LS.notif, null));
+function saveNotif() { lsSet(LS.notif, notif); savePrefs(); schedSync(); renderNotif(); renderNotifRow(); }
+
+// 這台裝置的推播（開了沒）
+let pushPref = Object.assign({ on: false }, lsGet(LS.push, {}));
+const savePushPref = () => lsSet(LS.push, { on: !!pushPref.on });
 let pushMsg = null, pushBusy = false;
 function pushSupport() {
     if (!VAPID_KEY) return { ok: false, why: '推播即將開放，敬請期待' };
-    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-        return { ok: false, why: isIOS() && !isStandalone() ? '先用 Safari 把網站「加入主畫面」，從主畫面打開後才能開啟推播（iOS 16.4 以上）' : '這個瀏覽器不支援推播通知' };
-    }
-    if (isIOS() && !isStandalone()) return { ok: false, why: '先用 Safari 把網站「加入主畫面」，從主畫面打開後才能開啟推播' };
-    if (Notification.permission === 'denied') return { ok: false, why: '通知被關掉了：請到瀏覽器或手機的「設定」裡允許這個網站傳送通知' };
+    if (isIOS() && !isStandalone()) return { ok: false, why: '先用 Safari 把網站「加入主畫面」，從主畫面打開後才能開啟推播（iOS 16.4 以上）', install: true };
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return { ok: false, why: '這個瀏覽器不支援推播通知，換成 Chrome、Edge 或 Safari 試試' };
+    if (Notification.permission === 'denied') return { ok: false, why: '通知被封鎖了：請到手機或瀏覽器的「設定」裡，允許這個網站傳送通知' };
     return { ok: true };
 }
-// 推播資料的文件名稱：帳號＋token 的雜湊（不把 token 直接當名字）；舊瀏覽器沒有 crypto.subtle 時用簡單的雜湊
+const pushOn = () => !!(pushPref.on && localStorage.getItem(LS.pushId) && pushSupport().ok && Notification.permission === 'granted');
+// 推播資料的文件名稱：帳號＋token 的雜湊（舊瀏覽器沒有 crypto.subtle 時用簡單的雜湊）
 async function sha256(t) {
     try {
         const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
@@ -4107,59 +4196,62 @@ async function pushToken() {
     const reg = await navigator.serviceWorker.ready;
     return pushMsg.m.getToken(pushMsg.messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
 }
-// 把這台裝置的推播設定寫到雲端（伺服器照這份資料決定要不要通知）
-async function pushSave(extra) {
+async function pushSave() {
     if (!currentUser || !fb) return false;
     const token = await pushToken();
     if (!token) return false;
     const id = await sha256(currentUser.uid + ':' + token);
-    const [hh, mm] = pushPref.time.split(':').map(Number);
-    await fb.fs.setDoc(fb.fs.doc(fb.db, 'pushTokens', id), {
-        uid: currentUser.uid, token, platform: 'web', ios: isIOS(),
-        chat: !!pushPref.chat, daily: !!pushPref.daily, time: pushPref.time, hh, mm,
-        goal: tpref.goal || 180, updatedAt: Date.now(), ...(extra || {})
-    }, { merge: true });
+    await fb.fs.setDoc(fb.fs.doc(fb.db, 'pushTokens', id), { uid: currentUser.uid, token, platform: 'web', ios: isIOS(), updatedAt: Date.now() }, { merge: true });
     lsSet(LS.pushId, id);
     return true;
 }
 async function pushRemove() {
     const id = localStorage.getItem(LS.pushId);
-    if (!id || !fb || !currentUser) { try { localStorage.removeItem(LS.pushId); } catch (e) {} return; }
-    try { await fb.fs.deleteDoc(fb.fs.doc(fb.db, 'pushTokens', id)); } catch (e) {}
     try { localStorage.removeItem(LS.pushId); } catch (e) {}
+    if (!id || !fb || !currentUser) return;
+    try { await fb.fs.deleteDoc(fb.fs.doc(fb.db, 'pushTokens', id)); } catch (e) {}
 }
 async function enablePush() {
     if (pushBusy) return;
     const sup = pushSupport();
-    if (!sup.ok) { toast(sup.why); renderPushRow(); return; }
+    if (!sup.ok) { toast(sup.why); renderNotif(); return; }
     if (!currentUser) { toast('推播要先登入 Google 帳號'); return; }
-    pushBusy = true; renderPushRow();
+    pushBusy = true; renderNotif();
     try {
         const perm = await Notification.requestPermission();
         if (perm !== 'granted') { toast('沒有允許通知，推播沒有開啟'); return; }
         pushPref.on = true; savePushPref();
-        if (await pushSave({ activeUntil: 0 })) toast('已開啟推播通知');
-        else throw new Error('no-token');
+        if (!(await pushSave())) throw new Error('no-token');
+        schedSync(true);
+        toast('已開啟推播通知');
     } catch (e) {
         console.warn('開啟推播失敗：', e);
         pushPref.on = false; savePushPref();
         toast('開啟推播失敗，請稍後再試');
-    } finally { pushBusy = false; renderPushRow(); }
+    } finally { pushBusy = false; renderNotif(); renderNotifRow(); }
 }
 async function disablePush() {
     pushPref.on = false; savePushPref();
     await pushRemove();
-    renderPushRow(); toast('已關閉推播通知');
+    renderNotif(); renderNotifRow(); toast('這台裝置不會再收到推播');
 }
-// 設定改了（開關、提醒時間、每日目標）：更新雲端那份
-let pushSyncT = 0;
-function pushSync() {
-    if (!pushPref.on || !currentUser || !fb || !VAPID_KEY || Notification?.permission !== 'granted') return;
-    clearTimeout(pushSyncT);
-    pushSyncT = setTimeout(() => pushSave().catch(e => console.warn('推播設定同步失敗：', e)), 600);
+// 傳一則測試通知（伺服器上的 testPush）
+async function testPush() {
+    if (!pushOn()) { toast('先開啟這台裝置的推播'); return; }
+    const b = $('nfTest');
+    b.disabled = true; b.textContent = '傳送中…';
+    try {
+        const fm = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-functions.js`);
+        const call = fm.httpsCallable(fm.getFunctions(fb.app, 'asia-east1'), 'testPush');
+        const r = await call({});
+        toast(r.data?.sent ? `已送出到 ${r.data.sent} 台裝置，幾秒內會收到` : '沒有找到可以收推播的裝置，請關掉推播再開一次');
+    } catch (e) {
+        console.warn('測試通知失敗：', e);
+        toast('測試通知送不出去，伺服器可能還沒更新');
+    } finally { b.disabled = false; b.textContent = '傳一則測試通知'; }
 }
-// 正在用網站的時候，聊天訊息由網站自己顯示，不要再推播一次：每 3 分鐘告訴伺服器「我在」，離開時立刻取消
-let pushBeatT = 0, pushLastBeat = 0;
+// 正在用網站的時候，聊天訊息由網站自己顯示，不要再推播：每 3 分鐘告訴伺服器「我在」，離開時立刻取消
+let pushLastBeat = 0;
 function pushBeat(force) {
     const id = localStorage.getItem(LS.pushId);
     if (!id || !pushPref.on || !currentUser || !fb) return;
@@ -4169,30 +4261,431 @@ function pushBeat(force) {
     fb.fs.setDoc(fb.fs.doc(fb.db, 'pushTokens', id), { activeUntil: visible ? Date.now() + 240000 : 0 }, { merge: true }).catch(() => {});
 }
 document.addEventListener('visibilitychange', () => pushBeat(true));
-window.addEventListener('pagehide', () => { if (document.visibilityState !== 'visible') pushBeat(true); });
-clearInterval(pushBeatT); pushBeatT = setInterval(() => pushBeat(false), 30000);
-function renderPushRow() {
-    if (!$('pushState')) return;
-    const sup = pushSupport();
-    const on = pushPref.on && !!localStorage.getItem(LS.pushId) && sup.ok;
-    $('pushState').textContent = pushBusy ? '開啟中…' : on ? '已開啟' : '未開啟';
-    $('pushNote').textContent = !sup.ok ? sup.why : !currentUser ? '登入 Google 帳號後就能開啟。' : on ? '網站沒開也會通知你；正在用網站時，聊天訊息會照常顯示在畫面上方。' : '開啟後，網站沒開也收得到聊天訊息和讀書提醒。';
-    $('pushEnable').hidden = on || !sup.ok || !currentUser;
-    $('pushEnable').disabled = pushBusy;
-    $('pushOff').hidden = !on;
-    $('pushOpts').hidden = !on;
-    $('pushChat').checked = !!pushPref.chat;
-    $('pushDaily').checked = !!pushPref.daily;
-    $('pushTime').value = pushPref.time;
-    $('pushTime').disabled = !pushPref.daily;
+window.addEventListener('pagehide', () => pushBeat(true));
+setInterval(() => pushBeat(false), 30000);
+
+/* --- 給伺服器的排程資料 pushSched/{uid} --- */
+// 勿擾：這個時間（當天第幾分鐘）在不在勿擾時段裡
+function inQuiet(min) {
+    if (!notif.quiet.on) return false;
+    const f = hmMin(notif.quiet.from), t = hmMin(notif.quiet.to);
+    if (f === t) return false;
+    return f < t ? (min >= f && min < t) : (min >= f || min < t);
 }
-$('pushTime').innerHTML = PUSH_TIMES.map(t => `<option value="${t}">${t}</option>`).join('');
-$('pushRow').addEventListener('click', () => { renderPushRow(); setFold('pushRow', 'pushFold', !$('pushFold').classList.contains('open')); });
-$('pushEnable').addEventListener('click', enablePush);
-$('pushOff').addEventListener('click', disablePush);
-$('pushChat').addEventListener('change', (e) => { pushPref.chat = e.target.checked; savePushPref(); pushSync(); });
-$('pushDaily').addEventListener('change', (e) => { pushPref.daily = e.target.checked; savePushPref(); renderPushRow(); pushSync(); });
-$('pushTime').addEventListener('change', (e) => { pushPref.time = e.target.value; savePushPref(); pushSync(); });
+// 落在勿擾時段的提醒，延到勿擾結束
+function deferQuiet(ms) {
+    const d = new Date(ms), m = d.getHours() * 60 + d.getMinutes();
+    if (!inQuiet(m)) return ms;
+    const t = hmMin(notif.quiet.to), e = new Date(d);
+    e.setHours(Math.floor(t / 60), t % 60, 0, 0);
+    if (e.getTime() <= ms) e.setDate(e.getDate() + 1);
+    return e.getTime();
+}
+const atOn = (ds, hm) => { const d = parseYmd(ds); d.setHours(Number(hm.slice(0, 2)), Number(hm.slice(3, 5)), 0, 0); return d.getTime(); };
+const mdw = (ds) => { const d = parseYmd(ds); return `${d.getMonth() + 1}/${d.getDate()}（${WEEK_ZH[d.getDay()]}）`; };
+function fmtLead(min) {
+    const d = Math.floor(min / 1440), h = Math.floor(min % 1440 / 60), m = min % 60;
+    return [d ? `${d} 天` : '', h ? `${h} 小時` : '', m ? `${m} 分` : ''].filter(Boolean).join(' ') || '0 分';
+}
+// 接下來 60 天要發的一次性提醒（行程、考試、自己的倒數、待辦）
+function buildQueue(now = Date.now()) {
+    const out = [], t = todayStr(), limit = now + 60 * 86400000;
+    const push = (at, title, body, tab, id) => { at = deferQuiet(at); if (at > now && at < limit) out.push({ at, title: title.slice(0, 60), body: body.slice(0, 120), tab, id }); };
+    if (notif.event.on) {
+        const N = notif.event.days, when = N === 0 ? '今天' : N === 1 ? '明天' : `${N} 天後`;
+        const items = [
+            ...state.events.map(e => ({ id: 'e' + e.id, name: e.title || '行程', date: e.start, imp: e.important })),
+            ...examEntries.map(([k, e]) => ({ id: 'x' + k, name: e.name, date: e.date, exam: true })),
+            ...state.countdowns.items.map(c => ({ id: 'c' + c.id, name: c.name, date: cdNextDate(c) }))
+        ];
+        items.forEach(it => {
+            if (!it.date || it.date < t) return;
+            const d = parseYmd(it.date); d.setDate(d.getDate() - N);
+            push(atOn(ymd(d), notif.event.time), `${when}：${it.name}`, `${mdw(it.date)}${it.exam ? ' · 考試加油！' : it.imp ? ' · 重要' : ''}`, 'tab-calendar', it.id);
+        });
+    }
+    if (notif.todo.on) {
+        state.todos.forEach(td => {
+            if (!td.date || td.date < t) return;
+            if (td.time) {
+                const due = atOn(td.date, td.time), lead = notif.todo.lead;
+                push(due - lead * 60000, `待辦：${td.text}`, `${todoDateText(td.date)} ${td.time}${lead ? ` · 還有 ${fmtLead(lead)}` : ' · 就是現在'}`, 'tab-todo', 't' + td.id);
+            } else {
+                push(atOn(td.date, notif.todo.day), `待辦：${td.text}`, `${todoDateText(td.date)}要完成`, 'tab-todo', 't' + td.id);
+            }
+        });
+    }
+    return out.sort((a, b) => a.at - b.at).slice(0, 120);
+}
+// 早安倒數要倒數哪些
+function morningLists() {
+    const t = todayStr(), keys = notif.morning.keys;
+    const fixed = [], next = keys.includes('next')
+        ? examEntries.filter(([, e]) => e.date >= t).map(([, e]) => ({ name: e.name, date: e.date })).slice(0, 6) : [];
+    keys.forEach(k => {
+        if (k === 'next') return;
+        const c = getCd(k);
+        if (c && c.date >= t) fixed.push({ name: c.name, date: c.date });
+    });
+    return { fixed, next };
+}
+// 番茄鐘：這一輪什麼時候結束（暫停、自由計時、關掉提醒就是 null）
+function timerEndAt() {
+    if (!notif.pomo || timer.phase !== 'focus' || !timer.duration || timer.pausedAt) return null;
+    const end = timer.startAt + (timer.pausedTotal || 0) + timer.duration;
+    return end > Date.now() + 5000 ? end : null;   // 已經到時間的不用再排（避免伺服器重複通知）
+}
+// 讀書中（專注、沒暫停）到什麼時候：番茄鐘用這一輪結束的時間；自由計時最多算 4 小時（按結束就會清掉）
+function focusUntilAt() {
+    if (timer.phase !== 'focus' || timer.pausedAt) return null;
+    const end = timer.duration ? timer.startAt + (timer.pausedTotal || 0) + timer.duration : Date.now() + 4 * 3600000;
+    return end > Date.now() ? end : null;
+}
+let schedT = 0, schedSig = '';
+function schedSync(force) {
+    if (!currentUser || !fb || !cloudReady) return;
+    clearTimeout(schedT);
+    schedT = setTimeout(() => {
+        const q = buildQueue();
+        const mt = morningLists();
+        const end = timerEndAt();
+        const mode = MODES[timer.mode] || MODES[0];
+        const data = {
+            uid: currentUser.uid,
+            chat: notif.chat, reply: notif.reply, react: notif.react, poke: notif.poke,
+            focusMute: notif.focus, focusUntil: notif.focus ? focusUntilAt() : null,
+            quiet: notif.quiet.on ? { from: notif.quiet.from, to: notif.quiet.to } : null,
+            daily: notif.daily.on ? notif.daily.time : null, goal: tpref.goal || 180,
+            morning: notif.morning.on && (mt.fixed.length || mt.next.length) ? notif.morning.time : null, morningFixed: mt.fixed, morningNext: mt.next,
+            queue: q, queueMin: q.length ? q[0].at : null,
+            timerEnd: end, timerInfo: end ? { subject: SUBJECTS[timer.subject] || '', focus: Math.round(timer.duration / 60000), rest: mode.rest || 5 } : null
+        };
+        const sig = JSON.stringify(data);
+        if (!force && sig === schedSig) return;
+        schedSig = sig;
+        fb.fs.setDoc(fb.fs.doc(fb.db, 'pushSched', currentUser.uid), { ...data, updatedAt: Date.now() }, { merge: true })
+            .catch(e => { schedSig = ''; console.warn('推播排程更新失敗：', e); });
+    }, force ? 50 : 1500);
+}
+// 待辦、行程、倒數改了 → 更新排程；計時開始、暫停、結束也更新
+const _saveForSched = save;
+save = function () { _saveForSched.apply(this, arguments); schedSync(); };
+
+/* --- 時間滾輪（下方滑出）：時、分；也可以給「天 時 分」用 --- */
+let wheelDone = null;
+const WHEEL_H = 40;
+function wheelCol(values, cur, suffix) {
+    const i = Math.max(0, values.indexOf(cur));
+    return `<div class="wh-col" data-i="${i}" tabindex="0" role="listbox"><div class="wh-pad"></div>${values.map((v, k) => `<div class="wh-item${k === i ? ' on' : ''}" data-v="${v}" role="option">${v}${suffix ? `<small>${suffix}</small>` : ''}</div>`).join('')}<div class="wh-pad"></div></div>`;
+}
+function openWheel({ title, cols, quick, note }) {
+    $('whTitle').textContent = title;
+    $('whNote').textContent = note || '';
+    $('whNote').hidden = !note;
+    $('whCols').innerHTML = cols.map((c, k) => (k && c.sep ? `<span class="wh-sep">${c.sep}</span>` : '') + wheelCol(c.values, c.value, c.suffix)).join('');
+    $('whCols').style.gridTemplateColumns = cols.map((c, k) => (k && c.sep ? 'auto ' : '') + 'minmax(0, 1fr)').join(' ');
+    $('whQuick').innerHTML = (quick || []).map(q => `<button type="button" data-q="${esc(JSON.stringify(q.v))}">${esc(q.label)}</button>`).join('');
+    $('whQuickWrap').hidden = !(quick && quick.length);
+    openModal('wheelModal');
+    requestAnimationFrame(() => document.querySelectorAll('#whCols .wh-col').forEach(col => { col.scrollTop = Number(col.dataset.i) * WHEEL_H; markWheel(col); }));
+    markQuick();
+    return new Promise(res => { wheelDone = res; });
+}
+function wheelValues() { return [...document.querySelectorAll('#whCols .wh-col')].map(col => col.querySelectorAll('.wh-item')[Number(col.dataset.i)]?.dataset.v); }
+function markWheel(col) {
+    const items = col.querySelectorAll('.wh-item');
+    const i = Math.min(items.length - 1, Math.max(0, Math.round(col.scrollTop / WHEEL_H)));
+    col.dataset.i = i;
+    items.forEach((el, k) => el.classList.toggle('on', k === i));
+}
+function markQuick() {
+    const cur = JSON.stringify(wheelValues());
+    document.querySelectorAll('#whQuick [data-q]').forEach(b => b.classList.toggle('on', b.dataset.q === cur));
+}
+$('whCols').addEventListener('scroll', (e) => {
+    const col = e.target.closest?.('.wh-col');
+    if (!col) return;
+    markWheel(col);
+    clearTimeout(col._t);
+    col._t = setTimeout(() => { col.scrollTo({ top: Number(col.dataset.i) * WHEEL_H, behavior: 'smooth' }); markQuick(); }, 120);
+}, true);
+$('whCols').addEventListener('click', (e) => {
+    const it = e.target.closest('.wh-item');
+    if (!it) return;
+    const col = it.closest('.wh-col'), k = [...col.querySelectorAll('.wh-item')].indexOf(it);
+    col.scrollTo({ top: k * WHEEL_H, behavior: 'smooth' });
+});
+$('whCols').addEventListener('keydown', (e) => {
+    const col = e.target.closest('.wh-col');
+    if (!col || !['ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    e.preventDefault();
+    const n = col.querySelectorAll('.wh-item').length;
+    const k = Math.min(n - 1, Math.max(0, Number(col.dataset.i) + (e.key === 'ArrowDown' ? 1 : -1)));
+    col.scrollTo({ top: k * WHEEL_H, behavior: 'smooth' });
+});
+$('whQuick').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-q]');
+    if (!b) return;
+    const v = JSON.parse(b.dataset.q);
+    document.querySelectorAll('#whCols .wh-col').forEach((col, k) => {
+        const items = [...col.querySelectorAll('.wh-item')], idx = items.findIndex(x => x.dataset.v === v[k]);
+        if (idx >= 0) col.scrollTo({ top: idx * WHEEL_H, behavior: 'smooth' });
+    });
+    setTimeout(markQuick, 350);
+});
+$('whDone').addEventListener('click', () => { const v = wheelValues(); closeModal('wheelModal'); const f = wheelDone; wheelDone = null; f && f(v); });
+document.querySelectorAll('#wheelModal [data-close]').forEach(b => b.addEventListener('click', () => { const f = wheelDone; wheelDone = null; f && f(null); }));
+const HOURS = Array.from({ length: 24 }, (_, i) => pad(i));
+const MINS5 = Array.from({ length: 12 }, (_, i) => pad(i * 5));
+// 選一個時間（分鐘不是 5 的倍數就四捨五入到最近的 5 分）
+async function pickTime(title, cur, quick, note) {
+    const m5 = pad(Math.round(Number(cur.slice(3, 5)) / 5) * 5 % 60);
+    const v = await openWheel({ title, note, cols: [{ values: HOURS, value: cur.slice(0, 2) }, { values: MINS5, value: m5, sep: ':' }], quick: (quick || []).map(q => ({ label: q, v: [q.slice(0, 2), q.slice(3, 5)] })) });
+    return v ? `${v[0]}:${v[1]}` : null;
+}
+
+/* --- 通知設定頁（個人設定 →「通知」） --- */
+const NF_IC = {
+    chat: '<path d="M4 5.5h16v10H9l-5 4z"/>',
+    reply: '<path d="M10 8L5 12.5l5 4.5"/><path d="M5.5 12.5H14a5 5 0 0 1 5 5V19"/>',
+    react: '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.8h.01M15 9.8h.01"/>',
+    poke: '<path d="M4 10v4h3l6 4V6L7 10z"/><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"/>',
+    pomo: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/>',
+    daily: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>',
+    morning: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/>',
+    event: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+    todo: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>',
+    quiet: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+    focus: '<path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5z"/><path d="M12 6.5v13"/>',
+    bell: '<path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/>'
+};
+const nfIc = (k) => `<span class="nf-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${NF_IC[k]}</svg></span>`;
+const nfRow = (k, title, sub, on, path) => `<label class="nf-row">${nfIc(k)}<span class="nf-tx"><b>${title}</b><small>${sub}</small></span><input type="checkbox" role="switch" data-nf="${path}" ${on ? 'checked' : ''}><i class="nf-sw" aria-hidden="true"></i></label>`;
+const nfVal = (label, value, act, aria) => `<div class="nf-line"><span>${label}</span><button type="button" class="nf-val" data-nfa="${act}" aria-label="${aria || label}：${value.replace(/<[^>]+>/g, '')}"><span>${value}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 10l4 4 4-4"/></svg></button></div>`;
+function morningChips() {
+    const t = todayStr();
+    const opts = [{ k: 'gsat', name: EXAMS.gsat.name }, { k: 'next', name: '下一場考試' },
+        ...state.countdowns.items.map(c => ({ k: c.id, name: c.name, color: c.color }))].filter(o => o.k !== 'gsat' || EXAMS.gsat.date >= t);
+    return opts.map(o => { const on = notif.morning.keys.includes(o.k); return `<button type="button" class="nf-chip ${on ? 'on' : ''}" data-mk="${esc(o.k)}" aria-pressed="${on}">${o.color ? `<i style="background:${esc(o.color)}"></i>` : ''}${esc(o.name)}</button>`; }).join('');
+}
+function renderNotif() {
+    const el = $('nfBody');
+    if (!el || !$('notifScreen').classList.contains('open')) return;
+    const sup = pushSupport(), on = pushOn();
+    let dev;
+    if (!currentUser) dev = `<div class="nf-dev"><i class="dot off"></i><div class="nf-tx"><b>還沒登入</b><small>登入 Google 帳號後，才能開啟推播。</small></div><button class="btn btn-small" data-nfa="login">登入</button></div>`;
+    else if (!sup.ok) dev = `<div class="nf-dev"><i class="dot off"></i><div class="nf-tx"><b>這台裝置不能收推播</b><small>${esc(sup.why)}</small></div>${sup.install ? '<button class="btn btn-small" data-nfa="install">怎麼加</button>' : ''}</div>`;
+    else if (!on) dev = `<div class="nf-dev"><i class="dot off"></i><div class="nf-tx"><b>推播還沒開</b><small>開了之後，網站沒開也收得到下面打開的通知。</small></div><button class="btn btn-small btn-accent" data-nfa="enable" ${pushBusy ? 'disabled' : ''}>${pushBusy ? '開啟中…' : '開啟'}</button></div>`;
+    else dev = `<div class="nf-dev"><i class="dot"></i><div class="nf-tx"><b>推播已開啟</b><small>網站沒開也收得到下面打開的通知。</small></div><button class="btn btn-small" data-nfa="disable">關閉</button></div>`;
+    const n = notif, ev = n.event.days === 0 ? '當天' : `${n.event.days} 天`;
+    const quietWarn = (hm) => inQuiet(hmMin(hm)) ? '<p class="nf-warn">這個時間在勿擾時段內，不會提醒</p>' : '';
+    setHtml(el, `
+    <section class="nf-sec"><h3>這台裝置</h3><div class="nf-card">${dev}</div>
+        <p class="nf-foot">每台手機、電腦要各自開啟一次推播；下面的設定跟著帳號，所有裝置共用。</p>
+        ${on ? '<button class="btn nf-test" id="nfTest" data-nfa="test">傳一則測試通知</button>' : ''}</section>
+    <section class="nf-sec"><h3>朋友和聊天</h3><div class="nf-card">
+        ${nfRow('chat', '聊天訊息', '朋友在讀書房間傳訊息', n.chat, 'chat')}
+        ${nfRow('reply', '回覆你的訊息', '通知上面會多一行「回覆了你：你的訊息…」', n.reply, 'reply')}
+        ${nfRow('react', '對你的訊息按表情', '例如「對你的訊息按了 😂」', n.react, 'react')}
+        ${nfRow('poke', '朋友叫你讀書', '房間裡的朋友點你的頭像叫你去讀書', n.poke, 'poke')}
+    </div></section>
+    <section class="nf-sec"><h3>讀書</h3><div class="nf-card">
+        ${nfRow('pomo', '番茄鐘時間到', '專注結束：「休息中，點一下繼續」', n.pomo, 'pomo')}
+        ${nfRow('daily', '每日讀書提醒', '到了這個時間，今天還沒達標才提醒', n.daily.on, 'daily.on')}
+        ${n.daily.on ? `<div class="nf-sub">${nfVal('每天', n.daily.time, 'daily', '每日讀書提醒時間')}${quietWarn(n.daily.time)}</div>` : ''}
+        ${nfRow('morning', '早安倒數', '每天早上告訴你離考試還有幾天', n.morning.on, 'morning.on')}
+        ${n.morning.on ? `<div class="nf-sub">${nfVal('每天', n.morning.time, 'morning', '早安倒數時間')}${quietWarn(n.morning.time)}
+            <div class="nf-line col"><span>要倒數哪些（可以複選）</span><div class="nf-chips">${morningChips()}</div></div></div>` : ''}
+    </div></section>
+    <section class="nf-sec"><h3>行事曆和待辦</h3><div class="nf-card">
+        ${nfRow('event', '行程提醒', '行事曆上的行程、考試和自己的倒數', n.event.on, 'event.on')}
+        ${n.event.on ? `<div class="nf-sub">${nfVal('提前', ev, 'evdays', '提前幾天')}${nfVal('提醒時間', n.event.time, 'evtime')}</div>` : ''}
+        ${nfRow('todo', '待辦提醒', '有日期的待辦事項', n.todo.on, 'todo.on')}
+        ${n.todo.on ? `<div class="nf-sub">${nfVal('有設時間的待辦，提前', fmtLead(n.todo.lead), 'tdlead', '待辦提前多久')}${nfVal('只有日期的待辦，當天', n.todo.day, 'tdday')}</div>` : ''}
+    </div></section>
+    <section class="nf-sec"><h3>勿擾</h3><div class="nf-card">
+        ${nfRow('quiet', '勿擾時段', '這段時間不推播；行程和待辦提醒延到結束後再發', n.quiet.on, 'quiet.on')}
+        ${n.quiet.on ? `<div class="nf-sub">${nfVal('從', n.quiet.from, 'qfrom', '勿擾開始')}${nfVal('到', n.quiet.to, 'qto', '勿擾結束')}</div>` : ''}
+        ${nfRow('focus', '讀書中不打擾', '專注計時的時候，聊天和其他通知先不推播；行程和待辦等你停下來再發', n.focus, 'focus')}
+    </div></section>
+    <section class="nf-sec"><h3>正在用網站時，訊息怎麼顯示</h3><div class="nf-card"><div class="notify-grid nf-style" id="notifyGrid">
+        <button class="notify-opt ${notifyStyle === 'banner' ? 'active' : ''}" data-notify="banner" aria-pressed="${notifyStyle === 'banner'}"><span class="nt-th"><span class="nt-banner"><i></i><span><b></b><em></em><em class="s"></em></span></span></span><span class="nt-name">頂部橫幅</span><span class="nt-sub">名字＋兩行訊息</span></button>
+        <button class="notify-opt ${notifyStyle === 'pill' ? 'active' : ''}" data-notify="pill" aria-pressed="${notifyStyle === 'pill'}"><span class="nt-th"><span class="nt-pill"><i></i><em></em><u></u></span></span><span class="nt-name">頂部小膠囊</span><span class="nt-sub">最省空間</span></button>
+    </div><button class="nt-try" type="button" data-nfa="try">試試看</button></div></section>`);
+}
+function renderNotifRow() {
+    if (!$('notifValue')) return;
+    const kinds = [notif.chat, notif.reply, notif.react, notif.poke, notif.pomo, notif.daily.on, notif.morning.on, notif.event.on, notif.todo.on].filter(Boolean).length;
+    $('notifValue').textContent = pushOn() ? `推播已開啟 · ${kinds} 項` : '推播未開啟';
+}
+function openNotif() {
+    closeModal('accountModal');
+    $('notifScreen').classList.add('open');
+    document.body.classList.add('guide-open');
+    $('nfBody').scrollTop = 0;
+    renderNotif();
+    syncScrollLock();
+}
+function closeNotif() {
+    $('notifScreen').classList.remove('open');
+    document.body.classList.remove('guide-open');
+    syncScrollLock();
+}
+$('notifRow').addEventListener('click', openNotif);
+$('nfBack').addEventListener('click', closeNotif);
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('notifScreen').classList.contains('open') && !document.querySelector('.modal.open')) { e.stopImmediatePropagation(); closeNotif(); }
+}, true);
+$('nfBody').addEventListener('change', (e) => {
+    const p = e.target.dataset.nf;
+    if (!p) return;
+    const [a, b] = p.split('.');
+    if (b) notif[a][b] = e.target.checked; else notif[a] = e.target.checked;
+    saveNotif();
+});
+$('nfBody').addEventListener('click', async (e) => {
+    const chip = e.target.closest('[data-mk]');
+    if (chip) {
+        const k = chip.dataset.mk, ks = notif.morning.keys;
+        if (ks.includes(k)) { if (ks.length === 1) { toast('至少要選一個'); return; } notif.morning.keys = ks.filter(x => x !== k); }
+        else { if (ks.length >= 3) { toast('最多選 3 個'); return; } notif.morning.keys = [...ks, k]; }
+        saveNotif(); return;
+    }
+    const st = e.target.closest('[data-notify]');
+    if (st) { applyNotify(st.dataset.notify); savePrefs(); renderNotif(); demoNotice(); return; }
+    const a = e.target.closest('[data-nfa]')?.dataset.nfa;
+    if (!a) return;
+    const n = notif;
+    if (a === 'enable') enablePush();
+    else if (a === 'disable') disablePush();
+    else if (a === 'test') testPush();
+    else if (a === 'try') demoNotice();
+    else if (a === 'login') { closeNotif(); openModal('accountModal'); }
+    else if (a === 'install') { closeNotif(); openInstall(false); }
+    else if (a === 'daily') { const v = await pickTime('每日讀書提醒時間', n.daily.time, ['17:00', '18:00', '19:00', '20:00', '21:00', '22:00']); if (v) { n.daily.time = v; saveNotif(); } }
+    else if (a === 'morning') { const v = await pickTime('早安倒數時間', n.morning.time, ['06:00', '06:30', '07:00', '07:30', '08:00']); if (v) { n.morning.time = v; saveNotif(); } }
+    else if (a === 'evtime') { const v = await pickTime('行程提醒時間', n.event.time, ['07:00', '12:00', '18:00', '20:00', '21:00']); if (v) { n.event.time = v; saveNotif(); } }
+    else if (a === 'tdday') { const v = await pickTime('只有日期的待辦：當天幾點提醒', n.todo.day, ['06:30', '07:00', '07:30', '08:00', '12:00']); if (v) { n.todo.day = v; saveNotif(); } }
+    else if (a === 'qfrom') { const v = await pickTime('勿擾開始', n.quiet.from, ['22:00', '22:30', '23:00', '23:30', '00:00']); if (v) { n.quiet.from = v; saveNotif(); } }
+    else if (a === 'qto') { const v = await pickTime('勿擾結束', n.quiet.to, ['06:00', '06:30', '07:00', '07:30', '08:00']); if (v) { n.quiet.to = v; saveNotif(); } }
+    else if (a === 'evdays') {
+        const v = await openWheel({ title: '行程提前幾天提醒', cols: [{ values: ['當天', '1', '2', '3', '4', '5', '6', '7'], value: n.event.days ? String(n.event.days) : '當天', suffix: '' }], quick: [{ label: '當天', v: ['當天'] }, { label: '1 天', v: ['1'] }, { label: '3 天', v: ['3'] }, { label: '7 天', v: ['7'] }], note: '數字是「天前」，例如 1＝前一天' });
+        if (v) { n.event.days = v[0] === '當天' ? 0 : Number(v[0]); saveNotif(); }
+    }
+    else if (a === 'tdlead') {
+        const L = n.todo.lead;
+        const v = await openWheel({ title: '有設時間的待辦：提前多久提醒',
+            cols: [{ values: ['0', '1', '2', '3', '4', '5', '6', '7'], value: String(Math.floor(L / 1440)), suffix: '天' },
+                { values: Array.from({ length: 24 }, (_, i) => String(i)), value: String(Math.floor(L % 1440 / 60)), suffix: '時' },
+                { values: Array.from({ length: 12 }, (_, i) => String(i * 5)), value: String(Math.round(L % 60 / 5) * 5 % 60), suffix: '分' }],
+            quick: [{ label: '準時', v: ['0', '0', '0'] }, { label: '15 分', v: ['0', '0', '15'] }, { label: '30 分', v: ['0', '0', '30'] }, { label: '1 小時', v: ['0', '1', '0'] }, { label: '1 天', v: ['1', '0', '0'] }] });
+        if (v) { n.todo.lead = Number(v[0]) * 1440 + Number(v[1]) * 60 + Number(v[2]); saveNotif(); }
+    }
+});
+
+/* --- 叫朋友讀書（房間裡點朋友的頭像） --- */
+const POKE_GAP = 10 * 60000;
+let pokeLast = lsGet(LS.pokes, {});
+if (!pokeLast || typeof pokeLast !== 'object') pokeLast = {};
+let pokeFor = null;
+function memberWeek(u) {
+    const days = u === currentUser?.uid ? recentDays(7) : (profiles[u]?.days || {});
+    const mon = mondayOf(new Date()); let sum = 0;
+    for (let i = 0; i < 7; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); sum += days[ymd(d)] || 0; }
+    let streak = 0; const d = new Date(); if (!days[ymd(d)]) d.setDate(d.getDate() - 1);
+    while (days[ymd(d)] > 0 && streak < 400) { streak++; d.setDate(d.getDate() - 1); }
+    return { week: sum, streak };
+}
+function closePoke() { $('pokePop').hidden = true; pokeFor = null; }
+function renderPoke() {
+    const u = pokeFor, pop = $('pokePop');
+    if (!u) return;
+    const seat = document.querySelector(`#tab-room [data-seat="${CSS.escape(u)}"]`);
+    if (!seat) { closePoke(); return; }
+    const s = statusOf(u), p = profiles[u], me = u === currentUser?.uid, w = memberWeek(u);
+    const name = memberName({ u, p });
+    const left = pokeLast[u] ? pokeLast[u] + POKE_GAP - Date.now() : 0;
+    let btn;
+    if (me) btn = '<p class="pk-note">這是你自己</p>';
+    else if (s.phase === 'focus' && !s.paused) btn = '<button class="pk-btn done" disabled>他正在讀書中 📖</button>';
+    else if (left > 0) btn = `<button class="pk-btn done" disabled>已經叫過了 ✓（${Math.ceil(left / 60000)} 分鐘後可以再叫）</button>`;
+    else btn = '<button class="pk-btn" data-pk="go">📣 叫他讀書！</button>';
+    const sub = s.phase === 'focus' ? `${s.subject != null ? SUBJECTS[s.subject] : ''}${s.paused ? '暫停中' : '專注中'}` : s.phase === 'break' ? '番茄鐘休息中' : s.min > 0 ? '休息中' : '今天還沒開始';
+    pop.innerHTML = `<div class="pk-head"><span class="pk-av" style="background:${avColor(u)}">${esc(firstGlyph(name))}</span><div class="pk-who"><b>${esc(name)}${me ? '（你）' : ''}</b><small>${esc(sub)}</small></div></div>
+        <div class="pk-stat"><div><b class="num">${fmtClockHM(s.min + (s.phase === 'focus' ? s.el / 60000 : 0))}</b><span>今天</span></div><div><b class="num">${fmtClockHM(w.week)}</b><span>這週</span></div><div><b class="num">${w.streak}<small>天</small></b><span>連續</span></div></div>
+        ${btn}${!me && !(s.phase === 'focus' && !s.paused) && left <= 0 ? '<p class="pk-note">他會收到推播・每 10 分鐘可叫一次</p>' : ''}`;
+    pop.hidden = false;
+    const r = seat.querySelector('.seat-av').getBoundingClientRect();
+    const W = pop.offsetWidth, H = pop.offsetHeight, vw = document.documentElement.clientWidth, vh = innerHeight;
+    const topBar = (document.querySelector('.topbar')?.getBoundingClientRect().bottom || 60) + 8;
+    const bottomBar = matchMedia('(min-width: 900px)').matches ? 12 : 90;   // 手機下面有分頁列
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const below = r.bottom + 10 + H < vh - bottomBar, above = r.top - 10 - H > topBar;
+    pop.classList.remove('up', 'side-l', 'side-r');
+    if (below || above) {
+        // 下面放得下就放下面，不然放上面；箭頭指著頭像
+        const x = Math.min(Math.max(cx - W / 2, 12), vw - W - 12);
+        pop.style.left = (x + scrollX) + 'px';
+        pop.style.top = ((below ? r.bottom + 10 : r.top - H - 10) + scrollY) + 'px';
+        pop.style.setProperty('--ax', (cx - x) + 'px');
+        pop.classList.toggle('up', !below);
+    } else {
+        // 橫的手機：上下都放不下，改放在頭像旁邊
+        const right = r.right + 12 + W < vw - 8;
+        const x = right ? r.right + 12 : Math.max(8, r.left - 12 - W);
+        const y = Math.min(Math.max(cy - H / 2, topBar), Math.max(topBar, vh - bottomBar - H));
+        pop.style.left = (x + scrollX) + 'px';
+        pop.style.top = (y + scrollY) + 'px';
+        pop.style.setProperty('--ay', (cy - y) + 'px');
+        pop.classList.add(right ? 'side-r' : 'side-l');
+    }
+}
+const fmtClockHM = (min) => { min = Math.round(min); return `${Math.floor(min / 60)}:${pad(min % 60)}`; };
+$('tab-room').addEventListener('click', (e) => {
+    const seat = e.target.closest('[data-seat]');
+    if (!seat) return;
+    e.stopPropagation();
+    const u = seat.dataset.seat;
+    if (pokeFor === u && !$('pokePop').hidden) { closePoke(); return; }
+    pokeFor = u; renderPoke();
+});
+document.addEventListener('click', (e) => { if (pokeFor && !e.target.closest('#pokePop') && !e.target.closest('[data-seat]')) closePoke(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pokeFor) closePoke(); });
+window.addEventListener('scroll', () => { if (pokeFor) renderPoke(); }, { passive: true });
+window.addEventListener('resize', () => { if (pokeFor) renderPoke(); });
+$('pokePop').addEventListener('click', async (e) => {
+    if (!e.target.closest('[data-pk="go"]') || !pokeFor || !fb || !currentUser) return;
+    const to = pokeFor, room = roomView;
+    pokeLast[to] = Date.now(); lsSet(LS.pokes, pokeLast);
+    renderPoke();
+    try {
+        await fb.fs.addDoc(fb.fs.collection(fb.db, 'pokes'), { from: currentUser.uid, to, room, name: myName(), at: Date.now() });
+        toast(`已經叫 ${memberName({ u: to, p: profiles[to] })} 去讀書了！`);
+    } catch (err) {
+        delete pokeLast[to]; lsSet(LS.pokes, pokeLast); renderPoke();
+        toast(err.code === 'permission-denied' ? '叫不到他：請確認 Firestore 規則已更新' : '沒送出去，請檢查網路');
+    }
+});
+// 有人叫我讀書：網站開著時直接在畫面上方顯示
+let pokeUnsub = null, pokeSince = 0;
+const pokeSeen = new Set();
+function pokeListen() {
+    if (pokeUnsub || !fb || !currentUser) return;
+    pokeSince = Date.now() - 5000;
+    const { fs, db } = fb;
+    pokeUnsub = fs.onSnapshot(fs.query(fs.collection(db, 'pokes'), fs.where('to', '==', currentUser.uid)), (snap) => {
+        snap.docChanges().forEach(ch => {
+            if (ch.type !== 'added') return;
+            const d = ch.doc.data();
+            if (pokeSeen.has(ch.doc.id) || !(d.at > pokeSince) || document.visibilityState !== 'visible') return;
+            pokeSeen.add(ch.doc.id);
+            const r = myRooms.find(x => x.id === d.room);
+            showChatNotice({ code: d.room, uid: d.from, name: String(d.name || profiles[d.from]?.name || '同學').slice(0, 20), room: r?.name || '讀書房間', text: '叫你去讀書！📚 點一下開始專注', kind: 'poke', count: 0 });
+            device.vibrate([30, 60, 30]);
+        });
+    }, () => {});
+}
+function pokeStop() { if (pokeUnsub) { pokeUnsub(); pokeUnsub = null; } }
 
 /* --- 全螢幕聊天室 --- */
 function openChat(code) {
@@ -4212,7 +4705,7 @@ function openChat(code) {
         snap.docs.forEach(d => { chatReads[d.id] = d.data().at || 0; });
         renderChatList(false);
     }, () => {});
-    $('notifyBar').hidden = !('Notification' in window) || Notification.permission !== 'default';
+    $('notifyBar').hidden = pushOn() || !!lsGet('study_nb_x', false) || !VAPID_KEY;
     renderChatList(true);
     markChatSeen();
     cleanupOldPhotos(code);
@@ -4560,12 +5053,13 @@ $('chatFile').addEventListener('change', async (e) => {
 });
 $('chatBack').addEventListener('click', closeChat);
 $('chatMore').addEventListener('click', () => { roomView = chatRoom; openRoomMenu(); });
+// v62：聊天室上方的「開啟通知」＝開啟推播（網站沒開也收得到）；這台不能收推播時打開通知設定看原因
 $('notifyBtn').addEventListener('click', async () => {
-    try { await Notification.requestPermission(); } catch (e) {}
     $('notifyBar').hidden = true;
-    if (Notification.permission === 'granted') toast('已開啟通知');
+    if (pushSupport().ok && currentUser) { await enablePush(); return; }
+    closeChat(); openNotif();
 });
-$('notifyClose').addEventListener('click', () => { $('notifyBar').hidden = true; });
+$('notifyClose').addEventListener('click', () => { $('notifyBar').hidden = true; lsSet('study_nb_x', true); });
 const chatList = $('chatList');
 chatList.addEventListener('pointerdown', (e) => {
     const t = e.target.closest('[data-mid]');
@@ -4813,6 +5307,7 @@ $('saveMeBtn').addEventListener('click', () => {
     const changedHidden = hid !== !!roomPref.hidden;
     const changedColor = meColorDraft !== (roomPref.color || '');
     roomPref.name = v; roomPref.hidden = hid; roomPref.color = meColorDraft; saveRoomPref();
+    savePrefs();   // v62：暱稱跟著帳號同步
     closeModal('meModal');
     publishProfile();
     renderRoom();
@@ -4843,7 +5338,7 @@ async function loadRoomProfile(user) {
         if (snap.exists()) {
             const p = snap.data();
             if (!profiles[user.uid]) profiles[user.uid] = p;   // 先知道雲端上自己的狀態（別台裝置可能正在讀），才不會被這台蓋掉
-            roomPref = { ...roomPref, enabled: true, name: roomPref.name || p.name || '', hidden: !!p.hidden, color: roomPref.color || (AV_COLORS.includes(p.color) ? p.color : '') };
+            roomPref = { ...roomPref, enabled: true, name: roomPref.name || String(p.name || '').slice(0, 20), hidden: roomPref.hidden ?? !!p.hidden, color: roomPref.color || (AV_COLORS.includes(p.color) ? p.color : '') };
             saveRoomPref();
         }
     } catch (e) { /* 離線或規則還沒設定 */ }
@@ -4956,7 +5451,7 @@ document.addEventListener('keydown', (e) => {
 }, true);
 // 第一次打開：手機瀏覽器先教「加到主畫面」（一定要按我知道了），接著簡易導覽；其他情況只顯示簡易導覽
 // v60：用過舊版的人，更新後第一次打開會看到「這次新增了什麼」（第一次用的人看簡易導覽就好，不會連跳兩個視窗）
-const WHATS_NEW = 'v60';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
+const WHATS_NEW = 'v62';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
 setTimeout(() => {
     if (document.querySelector('.modal.open') || document.body.classList.contains('guide-open')) return;
     const needInstall = !localStorage.getItem(LS.install) && !isStandalone() && isMobile();
@@ -4966,11 +5461,7 @@ setTimeout(() => {
     else if (needTour) openTour();
     else if (localStorage.getItem(LS.seenVer) !== WHATS_NEW) { lsSet(LS.seenVer, WHATS_NEW); openModal('whatsNewModal'); }
 }, 1200);
-$('wnTry').addEventListener('click', () => {
-    closeModal('whatsNewModal');
-    calView = 'tt'; lsSet(LS.calView, calView);
-    showTab('tab-calendar'); applyCalView();
-});
+$('wnTry').addEventListener('click', () => { closeModal('whatsNewModal'); setTimeout(openNotif, 150); });
 
 /* =====================================================
  * 帳號畫面
@@ -6208,7 +6699,7 @@ function onAuthChanged(user) {
     }
     loadRoomProfile(user);
     renderAccount('同步中…');
-    setTimeout(() => { pushSync(); pushBeat(true); renderPushRow(); }, 1500);   // 推播 token 可能會換，登入時更新一次
+    setTimeout(() => { if (pushPref.on && pushSupport().ok && Notification.permission === 'granted') pushSave().catch(() => {}); pushBeat(true); renderNotifRow(); pokeListen(); }, 1500);   // 推播 token 可能會換，登入時更新一次
     setTimeout(handlePendingJoin, 800);
     let first = true;
     // 副本是同一個帳號的才算數；換帳號就先清掉，避免看到別人的資料
@@ -6269,6 +6760,9 @@ $('loginBtn').addEventListener('click', async () => {
         if (confirm('確定要登出嗎？')) {
             if (cloudDirty) await flushCloud();   // 還沒送上雲端的修改先送出去
             await pushRemove();   // 登出後這台不再收到這個帳號的推播
+            pokeStop();
+            // 暱稱、頭像顏色跟著帳號：登出後清掉，換別的帳號登入才不會用到上一個人的
+            roomPref = { name: '', hidden: false, enabled: false }; saveRoomPref();
             await authM.signOut(auth); closeModal('accountModal');
         }
         return;

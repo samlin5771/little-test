@@ -282,6 +282,12 @@
                     </div>
                     <button class="btn btn-accent" id="addTodoBtn">新增</button>
                 </div>
+                <!-- v62：選了日期之後，可以再選時間（提醒會用到） -->
+                <div class="todo-time-row" id="todoTimeRow" hidden>
+                    <button type="button" class="todo-time-btn" id="todoTimeBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span id="todoTimeLabel">加上時間（可不選）</span></button>
+                    <button type="button" class="todo-date-x" id="todoTimeClear" aria-label="取消時間" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg></button>
+                    <span class="todo-time-hint" id="todoTimeHint">有時間的待辦，可以提前提醒你</span>
+                </div>
                 <ul class="check-list todo-list" id="todoList"></ul>
             </div>
         </section>
@@ -529,39 +535,11 @@
                         <button data-mode="light">淺色</button><button data-mode="dark">深色</button><button data-mode="auto">跟系統</button>
                     </div>
                 </div>
-                <button class="acct-row" id="notifyRow" aria-expanded="false" aria-controls="notifyFold">
-                    <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9z"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg></span>
-                    <span class="acct-label">訊息通知</span><span class="grow"></span>
-                    <span class="acct-value" id="notifyName">頂部橫幅</span><svg class="acct-fold-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                <button class="acct-row" id="notifRow">
+                    <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg></span>
+                    <span class="acct-label">通知</span><span class="grow"></span>
+                    <span class="acct-value" id="notifValue">推播未開啟</span><svg class="acct-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
                 </button>
-                <div class="acct-fold" id="notifyFold" inert><div class="acct-fold-in">
-                <div class="notify-grid" id="notifyGrid">
-                    <button class="notify-opt" data-notify="banner">
-                        <span class="nt-th"><span class="nt-banner"><i></i><span><b></b><em></em><em class="s"></em></span></span></span>
-                        <span class="nt-name">頂部橫幅</span><span class="nt-sub">名字＋兩行訊息</span>
-                    </button>
-                    <button class="notify-opt" data-notify="pill">
-                        <span class="nt-th"><span class="nt-pill"><i></i><em></em><u></u></span></span>
-                        <span class="nt-name">頂部小膠囊</span><span class="nt-sub">最省空間</span>
-                    </button>
-                </div>
-                <button class="nt-try" id="notifyTry" type="button">試試看</button>
-                </div></div>
-                <button class="acct-row" id="pushRow" aria-expanded="false" aria-controls="pushFold">
-                    <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/><path d="M19.5 3.5c1.2 1 2 2.6 2 4.3M4.5 3.5c-1.2 1-2 2.6-2 4.3"/></svg></span>
-                    <span class="acct-label">推播通知</span><span class="grow"></span>
-                    <span class="acct-value" id="pushState">未開啟</span><svg class="acct-fold-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-                </button>
-                <div class="acct-fold" id="pushFold" inert><div class="acct-fold-in"><div class="push-box">
-                    <p class="push-note" id="pushNote"></p>
-                    <button class="btn btn-accent push-on" id="pushEnable" type="button">開啟推播通知</button>
-                    <div id="pushOpts" hidden>
-                        <label class="cde-switch"><span>聊天訊息<small>朋友在讀書房間傳訊息時</small></span><input type="checkbox" id="pushChat" role="switch"><i aria-hidden="true"></i></label>
-                        <label class="cde-switch push-daily"><span>每日讀書提醒<small>還沒達到每日目標時提醒你</small></span><input type="checkbox" id="pushDaily" role="switch"><i aria-hidden="true"></i></label>
-                        <div class="push-time"><span>提醒時間</span><select class="field" id="pushTime" aria-label="每日提醒時間"></select></div>
-                    </div>
-                    <button class="text-link push-off" id="pushOff" type="button" hidden>關閉這台裝置的推播</button>
-                </div></div></div>
             </div>
             <div class="acct-group">
                 <button class="acct-row" id="guideRow">
@@ -828,21 +806,46 @@
     </div>
 
     <!-- 第一次打開：簡易導覽 -->
+    <!-- v62：通知設定（整頁） -->
+    <section class="guide-screen nf-screen" id="notifScreen" role="dialog" aria-modal="true" aria-labelledby="nfTitle">
+        <header class="guide-head">
+            <button class="icon-btn ghost" id="nfBack" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <h2 id="nfTitle">通知</h2>
+        </header>
+        <div class="guide-body nf-body" id="nfBody"></div>
+    </section>
+
+    <!-- v62：選時間的滾輪 -->
+    <div class="modal bottom" id="wheelModal" role="dialog" aria-modal="true" aria-labelledby="whTitle">
+        <div class="sheet wh-sheet">
+            <div class="grabber" data-close></div>
+            <h2 id="whTitle">選時間</h2>
+            <p class="wh-note" id="whNote" hidden></p>
+            <div class="wh-cols" id="whCols"></div>
+            <div id="whQuickWrap"><p class="field-label">常用</p><div class="wh-quick" id="whQuick"></div></div>
+            <div class="sheet-btns"><span class="spacer"></span><button class="btn" data-close>取消</button><button class="btn btn-accent" id="whDone">完成</button></div>
+        </div>
+    </div>
+
+    <!-- v62：房間裡點朋友的頭像 -->
+    <div class="pk-pop" id="pokePop" role="dialog" aria-label="朋友" hidden></div>
+
     <!-- v60：更新後第一次打開，告訴大家這次新增了什麼 -->
     <div class="modal" id="whatsNewModal" role="dialog" aria-modal="true" aria-labelledby="wnTitle">
-        <div class="sheet tour-card">
+        <div class="sheet tour-card wn-card">
             <p class="tour-kicker">版本更新</p>
             <h2 id="wnTitle">這次新增了什麼</h2>
-            <p class="tour-sub">四個新功能，不用設定也能先看看</p>
+            <p class="tour-sub">通知變得更完整，還多了幾個和朋友一起讀的小功能</p>
             <ul class="tour-list">
-                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M9 4v16"/></svg></span><div><b>課表</b><span>在「行事曆」上方切換。可自訂課名、節數和上課時間，還能分享給同學一鍵匯入</span></div></li>
-                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/></svg></span><div><b>首頁「今天的課」</b><span>現在第幾節、還有幾分下課，一打開就知道</span></div></li>
-                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="10" y="3" width="5" height="5" rx="1"/><rect x="17" y="3" width="4" height="5" rx="1"/><rect x="3" y="10" width="5" height="5" rx="1"/><rect x="10" y="10" width="5" height="5" rx="1"/><rect x="3" y="17" width="5" height="4" rx="1"/></svg></span><div><b>讀書熱力圖</b><span>在讀書統計最下面，一格一天，可以分享成 IG 限動</span></div></li>
-                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg></span><div><b>推播通知</b><span>網站沒開也收得到聊天訊息和每日讀書提醒，在個人設定裡打開</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg></span><div><b>通知設定</b><span>每日讀書提醒、早安倒數、番茄鐘時間到、行程和待辦提前提醒、勿擾時段，時間都能自己選</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h3l6 4V6L7 10z"/><path d="M16.5 9a4 4 0 0 1 0 6"/></svg></span><div><b>叫朋友讀書</b><span>在讀書房間點朋友的頭像，按「叫他讀書！」他就會收到通知</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 8L5 12.5l5 4.5"/><path d="M5.5 12.5H14a5 5 0 0 1 5 5V19"/></svg></span><div><b>回覆、表情也會通知</b><span>有人回覆你的訊息或對你的訊息按表情，都會提醒你</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg></span><div><b>待辦可以加時間</b><span>選了日期後可以再選時間，時間到之前提醒你</span></div></li>
             </ul>
+            <p class="tour-note">在個人設定 →「<b>通知</b>」打開推播。暱稱和頭像顏色現在也會跟著帳號，換手機也一樣。</p>
             <div class="sheet-btns">
-                <button class="btn" id="wnTry">看看課表</button>
-                <button class="btn btn-accent" data-close style="flex:1">知道了</button>
+                <button class="btn" data-close>知道了</button>
+                <button class="btn btn-accent" id="wnTry" style="flex:1">打開通知設定</button>
             </div>
         </div>
     </div>
@@ -885,7 +888,7 @@
                 <h1>學測倒數 &amp; 讀書計畫</h1>
                 <p>從倒數、排計畫、專注計時到和朋友一起讀書，這裡一次看懂每個功能怎麼用。</p>
             </div>
-            <nav class="guide-toc" aria-label="導覽目錄"><a href="#g-cd">倒數</a><a href="#g-wk">每週進度</a><a href="#g-syl">學測範圍</a><a href="#g-tm">計時</a><a href="#g-st">統計</a><a href="#g-rm">讀書房間</a><a href="#g-ch">聊天室</a><a href="#g-cal">行事曆・待辦</a><a href="#g-tt">課表</a><a href="#g-me">個人設定</a><a href="#g-key">電腦快捷鍵</a></nav>
+            <nav class="guide-toc" aria-label="導覽目錄"><a href="#g-cd">倒數</a><a href="#g-wk">每週進度</a><a href="#g-syl">學測範圍</a><a href="#g-tm">計時</a><a href="#g-st">統計</a><a href="#g-rm">讀書房間</a><a href="#g-ch">聊天室</a><a href="#g-cal">行事曆・待辦</a><a href="#g-tt">課表</a><a href="#g-me">個人設定</a><a href="#g-nf">通知</a><a href="#g-key">電腦快捷鍵</a></nav>
 
             <section class="g-sec" id="g-cd">
                 <p class="g-num num">01</p>
@@ -991,7 +994,7 @@
     <div class="g-rh-row"><span class="g-rh-av" style="background:var(--s0)">明</span><span class="g-rh-mid"><b>阿明</b><i class="g-rh-bar"><i style="width:78%;background:var(--s0)"></i></i><span class="g-rh-meta"><span>4 時 2 分</span><span>讀了 5 天</span></span></span></div>
   </div>
 </div></figure>
-                <ul class="g-points"><li>按<b>建立新房間</b>會拿到 6 碼邀請碼，最多 20 人。</li><li><b>邀請朋友</b>（「⋯」裡）會分享一個<b>邀請連結</b>：朋友點開、登入後按「加入」就好，不用自己輸入邀請碼；也可以直接輸入 6 碼加入。</li><li>房間裡每個人有一個座位，頭像外圈是這一輪的進度；綠色是正在讀，變淡是還沒開始。</li><li><b>今天排行</b>連正在讀的那一輪也算進去，前三名有金銀銅。</li><li>最下面的<b>讀書紀錄</b>可以選<b>日、週、月或自訂</b>期間，看房間裡每個人讀了多久、讀了幾天，第一名的頭像會戴上<b>皇冠</b>。</li><li>右上角的暱稱可以改名字、選<b>頭像顏色</b>（10 種顏色或自動），或開<b>隱身模式</b>：只顯示今天時數，不顯示在讀什麼。</li><li>房主可以改房間名稱；「⋯」裡可以邀請朋友或離開房間。</li></ul>
+                <ul class="g-points"><li>按<b>建立新房間</b>會拿到 6 碼邀請碼，最多 20 人。</li><li><b>邀請朋友</b>（「⋯」裡）會分享一個<b>邀請連結</b>：朋友點開、登入後按「加入」就好，不用自己輸入邀請碼；也可以直接輸入 6 碼加入。</li><li>房間裡每個人有一個座位，頭像外圈是這一輪的進度；綠色是正在讀，變淡是還沒開始。</li><li><b>今天排行</b>連正在讀的那一輪也算進去，前三名有金銀銅。</li><li>最下面的<b>讀書紀錄</b>可以選<b>日、週、月或自訂</b>期間，看房間裡每個人讀了多久、讀了幾天，第一名的頭像會戴上<b>皇冠</b>。</li><li>右上角的暱稱可以改名字、選<b>頭像顏色</b>（10 種顏色或自動），或開<b>隱身模式</b>：只顯示今天時數，不顯示在讀什麼。暱稱和顏色會<b>跟著帳號</b>，換手機、重新登入都一樣。</li><li><b>點朋友的頭像</b>會跳出小卡片：看他今天、這週讀了多久和連續天數，還可以按<b>「叫他讀書！」</b>，他會收到通知。同一個人 10 分鐘可以叫一次；他正在讀書時不能叫。</li><li>房主可以改房間名稱；「⋯」裡可以邀請朋友或離開房間。</li></ul>
                 
             </section>
 
@@ -1007,7 +1010,7 @@
   <p class="g-sys">哲哲 收回了一則訊息</p>
   <div class="g-pop"><div class="g-rbar"><span>❤️</span><span>😂</span><span>😮</span><span>😢</span><span>👍</span><span>🔥</span></div><span class="g-msg mine solo"><span>好 👌 衝 ≥ 3 小時！</span></span><div class="menu"><span>回覆</span><span>複製文字</span><span class="red">收回訊息</span></div></div>
 </div></figure>
-                <ul class="g-points"><li>在房間裡，聊天室在<b>座位下面、今天排行上面</b>，有未讀訊息時會顯示數字。</li><li>可以傳文字、表情符號（用手機鍵盤就能打）和照片；照片會先壓縮，30 天後過期。</li><li><b>長按訊息</b>（電腦按右鍵）會浮出訊息卡片：上面一排可以<b>按表情</b>（❤️😂😮😢👍🔥），下面可以回覆、複製文字、儲存照片；自己的訊息 24 小時內可以收回。</li><li><b>回覆</b>：長按選「回覆」，或在手機上把訊息<b>往右滑</b>，輸入框上面會出現「回覆 某某」，按 ✕ 取消。送出後訊息上方會帶著原本那則，點一下就跳回去看。</li><li><b>連點兩下</b>訊息就會送出 ❤️，再連點兩下取消。表情會貼在訊息泡泡角落，不會蓋到字；點表情可以看是誰按的，每人一則只能按一個，按別的會換掉。</li><li>自己的訊息旁邊會顯示「已讀 N」。</li><li>在其他頁面有新訊息時，畫面<b>上方</b>會滑出通知（頭像、名字、房間和訊息），點一下直接打開聊天室，往上滑可以關掉；「計時」分頁也會出現紅點。通知樣式可以在個人設定的<b>訊息通知</b>選「頂部橫幅」或「頂部小膠囊」。</li><li>第一次進聊天室可以<b>開啟通知</b>：App 在背景時也會提醒你，點通知會直接打開那個聊天室（手機完全關掉時收不到）。</li></ul>
+                <ul class="g-points"><li>在房間裡，聊天室在<b>座位下面、今天排行上面</b>，有未讀訊息時會顯示數字。</li><li>可以傳文字、表情符號（用手機鍵盤就能打）和照片；照片會先壓縮，30 天後過期。</li><li><b>長按訊息</b>（電腦按右鍵）會浮出訊息卡片：上面一排可以<b>按表情</b>（❤️😂😮😢👍🔥），下面可以回覆、複製文字、儲存照片；自己的訊息 24 小時內可以收回。</li><li><b>回覆</b>：長按選「回覆」，或在手機上把訊息<b>往右滑</b>，輸入框上面會出現「回覆 某某」，按 ✕ 取消。送出後訊息上方會帶著原本那則，點一下就跳回去看。</li><li><b>連點兩下</b>訊息就會送出 ❤️，再連點兩下取消。表情會貼在訊息泡泡角落，不會蓋到字；點表情可以看是誰按的，每人一則只能按一個，按別的會換掉。</li><li>自己的訊息旁邊會顯示「已讀 N」。</li><li>在其他頁面有新訊息時，畫面<b>上方</b>會滑出通知（頭像、名字、房間和訊息），點一下直接打開聊天室，往上滑可以關掉；「計時」分頁也會出現紅點。通知樣式可以在個人設定的<b>訊息通知</b>選「頂部橫幅」或「頂部小膠囊」。</li><li>打開<b>推播通知</b>（個人設定 →「通知」）之後，網站沒開也收得到新訊息；有人<b>回覆你的訊息</b>，通知上面會多一行「回覆了你：「你的訊息…」」，有人<b>對你的訊息按表情</b>也會通知你。每一種都可以在通知設定裡分別開關。</li></ul>
                 
             </section>
 
@@ -1021,7 +1024,7 @@
   <div class="g-todo"><span class="swipe ok">✓ 完成</span><span class="item">交數學作業<em class="g-td-date">明天</em></span></div>
   <div class="g-todo"><span class="item">背英文單字</span><span class="swipe del">刪除</span></div>
 </div></figure>
-                <ul class="g-points"><li>行事曆左右滑換月份；點日期再按 ＋ 新增行程，可以選<b>單日或連續多天</b>；標成<b>重要</b>的日期會被圈起來。</li><li>考試日會用紅色標出；下面列出即將到來的行程和剩幾天。</li><li>最上面可以切換<b>行事曆／課表</b>，課表的用法在下一段。</li><li>待辦清單：輸入後按新增；<b>往右滑完成、往左滑刪除</b>，不小心刪掉可以按「復原」。</li><li>新增待辦時可以按輸入框旁的<b>日曆圖示選日期</b>（不選也可以）。有日期的待辦會排在前面，同時出現在<b>行事曆</b>那天（綠色小點），當天和逾期的也會列在倒數頁的<b>「今天」</b>，在哪裡打勾都可以。</li></ul>
+                <ul class="g-points"><li>行事曆左右滑換月份；點日期再按 ＋ 新增行程，可以選<b>單日或連續多天</b>；標成<b>重要</b>的日期會被圈起來。</li><li>考試日會用紅色標出；下面列出即將到來的行程和剩幾天。</li><li>最上面可以切換<b>行事曆／課表</b>，課表的用法在下一段。</li><li>待辦清單：輸入後按新增；<b>往右滑完成、往左滑刪除</b>，不小心刪掉可以按「復原」。</li><li>新增待辦時可以按輸入框旁的<b>日曆圖示選日期</b>（不選也可以）。有日期的待辦會排在前面，同時出現在<b>行事曆</b>那天（綠色小點），當天和逾期的也會列在倒數頁的<b>「今天」</b>，在哪裡打勾都可以。</li><li>選了日期之後，下面還可以<b>加上時間</b>（例如 22:00 交作業）。有時間的待辦可以<b>提前提醒</b>你，要提前多久在通知設定裡改。</li></ul>
                 
             </section>
 
@@ -1053,12 +1056,32 @@
   <div class="g-acct-row">網站導覽<span>›</span></div>
   <div class="g-acct-row">新增到主畫面<span>›</span></div>
 </div></figure>
-                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。手機和電腦<b>同時使用</b>、或是沒網路時改的東西，連上網路後會一筆一筆合併，不會互相蓋掉。</li><li><b>沒有網路</b>時畫面下方會出現「離線中」的小提示，照樣可以計時、改進度；連上網路後會顯示「同步中」，同步好就自己收起來。</li><li>個人設定裡的<b>隱私權政策</b>，寫清楚收集了哪些資料、誰看得到、怎麼刪除。</li><li>不想用了可以按個人設定最下面的<b>刪除帳號與資料</b>：雲端資料、聊天訊息和照片都會永久刪除，並離開所有房間（要輸入「刪除」確認，Google 可能會請你再登入一次）。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 8 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>訊息通知</b>：選聊天訊息要用<b>頂部橫幅</b>（顯示誰傳的和兩行訊息）還是<b>頂部小膠囊</b>（最不佔空間，點一下展開），按「試試看」可以先看效果。</li><li><b>推播通知</b>：登入後打開，<b>網站沒開也收得到</b>朋友的聊天訊息，和<b>每日讀書提醒</b>（到了你選的時間、今天還沒達標才會提醒）。兩種可以分開開關；正在用網站時，聊天訊息照常顯示在畫面上方，不會重複通知。iPhone 要先<b>加入主畫面</b>、從主畫面打開才能開啟（iOS 16.4 以上）。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
+                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。手機和電腦<b>同時使用</b>、或是沒網路時改的東西，連上網路後會一筆一筆合併，不會互相蓋掉。</li><li><b>沒有網路</b>時畫面下方會出現「離線中」的小提示，照樣可以計時、改進度；連上網路後會顯示「同步中」，同步好就自己收起來。</li><li>個人設定裡的<b>隱私權政策</b>，寫清楚收集了哪些資料、誰看得到、怎麼刪除。</li><li>不想用了可以按個人設定最下面的<b>刪除帳號與資料</b>：雲端資料、聊天訊息和照片都會永久刪除，並離開所有房間（要輸入「刪除」確認，Google 可能會請你再登入一次）。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 8 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>通知</b>：個人設定裡只有一列「通知」，點進去是完整的通知設定頁（下一段有詳細說明）。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
+                
+            </section>
+
+            <section class="g-sec" id="g-nf">
+                <p class="g-num num">11</p>
+                <h3>通知</h3>
+                <p class="g-lead">個人設定 →「通知」。打開推播後，網站沒開也收得到提醒，每一種都可以自己決定要不要、幾點提醒。</p>
+                <figure class="g-fig" aria-hidden="true"><div class="g-phone g-nfp">
+  <div class="g-nfdev"><i></i><span><b>推播已開啟</b><small>網站沒開也收得到</small></span></div>
+  <p class="g-nfh">朋友和聊天</p>
+  <div class="g-nfr"><span>聊天訊息</span><u class="on"></u></div>
+  <div class="g-nfr"><span>回覆你的訊息</span><u class="on"></u></div>
+  <div class="g-nfr"><span>朋友叫你讀書</span><u class="on"></u></div>
+  <p class="g-nfh">讀書</p>
+  <div class="g-nfr"><span>每日讀書提醒</span><u class="on"></u></div>
+  <div class="g-nfr sub"><span>每天</span><em>18:00</em></div>
+  <div class="g-nfr"><span>早安倒數</span><u class="on"></u></div>
+  <div class="g-nfr sub"><span>每天</span><em>07:00</em></div>
+</div></figure>
+                <ul class="g-points"><li>第一步：按「<b>開啟</b>」並允許通知。每台手機、電腦要<b>各自開一次</b>；下面的設定跟著帳號，所有裝置共用。iPhone 要先<b>加入主畫面</b>、從主畫面打開才能開（iOS 16.4 以上）。</li><li><b>朋友和聊天</b>：聊天訊息、回覆你的訊息、對你的訊息按表情、朋友叫你讀書。正在用網站時，訊息照常顯示在畫面上方，不會重複通知；畫面上方要用橫幅還是小膠囊也在這裡選。</li><li><b>讀書</b>：番茄鐘時間到（「休息中，點一下繼續」）、<b>每日讀書提醒</b>（到了你選的時間、今天還沒達標才提醒，預設 18:00）、<b>早安倒數</b>（每天早上告訴你學測和下一場考試還有幾天，也可以換成自己的倒數）。</li><li><b>行事曆和待辦</b>：行程、考試和自己的倒數可以<b>提前幾天、幾點</b>提醒；有時間的待辦可以<b>提前幾天幾時幾分</b>提醒，只有日期的待辦在當天你選的時間提醒。</li><li><b>勿擾時段</b>（預設 23:00–06:30）：這段時間不推播，行程和待辦提醒會延到勿擾結束再發。</li><li><b>讀書中不打擾</b>（預設打開）：專注計時、沒有暫停的時候，聊天、回覆、表情和每日提醒都先不推播；行程和待辦提醒等你停下來或這一輪結束再發。番茄鐘時間到的通知照常會收到。</li><li>點時間會從下面滑出<b>滾輪</b>，上下滑選時和分，下面也有常用時間可以一鍵選。</li><li>不確定有沒有設定好，按「<b>傳一則測試通知</b>」，幾秒內就會收到。</li></ul>
                 
             </section>
 
             <section class="g-sec" id="g-key">
-                <p class="g-num num">11</p>
+                <p class="g-num num">12</p>
                 <h3>電腦快捷鍵</h3>
                 <p class="g-lead">用電腦時，這些按鍵可以更快操作。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-keys"><div><span class="kbd">1 – 5</span>切換分頁</div><div><span class="kbd">Space</span>開始／暫停計時</div><div><span class="kbd">N</span>新增待辦或行程</div><div><span class="kbd">← →</span>上一週、下一週（月）</div><div><span class="kbd">T</span>切換深淺色</div><div><span class="kbd">⌘K</span>指令面板：打字就能新增、開始專注</div><div><span class="kbd">?</span>快捷鍵表</div><div><span class="kbd">Esc</span>關閉視窗、返回上一頁</div></div></figure>
@@ -1114,7 +1137,7 @@
             <button class="icon-btn" id="chatMore" aria-label="房間選項"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
         </header>
         <div class="notify-bar" id="notifyBar" hidden>
-            <span>開啟通知，App 在背景時有新訊息會提醒你</span>
+            <span>開啟推播，網站沒開也收得到新訊息</span>
             <button class="btn btn-small btn-accent" id="notifyBtn">開啟</button>
             <button class="icon-btn ghost" id="notifyClose" aria-label="不用了"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         </div>
