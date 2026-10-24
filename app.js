@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v59';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v60';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -60,7 +60,8 @@ const LS = {
     notify: 'study_notify',
     install: 'study_install_seen', tour: 'study_tour_seen', chatSeen: 'study_chat_seen', photoCount: 'study_photo_count',
     countdowns: 'study_countdowns', home: 'study_home', progView: 'study_prog_view', sylOpen: 'study_syl_open',
-    lastActive: 'study_last_active', cloud: 'study_cloud_cache'
+    lastActive: 'study_last_active', cloud: 'study_cloud_cache',
+    tt: 'study_timetable', calView: 'study_cal_view', heat: 'study_heat_range', seenVer: 'study_seen_ver'   // v60 課表、行事曆／課表切換、熱力圖範圍
 };   // 這台裝置存的所有設定都在這裡（改名字會讓舊資料讀不到，不要改）
 // 沒有頭像時的預設圖（顏色跟著主題色）
 function defaultAvatar() {
@@ -688,7 +689,7 @@ function savePrefs() {
     clearTimeout(prefsTimer);
     prefsTimer = setTimeout(() => {
         fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), {
-            prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow', notify: localStorage.getItem(LS.notify) || 'banner', home: homePref }
+            prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow', notify: localStorage.getItem(LS.notify) || 'banner', home: homePref, tt }
         }, { mergeFields: ['prefs'] }).catch(e => console.warn('設定同步失敗：', e));
     }, 400);
 }
@@ -699,6 +700,11 @@ function applyCloudPrefs(p) {
     }
     if (BG_NAME[p.bg] && p.bg !== (localStorage.getItem(LS.bg) || 'glow')) { applyBg(p.bg); lsSet(LS.bg, p.bg); }
     if (NOTIFY_NAME[p.notify] && p.notify !== notifyStyle) { applyNotify(p.notify); }
+    // v60 課表也跟著帳號；雲端還沒有、這台有的話，把這台的送上去
+    if (p.tt && typeof p.tt === 'object') {
+        const x = normTT(p.tt);
+        if (JSON.stringify(x) !== JSON.stringify(tt)) { tt = x; lsSet(LS.tt, tt); renderTT(); renderHomeClass(); }
+    } else if (ttHasData()) savePrefs();
     if (p.home) {   // 首頁排法也跟著帳號
         const h = normHome(p.home);
         if (JSON.stringify(h) !== JSON.stringify(homePref)) { homePref = h; lsSet(LS.home, h); applyHome(); }
@@ -832,6 +838,7 @@ function showTab(id) {
     document.body.classList.toggle('sub', !!SUB[id] && id !== 'tab-syllabus');   // 學測範圍和每週進度是並排切換，不需要返回鍵   // 子頁面：頂部左邊出現返回鍵
     $('topExtra').innerHTML = '';
     if (id === 'tab-stats') renderStats();
+    if (id === 'tab-calendar') applyCalView();
     if (id === 'tab-countdown') tick();
     if (id === 'tab-room') { roomStart(); renderRoom(); }
     if (id === 'tab-ai') renderAI();
@@ -2731,12 +2738,15 @@ function renderStats() {
             </div>`).join('')}
         </section>
 
+        ${heatHtml()}
+
         <div style="display:flex;justify-content:center;margin-top:16px">
             <button class="text-link" data-sact="add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>補登讀書時間</button>
         </div>
     </div>`;
     setTopExtra('tab-stats', `<button class="icon-btn" data-top="share-day" aria-label="分享這天"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>`);
     if ($('dayModal').classList.contains('open')) renderDaySheet();
+    heatAfterRender();
 }
 
 // 某一天的明細（下方滑出）
@@ -2773,6 +2783,14 @@ $('tab-stats').addEventListener('click', (e) => {
     else if (act === 'next' && statOffset < 0) { statOffset++; statSel = null; renderStats(); }
     else if (act === 'add') openLogModal();   // 統計頁：預設選的那天
     else if (act === 'day') openDaySheet();
+    else if (act === 'heat-half' || act === 'heat-year') { heatRange = act === 'heat-year' ? 'year' : 'half'; lsSet(LS.heat, heatRange); heatSel = null; renderStats(); }
+    else if (act === 'heat-share') openHeatShare();
+    const hm = e.target.closest('[data-hm]');
+    if (hm) {
+        heatSel = heatSel === hm.dataset.hm ? null : hm.dataset.hm;
+        document.querySelectorAll('#heatSec .hm-d.sel').forEach(x => x.classList.remove('sel'));
+        if (heatSel) { hm.classList.add('sel'); showHeatTip(heatSel); } else $('heatSec').querySelector('.hm-tip')?.remove();
+    }
 });
 $('tab-stats').addEventListener('change', (e) => {
     if (e.target.id === 'goalSelect') { tpref.goal = Number(e.target.value); saveTpref(); renderStats(); renderTimer(); renderToday(); }
@@ -2922,6 +2940,7 @@ function buildPalette(q) {
     go.forEach(([n, id], i) => { if (match(n, id, '前往')) items.push({ group: '前往', label: n, key: String(i + 1), run: () => showTab('tab-' + id) }); });
     if (match('AI', '讀書計畫', '計畫', 'plan')) items.push({ group: '前往', label: 'AI 讀書計畫', run: () => showTab('tab-ai') });
     if (match('學測範圍', '範圍', '單元', '重點複習', 'syllabus')) items.push({ group: '前往', label: '學測範圍', run: () => showTab('tab-syllabus') });
+    if (match('課表', '上課', '節次', 'timetable')) items.push({ group: '前往', label: '課表', run: () => { calView = 'tt'; lsSet(LS.calView, calView); showTab('tab-calendar'); applyCalView(); } });
     if (match('房間', '讀書房間', '朋友', 'room')) items.push({ group: '前往', label: '讀書房間', run: () => { roomView = null; showTab('tab-room'); } });
     if (match('統計', 'stats')) items.push({ group: '前往', label: '讀書統計', run: () => { statOffset = 0; statSel = null; renderStats(); showTab('tab-stats'); } });
     if (match('深色', '淺色', '主題', 'theme', 'dark', 'light')) items.push({ group: '設定', label: '切換深淺色', key: 'T', run: () => $('themeBtn').click() });
@@ -3074,13 +3093,18 @@ async function drawShareCard(ds) {
 }
 async function openShareCard(ds) {
     toast('正在產生卡片…');
-    shareBlob = await drawShareCard(ds || todayStr());
+    showShareBlob(await drawShareCard(ds || todayStr()), `讀書卡片-${ds || todayStr()}.png`, '分享卡片');
+}
+// 顯示一張做好的分享圖（今天的卡片、熱力圖共用）
+function showShareBlob(blob, filename, title) {
+    shareBlob = blob;
     if (!shareBlob) { toast('產生卡片失敗'); return; }
+    $('shareTitle').textContent = title || '分享卡片';
     if (shareUrl) URL.revokeObjectURL(shareUrl);   // 上一張卡片的圖用不到了，釋放記憶體
     const url = shareUrl = URL.createObjectURL(shareBlob);
     $('shareImg').src = url;
     $('shareDownload').href = url;
-    $('shareDownload').download = `讀書卡片-${ds}.png`;
+    $('shareDownload').download = filename;
     const file = new File([shareBlob], 'study-card.png', { type: 'image/png' });
     const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
     $('shareNativeBtn').style.display = canShare ? '' : 'none';
@@ -4802,13 +4826,22 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && $('guideScreen').classList.contains('open') && !document.querySelector('.modal.open')) { e.stopImmediatePropagation(); closeGuide(); }
 }, true);
 // 第一次打開：手機瀏覽器先教「加到主畫面」（一定要按我知道了），接著簡易導覽；其他情況只顯示簡易導覽
+// v60：用過舊版的人，更新後第一次打開會看到「這次新增了什麼」（第一次用的人看簡易導覽就好，不會連跳兩個視窗）
+const WHATS_NEW = 'v60';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
 setTimeout(() => {
-    if (document.querySelector('.modal.open')) return;
+    if (document.querySelector('.modal.open') || document.body.classList.contains('guide-open')) return;
     const needInstall = !localStorage.getItem(LS.install) && !isStandalone() && isMobile();
     const needTour = !localStorage.getItem(LS.tour);
+    if (needInstall || needTour) lsSet(LS.seenVer, WHATS_NEW);
     if (needInstall) openInstall(needTour);
     else if (needTour) openTour();
+    else if (localStorage.getItem(LS.seenVer) !== WHATS_NEW) { lsSet(LS.seenVer, WHATS_NEW); openModal('whatsNewModal'); }
 }, 1200);
+$('wnTry').addEventListener('click', () => {
+    closeModal('whatsNewModal');
+    calView = 'tt'; lsSet(LS.calView, calView);
+    showTab('tab-calendar'); applyCalView();
+});
 
 /* =====================================================
  * 帳號畫面
@@ -5111,9 +5144,610 @@ $('cdeDelete').addEventListener('click', () => {
 });
 
 /* =====================================================
+ * v60 課表（行事曆分頁上方切換「行事曆／課表」）
+ *   資料：{ periods: [{ s: '08:10', e: '09:00' }, …], cells: { '星期-節': { n, n2, c, note } }, anchor: 單週的星期一 }
+ *   跟著帳號同步（放在 prefs.tt），沒登入時只存在這台裝置
+ * ===================================================== */
+const TT_DEFAULT_TIMES = [['08:10', '09:00'], ['09:10', '10:00'], ['10:10', '11:00'], ['11:10', '12:00'], ['13:10', '14:00'], ['14:10', '15:00'], ['15:10', '16:00'], ['16:10', '17:00']];
+const TT_MAX = 10;
+const TT_COMMON = ['國文', '英文', '數學', '物理', '化學', '生物', '地科', '體育'];   // 快捷選項只放這 8 個
+const timeOk = (t) => /^\d{2}:\d{2}$/.test(t);
+function normTT(x) {
+    const periods = (Array.isArray(x?.periods) ? x.periods : [])
+        .filter(p => p && timeOk(p.s) && timeOk(p.e)).slice(0, TT_MAX).map(p => ({ s: p.s, e: p.e }));
+    const cells = {};
+    if (x && typeof x.cells === 'object' && x.cells) {
+        for (const [k, v] of Object.entries(x.cells)) {
+            if (!/^[0-4]-\d$/.test(k) || !v || typeof v !== 'object') continue;
+            const n = String(v.n || '').trim().slice(0, 12), n2 = String(v.n2 || '').trim().slice(0, 12), note = String(v.note || '').trim().slice(0, 30);
+            if (!n && !n2 && !note) continue;
+            const c = Number.isInteger(v.c) && v.c >= -1 && v.c <= 4 ? v.c : null;   // null＝依科目名稱自動配色，-1＝不上色
+            cells[k] = { n, ...(n2 ? { n2 } : {}), ...(c !== null ? { c } : {}), ...(note ? { note } : {}) };
+        }
+    }
+    const anchor = typeof x?.anchor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.anchor) ? x.anchor : null;
+    return { periods: periods.length ? periods : TT_DEFAULT_TIMES.map(([s, e]) => ({ s, e })), cells, anchor };
+}
+let tt = normTT(lsGet(LS.tt, null));
+const ttHasData = () => Object.keys(tt.cells).length > 0;
+function saveTT() { lsSet(LS.tt, tt); savePrefs(); renderTT(); renderHomeClass(); }
+// 科目名稱 → 網站的五科顏色（數學、自然、英文、國文、社會），其他科不上色
+function ttAuto(name) {
+    const s = String(name || '');
+    if (!s) return -1;
+    if (/數學|數甲|數乙|數A|數B|math/i.test(s)) return 0;
+    if (/英|english/i.test(s)) return 2;
+    if (/物理|化學|生物|地科|地球科學|自然|理化|探究|實作/.test(s)) return 1;
+    if (/國文|國語|國寫|語文|作文|閱讀/.test(s)) return 3;
+    if (/歷史|地理|公民|社會|社區/.test(s)) return 4;
+    return -1;
+}
+const ttColorOf = (cell, name) => cell && Number.isInteger(cell.c) ? cell.c : ttAuto(name ?? cell?.n);
+const ttMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const mondayOf = (d) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return x; };
+// 單雙週：anchor 那週是單週，往後每隔一週輪替
+function isEvenWeek(d) {
+    if (!tt.anchor) return false;
+    const w = Math.round((mondayOf(d) - mondayOf(parseYmd(tt.anchor))) / (7 * 86400000));
+    return Math.abs(w) % 2 === 1;
+}
+const ttHasAlt = () => Object.values(tt.cells).some(c => c.n2);
+// 這天這節實際上的課（單雙週不同時換成雙週的）
+function ttClassAt(date, d, p) {
+    const c = tt.cells[`${d}-${p}`];
+    if (!c) return null;
+    const name = c.n2 && isEvenWeek(date) ? c.n2 : c.n;
+    return { name, color: ttColorOf(c, name), note: c.note || '', alt: !!c.n2, cell: c };
+}
+// 放假：行事曆上那天有寫「放假、補假、停課…」的行程
+const TT_OFF_RE = /放假|補假|停課|颱風假|連假|國定假日|休假|校慶補假/;
+const ttOffDay = (ds) => state.events.some(e => e.start <= ds && evEnd(e) >= ds && TT_OFF_RE.test(e.title || ''));
+// 顯示哪一週：平日顯示本週；週末顯示下一週（這週的課已經上完了）
+function ttWeek(now = new Date()) {
+    const mon = mondayOf(now);
+    if (now.getDay() === 6 || now.getDay() === 0) mon.setDate(mon.getDate() + 7);
+    return [0, 1, 2, 3, 4].map(i => { const x = new Date(mon); x.setDate(mon.getDate() + i); return x; });
+}
+let calView = localStorage.getItem(LS.calView) === 'tt' ? 'tt' : 'cal';
+function applyCalView() {
+    document.body.classList.toggle('cal-tt', calView === 'tt');
+    $('ttView').hidden = calView !== 'tt';
+    document.querySelectorAll('#calViewSeg [data-cv]').forEach(b => { const on = b.dataset.cv === calView; b.classList.toggle('active', on); b.setAttribute('aria-selected', on); });
+    if (calView === 'tt') renderTT();
+}
+$('calViewSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cv]');
+    if (!b || b.dataset.cv === calView) return;
+    calView = b.dataset.cv; lsSet(LS.calView, calView);
+    applyCalView(); window.scrollTo({ top: 0 });
+});
+const ICON_DOTS = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
+let ttMinuteKey = '';
+function renderTT() {
+    const el = $('ttView');
+    if (!el || calView !== 'tt') return;
+    const now = new Date(), t = todayStr(), nowMin = now.getHours() * 60 + now.getMinutes();
+    const week = ttWeek(now), md = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+    const showPar = ttHasAlt() && tt.anchor;
+    let h = `<div class="tt-head"><div class="tt-range">${md(week[0])} – ${md(week[4])}${showPar ? `<small>${isEvenWeek(week[0]) ? '雙週' : '單週'}</small>` : ''}</div>
+        <button class="icon-btn" data-tta="menu" aria-label="課表選項">${ICON_DOTS}</button></div>`;
+    if (!ttHasData()) h += `<div class="tt-empty-tip"><span>點格子填入科目；同學有分享課表連結的話，可以直接匯入。</span><button class="btn btn-small" data-tta="import">匯入</button></div>`;
+    h += '<div class="tt" role="grid" aria-label="課表"><div></div>';
+    week.forEach(d => {
+        const ds = ymd(d), off = ttOffDay(ds);
+        h += `<div class="tt-dh${ds === t ? ' today' : ''}${off ? ' off' : ''}"><b>${WEEK_ZH[d.getDay()]}</b><span>${d.getDate()}</span>${off ? '<em>放假</em>' : ''}</div>`;
+    });
+    tt.periods.forEach((p, i) => {
+        const prev = tt.periods[i - 1];
+        if (prev && ttMin(p.s) - ttMin(prev.e) >= 30) h += `<div class="tt-break">${ttMin(prev.e) < 13 * 60 + 30 && ttMin(p.s) > 11 * 60 ? '午休' : '休息'} ${prev.e} – ${p.s}</div>`;
+        const isNowRow = week.some(d => ymd(d) === t) && nowMin >= ttMin(p.s) && nowMin < ttMin(p.e);
+        h += `<div class="tt-p${isNowRow ? ' now' : ''}"><b>${i + 1}</b><small>${p.s}</small></div>`;
+        week.forEach((d, di) => {
+            const ds = ymd(d), k = ttClassAt(d, di, i), off = ttOffDay(ds);
+            const isToday = ds === t, isNow = isToday && isNowRow, past = isToday && nowMin >= ttMin(p.e);
+            const label = `星期${WEEK_ZH[d.getDay()]} 第 ${i + 1} 節`;
+            if (!k || !k.name) {
+                h += `<button class="tt-c empty${off ? ' off' : ''}" data-ttc="${di}-${i}" aria-label="${label}：空堂，點一下新增">＋${k?.note ? '<i class="dot"></i>' : ''}</button>`;
+                return;
+            }
+            const cls = ['tt-c', k.color < 0 ? 'plain' : '', off ? 'off' : '', past ? 'past' : '', isNow ? 'now' : ''].join(' ');
+            const prog = isNow ? `--prog:${((nowMin - ttMin(p.s)) / Math.max(1, ttMin(p.e) - ttMin(p.s)) * 100).toFixed(0)}%;` : '';
+            h += `<button class="${cls}" data-ttc="${di}-${i}" ${k.color >= 0 ? `data-c style="--c:var(--s${k.color});${prog}"` : (prog ? `style="${prog}"` : '')} aria-label="${label}：${esc(k.name)}${k.note ? '，備註 ' + esc(k.note) : ''}">${esc(k.name)}${k.note ? '<i class="dot"></i>' : ''}${k.alt ? `<span class="alt">${isEvenWeek(d) ? '雙' : '單'}</span>` : ''}</button>`;
+        });
+    });
+    h += `</div>
+        <div class="tt-legend">${SUBJECTS.map((n, s) => `<span><i style="background:var(--s${s})"></i>${n}</span>`).join('')}<span><i style="background:var(--important)"></i>有備註</span></div>
+        <p class="tt-hint">點一格可以改科目、單雙週、備註<br>節數和上課時間在右上角 ⋯ 裡改</p>`;
+    setHtml(el, h);
+    ttMinuteKey = `${t} ${nowMin}`;
+}
+// 每分鐘更新「現在上到哪一節」
+function ttTick() {
+    const now = new Date(), k = `${todayStr()} ${now.getHours() * 60 + now.getMinutes()}`;
+    if (k === ttMinuteKey) return;
+    ttMinuteKey = k;
+    if (document.body.dataset.tab === 'tab-calendar' && calView === 'tt') renderTT();
+    if (document.body.dataset.tab === 'tab-countdown') renderHomeClass();
+}
+$('ttView').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-tta]')?.dataset.tta;
+    if (a === 'menu') { openModal('ttMenuModal'); return; }
+    if (a === 'import') { openTTImport(); return; }
+    const c = e.target.closest('[data-ttc]');
+    if (c) openTTCell(c.dataset.ttc);
+});
+$('ttMenuModal').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-ttm]')?.dataset.ttm;
+    if (!a) return;
+    closeModal('ttMenuModal');
+    if (a === 'share') shareTT();
+    else if (a === 'import') openTTImport();
+    else if (a === 'time') openTTTime();
+    else if (a === 'clear') {
+        if (!ttHasData()) { toast('課表本來就是空的'); return; }
+        const before = tt;
+        tt = { ...tt, cells: {} }; saveTT();
+        toast('已清空課表', { label: '復原', fn: () => { tt = before; saveTT(); } });
+    }
+});
+
+/* --- 編輯一格 --- */
+let ttEditKey = null, ttEditColor = null;
+function renderTTColors() {
+    const auto = ttAuto($('ttName').value.trim());
+    const opts = [[null, '自動', auto >= 0 ? `var(--s${auto})` : 'var(--faint)'], ...SUBJECTS.map((n, s) => [s, n, `var(--s${s})`]), [-1, '其他', 'var(--faint)']];
+    $('ttColors').innerHTML = opts.map(([v, n, col]) => `<button type="button" data-ttcol="${v === null ? 'auto' : v}" class="${ttEditColor === v ? 'active' : ''}" aria-pressed="${ttEditColor === v}"><i style="background:${col}"></i>${n}</button>`).join('');
+}
+function renderTTSuggest() {
+    $('ttSuggest').innerHTML = TT_COMMON.map(n => `<button type="button" data-ttsug="${esc(n)}">${esc(n)}</button>`).join('');
+}
+function openTTCell(key) {
+    const [d, p] = key.split('-').map(Number);
+    const per = tt.periods[p];
+    if (!per) return;
+    ttEditKey = key;
+    const c = tt.cells[key] || {};
+    $('ttCellTitle').textContent = `星期${WEEK_ZH[d + 1]} · 第 ${p + 1} 節（${per.s}–${per.e}）`;
+    $('ttName').value = c.n || '';
+    $('ttName2').value = c.n2 || '';
+    $('ttNote').value = c.note || '';
+    $('ttAlt').checked = !!c.n2;
+    $('ttAltWrap').hidden = !c.n2;
+    ttEditColor = Number.isInteger(c.c) ? c.c : null;
+    $('ttClearCell').hidden = !tt.cells[key];
+    renderTTColors(); renderTTSuggest();
+    openModal('ttCellModal');
+}
+$('ttName').addEventListener('input', renderTTColors);
+$('ttAlt').addEventListener('change', () => { $('ttAltWrap').hidden = !$('ttAlt').checked; if ($('ttAlt').checked) setTimeout(() => $('ttName2').focus(), 50); });
+$('ttSuggest').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ttsug]');
+    if (!b) return;
+    $('ttName').value = b.dataset.ttsug; renderTTColors();
+});
+$('ttColors').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ttcol]');
+    if (!b) return;
+    ttEditColor = b.dataset.ttcol === 'auto' ? null : Number(b.dataset.ttcol);
+    renderTTColors();
+});
+['ttName', 'ttName2', 'ttNote'].forEach(id => $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); $('ttSaveCell').click(); } }));
+$('ttSaveCell').addEventListener('click', () => {
+    if (!ttEditKey) return;
+    const n = $('ttName').value.trim(), n2 = $('ttAlt').checked ? $('ttName2').value.trim() : '', note = $('ttNote').value.trim();
+    const cells = { ...tt.cells };
+    if (!n && !n2 && !note) delete cells[ttEditKey];
+    else cells[ttEditKey] = { n, ...(n2 ? { n2 } : {}), ...(ttEditColor !== null ? { c: ttEditColor } : {}), ...(note ? { note } : {}) };
+    // 第一次設定單雙週：這週當單週
+    const anchor = tt.anchor || (n2 ? ymd(mondayOf(new Date())) : null);
+    tt = normTT({ ...tt, cells, anchor }); saveTT();
+    closeModal('ttCellModal');
+});
+$('ttClearCell').addEventListener('click', () => {
+    if (!ttEditKey) return;
+    const cells = { ...tt.cells }; delete cells[ttEditKey];
+    tt = { ...tt, cells }; saveTT();
+    closeModal('ttCellModal');
+});
+
+/* --- 節數和上課時間 --- */
+let ttDraftTimes = [], ttDraftPar = 0;
+function renderTTTimes() {
+    $('ttTimes').innerHTML = ttDraftTimes.map((p, i) => `<div class="tt-trow"><b>第 ${i + 1} 節</b>
+        <input type="text" inputmode="numeric" maxlength="5" class="field num" data-tti="${i}" data-k="s" value="${p.s}" placeholder="08:10" aria-label="第 ${i + 1} 節開始（24 小時制）">
+        <span>–</span>
+        <input type="text" inputmode="numeric" maxlength="5" class="field num" data-tti="${i}" data-k="e" value="${p.e}" placeholder="09:00" aria-label="第 ${i + 1} 節結束（24 小時制）"></div>`).join('');
+    $('ttLess').disabled = ttDraftTimes.length <= 1;
+    $('ttMore').disabled = ttDraftTimes.length >= TT_MAX;
+    document.querySelectorAll('#ttParity [data-par]').forEach(b => b.classList.toggle('active', Number(b.dataset.par) === ttDraftPar));
+}
+function openTTTime() {
+    ttDraftTimes = tt.periods.map(p => ({ ...p }));
+    ttDraftPar = isEvenWeek(new Date()) ? 1 : 0;
+    $('ttParityWrap').hidden = !ttHasAlt();
+    renderTTTimes();
+    openModal('ttTimeModal');
+}
+// 打字輸入時間：810、8:10、0810、8.10 都會變成 08:10（24 小時制）
+function ttParseTime(v) {
+    const m = String(v).trim().replace(/[：.．]/g, ':').match(/^(\d{1,2}):?(\d{2})$/);
+    if (!m) return null;
+    const h = Number(m[1]), mi = Number(m[2]);
+    return h < 24 && mi < 60 ? `${pad(h)}:${pad(mi)}` : null;
+}
+$('ttTimes').addEventListener('change', (e) => {
+    const inp = e.target.closest('[data-tti]');
+    if (!inp) return;
+    const v = ttParseTime(inp.value);
+    if (!v) { inp.value = ttDraftTimes[Number(inp.dataset.tti)][inp.dataset.k]; toast('時間請用 24 小時制，例如 13:10'); return; }
+    inp.value = v;
+    ttDraftTimes[Number(inp.dataset.tti)][inp.dataset.k] = v;
+});
+$('ttMore').addEventListener('click', () => {
+    if (ttDraftTimes.length >= TT_MAX) return;
+    const last = ttDraftTimes[ttDraftTimes.length - 1];
+    const s = Math.min(ttMin(last.e) + 10, 23 * 60), e = Math.min(s + 50, 23 * 60 + 59);
+    const hm = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+    ttDraftTimes.push({ s: hm(s), e: hm(e) });
+    renderTTTimes();
+    $('ttTimes').scrollTop = $('ttTimes').scrollHeight;
+});
+$('ttLess').addEventListener('click', () => { if (ttDraftTimes.length > 1) { ttDraftTimes.pop(); renderTTTimes(); } });
+$('ttParity').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-par]');
+    if (!b) return;
+    ttDraftPar = Number(b.dataset.par); renderTTTimes();
+});
+$('ttSaveTime').addEventListener('click', () => {
+    // 先把還在編輯中的時間讀進來
+    let bad = false;
+    document.querySelectorAll('#ttTimes [data-tti]').forEach(inp => { const v = ttParseTime(inp.value); if (v) ttDraftTimes[Number(inp.dataset.tti)][inp.dataset.k] = v; else bad = true; });
+    if (bad) { toast('有時間格式不對，請用 24 小時制，例如 13:10'); return; }
+    for (let i = 0; i < ttDraftTimes.length; i++) {
+        const p = ttDraftTimes[i];
+        if (ttMin(p.e) <= ttMin(p.s)) { toast(`第 ${i + 1} 節的下課時間要比上課晚`); return; }
+        if (i && ttMin(p.s) < ttMin(ttDraftTimes[i - 1].e)) { toast(`第 ${i + 1} 節要在第 ${i} 節下課之後`); return; }
+    }
+    const n = ttDraftTimes.length;
+    const dropped = Object.keys(tt.cells).filter(k => Number(k.split('-')[1]) >= n);
+    const cells = { ...tt.cells }; dropped.forEach(k => delete cells[k]);
+    // 單雙週：選的是「這週」，換算成單週的星期一
+    let anchor = tt.anchor;
+    if (ttHasAlt()) { const mon = mondayOf(new Date()); if (ttDraftPar === 1) mon.setDate(mon.getDate() - 7); anchor = ymd(mon); }
+    const before = tt;
+    tt = normTT({ periods: ttDraftTimes, cells, anchor }); saveTT();
+    closeModal('ttTimeModal');
+    if (dropped.length) toast(`已移除後面 ${dropped.length} 格課`, { label: '復原', fn: () => { tt = before; saveTT(); } });
+    else toast('已更新上課時間');
+});
+
+/* --- 分享、匯入（課表放在連結裡，不經過伺服器；備註不會分享出去） --- */
+function ttEncode() {
+    const cells = {};
+    for (const [k, c] of Object.entries(tt.cells)) if (c.n || c.n2) cells[k] = { n: c.n, ...(c.n2 ? { n2: c.n2 } : {}), ...(Number.isInteger(c.c) ? { c: c.c } : {}) };
+    const json = JSON.stringify({ v: 1, periods: tt.periods, cells, anchor: tt.anchor });
+    const bytes = new TextEncoder().encode(json);
+    let bin = ''; bytes.forEach(b => bin += String.fromCharCode(b));
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function ttDecode(code) {
+    try {
+        const b64 = code.replace(/-/g, '+').replace(/_/g, '/');
+        const bin = atob(b64 + '==='.slice((b64.length + 3) % 4));
+        const bytes = Uint8Array.from(bin, ch => ch.charCodeAt(0));
+        const x = normTT(JSON.parse(new TextDecoder().decode(bytes)));
+        return Object.keys(x.cells).length ? x : null;
+    } catch (e) { return null; }
+}
+async function shareTT() {
+    if (!ttHasData()) { toast('課表還是空的，先填幾格再分享'); return; }
+    const url = `${location.origin}${location.pathname}?tt=${ttEncode()}`;
+    const text = '這是我的課表，點連結就能匯入到「學測倒數」';
+    try {
+        if (navigator.share) { await navigator.share({ title: '課表', text, url }); return; }
+    } catch (e) { if (e.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(url); toast('已複製課表連結，貼給同學就能匯入'); return; } catch (e) {}
+    // 舊瀏覽器沒有 clipboard：用隱藏的輸入框複製
+    const ta = document.createElement('textarea');
+    ta.value = url; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta); ta.select();
+    let done = false;
+    try { done = document.execCommand('copy'); } catch (e) {}
+    ta.remove();
+    toast(done ? '已複製課表連結，貼給同學就能匯入' : '無法複製連結，請換個瀏覽器再試');
+}
+let ttPending = null;
+function ttSummary(x) {
+    const names = [...new Set(Object.values(x.cells).flatMap(c => [c.n, c.n2]).filter(Boolean))];
+    return `<b>${x.periods.length}</b> 節、<b>${Object.keys(x.cells).length}</b> 格課<br>${esc(names.slice(0, 8).join('、'))}${names.length > 8 ? ' 等' : ''}`;
+}
+function openTTImport(pending) {
+    ttPending = pending || null;
+    $('ttImportAsk').hidden = !!pending;
+    $('ttImportPrev').hidden = !pending;
+    if (pending) $('ttImportPrev').innerHTML = `${ttSummary(pending)}${ttHasData() ? '<br><span class="muted">會取代你現在的課表（你的備註會保留）</span>' : ''}`;
+    $('ttImportText').value = '';
+    openModal('ttImportModal');
+}
+$('ttImportGo').addEventListener('click', () => {
+    let x = ttPending;
+    if (!x) {
+        const v = $('ttImportText').value.trim();
+        const m = v.match(/[?&]tt=([A-Za-z0-9_-]+)/);
+        x = ttDecode(m ? m[1] : v);
+        if (!x) { toast('看不懂這個連結，請確認有完整複製'); return; }
+    }
+    const before = tt;
+    // 自己寫的備註保留在原本的格子
+    const cells = { ...x.cells };
+    for (const [k, c] of Object.entries(tt.cells)) if (c.note) cells[k] = { ...(cells[k] || { n: '' }), note: c.note };
+    tt = normTT({ ...x, cells }); saveTT();
+    closeModal('ttImportModal');
+    ttPending = null;
+    calView = 'tt'; lsSet(LS.calView, calView);
+    showTab('tab-calendar'); applyCalView();
+    toast('已匯入課表', { label: '復原', fn: () => { tt = before; saveTT(); } });
+});
+// 打開別人分享的課表連結：問要不要匯入
+(function handleTTLink() {
+    const m = location.search.match(/[?&]tt=([A-Za-z0-9_-]+)/);
+    if (!m) return;
+    const x = ttDecode(m[1]);
+    try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+    if (!x) { setTimeout(() => toast('課表連結不完整，請同學重新分享一次'), 800); return; }
+    setTimeout(() => openTTImport(x), 900);
+})();
+
+/* --- 首頁：今天的課 --- */
+const ICON_BOOK_CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M9 4v16"/></svg>';
+const ICON_NEXT_SM = '<svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+// 首頁一排小格子用的短名字：去掉「選修、高三、加深加廣、(彈性學習)」這類字，取前兩個字
+function ttShort(n) {
+    const x = String(n).replace(/[（(][^)）]*[)）]/g, '').replace(/^(高[一二三])/, '').replace(/^(選修|必修|加深加廣|多元)/, '').trim();
+    return (x || String(n)).slice(0, 2);
+}
+function renderHomeClass() {
+    const el = $('homeClass');
+    if (!el || homePref.hide.includes('class')) return;
+    const now = new Date(), t = todayStr(), dow = (now.getDay() + 6) % 7, nowMin = now.getHours() * 60 + now.getMinutes();
+    const mini = (icon, html) => `<button class="cls-mini" data-hc="open">${icon}<span class="grow">${html}</span>${ICON_NEXT_SM}</button>`;
+    if (!ttHasData()) { setHtml(el, mini(ICON_BOOK_CLOCK, '<b>設定課表</b>，這裡就會顯示今天的課')); return; }
+    const classes = dow > 4 || ttOffDay(t) ? [] : tt.periods.map((p, i) => ({ p, i, k: ttClassAt(now, dow, i) })).filter(x => x.k && x.k.name);
+    if (!classes.length) { setHtml(el, mini(ICON_BOOK_CLOCK, `<b>今日無課程</b>${ttOffDay(t) ? '（放假）' : ''}`)); return; }
+    const last = classes[classes.length - 1];
+    if (nowMin >= ttMin(last.p.e)) { setHtml(el, mini(ICON_BOOK_CLOCK, `<b>今天的課上完了</b> · 放學 ${last.p.e}`)); return; }
+    const cur = classes.find(x => nowMin >= ttMin(x.p.s) && nowMin < ttMin(x.p.e));
+    const next = classes.find(x => ttMin(x.p.s) > nowMin);
+    const show = cur || next;
+    const col = show.k.color >= 0 ? `var(--s${show.k.color})` : 'var(--muted)';
+    let frac = 0, line1, line3;
+    if (cur) {
+        const len = Math.max(1, ttMin(cur.p.e) - ttMin(cur.p.s));
+        frac = (nowMin - ttMin(cur.p.s)) / len;
+        line1 = `現在 · 第 ${cur.i + 1} 節 ${cur.p.s}–${cur.p.e}`;
+        line3 = `還有 <b>${ttMin(cur.p.e) - nowMin}</b> 分下課`;
+    } else {
+        line1 = `下一節 · 第 ${next.i + 1} 節 ${next.p.s}–${next.p.e}`;
+        const wait = ttMin(next.p.s) - nowMin;
+        line3 = wait <= 60 ? `<b>${wait}</b> 分後上課` : `${next.p.s} 上課`;
+    }
+    const C = 2 * Math.PI * 19;
+    const strip = classes.map(x => {
+        const past = nowMin >= ttMin(x.p.e), isCur = cur && x.i === cur.i;
+        return `<span ${x.k.color >= 0 ? `data-c style="--c:var(--s${x.k.color})"` : ''} class="${past ? 'past' : ''} ${isCur ? 'now' : ''}" title="第 ${x.i + 1} 節 ${esc(x.k.name)}">${esc(ttShort(x.k.name))}</span>`;
+    }).join('');
+    const after = cur ? classes.find(x => x.i > cur.i) : classes.find(x => x.i > next.i);
+    setHtml(el, `<div class="sec-head"><h3>今天的課</h3><span>星期${WEEK_ZH[now.getDay()]} · ${classes.length} 節</span></div>
+        <button class="cls-now" data-hc="open">
+            <svg class="ring" viewBox="0 0 46 46" aria-hidden="true"><circle cx="23" cy="23" r="19" fill="none" stroke="var(--surface-2)" stroke-width="4"/><circle cx="23" cy="23" r="19" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - frac)).toFixed(1)}" transform="rotate(-90 23 23)"/><text x="23" y="27.5" text-anchor="middle" font-size="13" font-weight="800" fill="currentColor" font-family="Manrope">${show.i + 1}</text></svg>
+            <span class="tx"><span class="t1" style="display:block">${line1}</span><span class="t2" style="display:block;color:${col}">${esc(show.k.name)}</span><span class="t3" style="display:block">${line3}${show.k.note ? ` · ${esc(show.k.note)}` : ''}</span></span>
+            ${ICON_NEXT_SM}
+        </button>
+        <div class="cls-strip" aria-hidden="true">${strip}</div>
+        <div class="cls-next"><span>${after ? `接著 ${after.p.s} ${esc(after.k.name)}` : '這是今天最後一節'}</span><span>放學 ${last.p.e}</span></div>`);
+}
+$('homeClass').addEventListener('click', (e) => {
+    if (!e.target.closest('[data-hc]')) return;
+    calView = 'tt'; lsSet(LS.calView, calView);
+    showTab('tab-calendar'); applyCalView();
+});
+
+/* =====================================================
+ * v60 讀書熱力圖（統計頁「各科比例」下面）：一格一天，顏色越深讀越多，最深＝達到每日目標
+ * ===================================================== */
+let heatRange = localStorage.getItem(LS.heat) === 'year' ? 'year' : 'half';
+let heatSel = null;
+function heatData(range = heatRange) {
+    const weeks = range === 'year' ? 53 : 26;
+    const now = new Date(), t = todayStr();
+    const start = mondayOf(now); start.setDate(start.getDate() - 7 * (weeks - 1));
+    const mins = dayMinutesMap();
+    const goal = tpref.goal || 180;
+    const cells = [];
+    for (let i = 0; i < weeks * 7; i++) {
+        const d = new Date(start); d.setDate(start.getDate() + i);
+        const ds = ymd(d), m = Math.round(mins.get(ds) || 0);
+        cells.push({ ds, d, m, fut: ds > t, lv: m <= 0 ? 0 : m >= goal ? 4 : m >= goal * 2 / 3 ? 3 : m >= goal / 3 ? 2 : 1 });
+    }
+    const past = cells.filter(c => !c.fut);
+    let best = 0, run = 0;
+    past.forEach(c => { run = c.m > 0 ? run + 1 : 0; best = Math.max(best, run); });
+    const top = past.reduce((a, c) => (c.m > (a?.m || 0) ? c : a), null);
+    return { weeks, cells, goal, days: past.filter(c => c.m > 0).length, best, total: past.reduce((a, c) => a + c.m, 0), goalDays: past.filter(c => c.lv === 4).length, top };
+}
+function heatGridHtml(H, interactive) {
+    let h = `<div class="hm-grid ${heatRange}" style="--cols:${H.weeks}">`;
+    for (let w = 0; w < H.weeks; w++) {
+        const first = H.cells[w * 7].d, prev = w ? H.cells[(w - 1) * 7].d : null;
+        // 月份標在那個月第一週上面；最前面和最後一欄不標（字會擠到旁邊）
+        const show = prev && prev.getMonth() !== first.getMonth() && w < H.weeks - 1;
+        h += `<div class="hm-m">${show ? (first.getMonth() + 1) + '月' : ''}</div>`;
+        for (let k = 0; k < 7; k++) {
+            const c = H.cells[w * 7 + k];
+            h += interactive && !c.fut
+                ? `<button class="hm-d ${c.lv ? 'l' + c.lv : ''} ${heatSel === c.ds ? 'sel' : ''}" data-hm="${c.ds}" aria-label="${c.d.getMonth() + 1}/${c.d.getDate()} ${c.m ? fmtHM(c.m) : '沒有讀書'}"></button>`
+                : `<i class="hm-d ${c.fut ? 'fut' : (c.lv ? 'l' + c.lv : '')}"></i>`;
+        }
+    }
+    return h + '</div>';
+}
+function heatHtml() {
+    const H = heatData();
+    return `<section class="stats-sec hm-sec" id="heatSec">
+        <div class="sec-head"><h3>讀書熱力圖</h3><div class="hm-tabs" role="group" aria-label="範圍"><button data-sact="heat-half" class="${heatRange === 'half' ? 'on' : ''}" aria-pressed="${heatRange === 'half'}">半年</button><button data-sact="heat-year" class="${heatRange === 'year' ? 'on' : ''}" aria-pressed="${heatRange === 'year'}">一年</button></div></div>
+        <div class="hm-card">
+            <div class="hm-top"><div><b>${H.days}<small>天</small></b><span>有讀書</span></div><div><b>${H.best}<small>天</small></b><span>最長連續</span></div><div><b>${Math.round(H.total / 60)}<small>小時</small></b><span>總共</span></div></div>
+            <div class="hm-wrap"><div class="hm-wd" aria-hidden="true"><span></span><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span><span>日</span></div><div class="hm-scroll" id="heatScroll">${heatGridHtml(H, true)}</div></div>
+            <div class="hm-foot"><span>最深色＝達標 ${H.goal / 60} 小時</span><span class="hm-leg" aria-hidden="true">少 <i class="hm-d"></i><i class="hm-d l1"></i><i class="hm-d l2"></i><i class="hm-d l3"></i><i class="hm-d l4"></i> 多</span></div>
+        </div>
+        <div class="hm-acts"><button class="btn btn-small" data-sact="heat-share">分享熱力圖</button></div>
+    </section>`;
+}
+// 一年的格子比較多：打開時捲到最右邊（最近的日子）
+function heatAfterRender() {
+    const sc = $('heatScroll');
+    if (!sc) return;
+    heatAlignDays();
+    sc.scrollLeft = sc.scrollWidth;
+    if (heatSel) showHeatTip(heatSel);
+}
+// 左邊「一、三、五、日」要跟格子同高（格子大小會跟著螢幕寬度變）
+function heatAlignDays() {
+    const wd = document.querySelector('#heatSec .hm-wd'), cell = document.querySelector('#heatSec .hm-grid .hm-d');
+    if (!wd || !cell) return;
+    wd.style.gridTemplateRows = `14px repeat(7, ${cell.getBoundingClientRect().height}px)`;
+}
+window.addEventListener('resize', () => { if (document.body.dataset.tab === 'tab-stats') heatAlignDays(); });
+function showHeatTip(ds) {
+    const sec = $('heatSec');
+    if (!sec) return;
+    sec.querySelector('.hm-tip')?.remove();
+    const b = sec.querySelector(`[data-hm="${ds}"]`);
+    if (!b) return;
+    const r = b.getBoundingClientRect(), sr = sec.getBoundingClientRect();
+    const d = parseYmd(ds), m = Math.round(dayMinutes(ds));
+    const tip = document.createElement('div');
+    tip.className = 'hm-tip';
+    tip.innerHTML = `${d.getMonth() + 1}/${d.getDate()}（${WEEK_ZH[d.getDay()]}）${m ? `<b>${Math.floor(m / 60)}</b> 時 <b>${pad(m % 60)}</b> 分` : '沒有讀書'}`;
+    sec.appendChild(tip);
+    const half = tip.offsetWidth / 2;
+    const x = Math.min(Math.max(r.left - sr.left + r.width / 2, half + 4), sr.width - half - 4);
+    tip.style.left = x + 'px';
+    tip.style.top = (r.top - sr.top) + 'px';
+}
+document.addEventListener('click', (e) => {   // 點熱力圖以外的地方，提示就收起來
+    if (!heatSel || e.target.closest('[data-hm]')) return;
+    heatSel = null;
+    document.querySelectorAll('#heatSec .hm-d.sel').forEach(x => x.classList.remove('sel'));
+    $('heatSec')?.querySelector('.hm-tip')?.remove();
+});
+
+/* --- 熱力圖分享卡（1080 × 1920） --- */
+async function drawHeatCard() {
+    const H = heatData();
+    const css = getComputedStyle(document.documentElement);
+    const accent = css.getPropertyValue('--accent').trim() || '#E9B154';
+    const rgb = css.getPropertyValue('--accent-rgb').trim() || '233, 177, 84';
+    const sub = ['#3987E5', '#D95926', '#199E70', '#C98500', '#D55181'];
+    const zh = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
+    const num = 'Manrope, "Noto Sans TC", sans-serif';
+    try { await Promise.all([document.fonts.load(`800 120px Manrope`, '0123456789'), document.fonts.load(`700 40px "Noto Sans TC"`, '半年一來我讀了個小時天有書最長連續數學自然英文國文社會距離測還每格慢把它填滿多的達標月')]); } catch (e) {}
+    const W = 1080, Hh = 1920, P = 96;
+    const c = document.createElement('canvas'); c.width = W; c.height = Hh;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#050608'; ctx.fillRect(0, 0, W, Hh);
+    let g = ctx.createRadialGradient(W * 0.2, 0, 0, W * 0.2, 0, W * 0.9);
+    g.addColorStop(0, `rgba(${rgb}, 0.3)`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, Hh);
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = accent; ctx.font = `700 34px ${num}`;
+    spacedText(ctx, `STUDY HEATMAP · ${new Date().getFullYear()}`, P, 250, 10);
+    ctx.fillStyle = '#F2F0E9'; ctx.font = `700 76px ${zh}`;
+    ctx.fillText(`${heatRange === 'year' ? '這一年' : '半年來'}，我讀了`, P, 370);
+    ctx.fillText(`${Math.round(H.total / 60)} 個小時`, P, 470);
+    // 兩個大數字
+    const stat = (x, v, u, label) => {
+        ctx.fillStyle = '#F2F0E9'; ctx.font = `800 120px ${num}`; ctx.fillText(String(v), x, 680);
+        const vw = ctx.measureText(String(v)).width;
+        ctx.fillStyle = 'rgba(242,240,233,0.7)'; ctx.font = `600 40px ${zh}`; ctx.fillText(u, x + vw + 12, 676);
+        ctx.font = `500 34px ${zh}`; ctx.fillText(label, x, 740);
+    };
+    stat(P, H.days, '天', '有讀書'); stat(P + 420, H.best, '天', '最長連續');
+    // 熱力圖：寬度填滿
+    const gap = H.weeks > 30 ? 4 : 7;
+    const cell = Math.floor((W - P * 2 - gap * (H.weeks - 1)) / H.weeks);
+    const gx = P + ((W - P * 2) - (cell * H.weeks + gap * (H.weeks - 1))) / 2, gy = 860;
+    ctx.font = `500 ${H.weeks > 30 ? 22 : 26}px ${zh}`; ctx.fillStyle = 'rgba(242,240,233,0.45)';
+    let lastLabelX = -999;
+    for (let w = 0; w < H.weeks; w++) {
+        const first = H.cells[w * 7].d, prev = w ? H.cells[(w - 1) * 7].d : null;
+        const x = gx + w * (cell + gap);
+        if (prev && prev.getMonth() !== first.getMonth() && w < H.weeks - 1 && x - lastLabelX > 56) { ctx.fillText(`${first.getMonth() + 1}月`, x, gy - 18); lastLabelX = x; }
+        for (let k = 0; k < 7; k++) {
+            const it = H.cells[w * 7 + k];
+            if (it.fut) continue;
+            ctx.fillStyle = it.lv ? `rgba(${rgb}, ${[0, .28, .5, .75, 1][it.lv]})` : 'rgba(242,240,233,0.08)';
+            roundRect(ctx, x, gy + k * (cell + gap), cell, cell, Math.max(2, cell * .22)); ctx.fill();
+        }
+    }
+    let y = gy + 7 * (cell + gap) + 70;
+    // 各科比例
+    const per = SUBJECTS.map((_, s) => state.sessions.reduce((a, r) => a + (r.subject === s && H.cells.some(cc => cc.ds === sessionDay(r)) ? r.minutes : 0), 0));
+    const tot = per.reduce((a, b) => a + b, 0);
+    if (tot) {
+        const parts = per.map((v, s) => [v, s]).filter(([v]) => v > 0).sort((a, b) => b[0] - a[0]);
+        let bx = P; const avail = W - P * 2 - 8 * (parts.length - 1);
+        ctx.save(); roundRect(ctx, P, y, W - P * 2, 24, 12); ctx.clip();
+        parts.forEach(([v, s]) => { const bw = avail * v / tot; ctx.fillStyle = sub[s]; ctx.fillRect(bx, y, bw, 24); bx += bw + 8; });
+        ctx.restore();
+        ctx.font = `500 32px ${zh}`;
+        let lx = P, ly = y + 80;
+        parts.forEach(([v, s]) => {
+            const label = `${SUBJECTS[s]} ${Math.round(v / tot * 100)}%`;
+            const w = 34 + ctx.measureText(label).width;
+            if (lx + w > W - P) { lx = P; ly += 56; }
+            ctx.fillStyle = sub[s]; roundRect(ctx, lx, ly - 22, 20, 20, 5); ctx.fill();
+            ctx.fillStyle = 'rgba(242,240,233,0.85)'; ctx.fillText(label, lx + 32, ly);
+            lx += w + 40;
+        });
+        y = ly + 60;
+    }
+    // 兩個小卡：讀最多的一天、達標天數
+    const box = (x, w, label, value) => {
+        ctx.fillStyle = 'rgba(242,240,233,0.07)'; roundRect(ctx, x, y, w, 150, 28); ctx.fill();
+        ctx.fillStyle = 'rgba(242,240,233,0.6)'; ctx.font = `500 30px ${zh}`; ctx.fillText(label, x + 32, y + 56);
+        ctx.fillStyle = '#F2F0E9'; ctx.font = `700 42px ${num}`; ctx.fillText(value, x + 32, y + 116);
+    };
+    const bw = (W - P * 2 - 24) / 2;
+    if (H.top) { const d = H.top.d; box(P, bw, '讀最多的一天', `${d.getMonth() + 1}/${d.getDate()} · ${fmtHM(H.top.m)}`); }
+    box(P + bw + 24, bw, '達標天數', `${H.goalDays} 天`);
+    y += 230;
+    const gsat = EXAMS.gsat;
+    const left = Math.max(0, Math.floor((examTime(gsat.date) - Date.now()) / 86400000));
+    ctx.fillStyle = 'rgba(242,240,233,0.85)'; ctx.font = `500 38px ${zh}`;
+    ctx.fillText(`距離 ${gsat.name}還有 ${left} 天`, P, Math.min(y, 1690));
+    ctx.fillStyle = 'rgba(242,240,233,0.6)'; ctx.font = `500 34px ${zh}`;
+    ctx.fillText('每天一格，慢慢把它填滿。', P, Math.min(y, 1690) + 60);
+    // 圖示＋名稱（跟今天的卡片一樣）
+    const cx = P + 30, cy = 1810, r = 22;
+    ctx.lineCap = 'round'; ctx.lineWidth = 9;
+    ctx.strokeStyle = 'rgba(242,240,233,0.2)'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = accent; ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, Math.PI); ctx.stroke();
+    ctx.fillStyle = 'rgba(242,240,233,0.85)'; ctx.font = `700 34px ${zh}`;
+    spacedText(ctx, '學測倒數', cx + 52, cy + 12, 10);
+    return new Promise(res => c.toBlob(b => res(b), 'image/png'));
+}
+async function openHeatShare() {
+    toast('正在產生卡片…');
+    const blob = await drawHeatCard();
+    showShareBlob(blob, `讀書熱力圖-${todayStr()}.png`, '讀書熱力圖');
+}
+
+/* =====================================================
  * 首頁自己排：倒數頁下面的區塊要不要顯示、排什麼順序（跟著帳號同步）
  * ===================================================== */
 const HOME_MODS = [
+    { k: 'class', name: '今天的課', sub: '課表上現在和下一節課', icon: '<rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M9 4v16"/>' },
     { k: 'time', name: '今天讀了多久', icon: '<path d="M4 18V11M10 18V6M16 18v-5M2 21h20"/>' },
     { k: 'list', name: '今天的清單', sub: '進度表和今天的待辦', icon: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>' },
     { k: 'review', name: '重點複習', sub: '有標重點時才會出現', icon: '<path d="M6 3h12v18l-6-4-6 4z"/>' },
@@ -5126,7 +5760,8 @@ function normHome(h) {
     const keys = HOME_MODS.map(m => m.k);
     if (!h || !Array.isArray(h.order)) return { order: HOME_DEFAULT.order.slice(), hide: HOME_DEFAULT.hide.slice() };
     const order = h.order.filter(k => keys.includes(k));
-    keys.forEach(k => { if (!order.includes(k)) order.push(k); });
+    // 新加的區塊（例如 v60 的「今天的課」）放回它預設的位置，不是全部塞到最後面
+    keys.forEach((k, i) => { if (!order.includes(k)) { const after = keys.slice(0, i).reverse().find(x => order.includes(x)); order.splice(after ? order.indexOf(after) + 1 : 0, 0, k); } });
     return { order, hide: (Array.isArray(h.hide) ? h.hide : []).filter(k => keys.includes(k)) };
 }
 let homePref = normHome(lsGet(LS.home, null));
@@ -5178,7 +5813,7 @@ $('homeEditReset').addEventListener('click', () => { homeDraft = normHome(null);
 $('homeEditBtn').addEventListener('click', openHomeEdit);
 
 // 接下來的行程＋讀書房間（兩個新的首頁區塊，有打開才畫）
-function renderHomeExtras() { renderHomeUpcoming(); renderHomeRoom(); }
+function renderHomeExtras() { renderHomeUpcoming(); renderHomeRoom(); renderHomeClass(); }
 function renderHomeUpcoming() {
     if (homePref.hide.includes('upcoming')) return;
     const t = todayStr();
@@ -5316,13 +5951,14 @@ if (removedDupes) saveLocal();
 // 上次是登入狀態：先用雲端副本畫出畫面，雲端回應後只在資料真的有變時才重畫
 { const c = loadCloudCache(); if (c) { state = c.state; cachedUid = c.uid; cloudBase = c.base; cloudDirty = c.dirty; } }
 applyHome();
+applyCalView();   // v60：上次停在課表就打開課表
 renderExamChips();
 // 關掉 App 期間一輪已經結束的話，打開時直接記錄（不響）
 if (timer.phase === 'focus' && timer.duration && !timer.pausedAt && focusElapsed() >= timer.duration) finishFocus(true, true);
 if (timer.phase === 'break' && Date.now() - timer.breakStart >= timer.breakLen && !timer.chimed) { timer.chimed = true; saveTimer(); }
 if (timer.phase === 'focus' && !timer.pausedAt) requestWake();
 tick();
-setInterval(() => { tick(); timerTick(); roomTick(); }, 1000);
+setInterval(() => { tick(); timerTick(); roomTick(); ttTick(); }, 1000);
 renderAll();
 renderAccount();
 const resumed = resumeAfterUpdate();   // 自動更新後重新載入：回到原本的畫面
@@ -5523,7 +6159,7 @@ $('loginBtn').addEventListener('click', async () => {
 /* --- v55：刪除帳號與所有資料 --- */
 const DEL_PENDING = 'study_del_pending';
 const LOCAL_DATA_KEYS = () => [LS.todos, LS.weekly, LS.events, LS.sessions, LS.syllabus, LS.countdowns, LS.timer, LS.tpref, LS.room,
-    LS.chatSeen, LS.photoCount, LS.home, LS.cloud, LS.aiPref, LS.aiCount, LS.exam, LS.progView, LS.sylOpen, LS.minTip, SESS_JOURNAL];
+    LS.chatSeen, LS.photoCount, LS.home, LS.cloud, LS.aiPref, LS.aiCount, LS.exam, LS.progView, LS.sylOpen, LS.minTip, SESS_JOURNAL, LS.tt, LS.calView, LS.heat];
 function openDelSheet(note) {
     if (!currentUser) return;
     $('delInput').value = '';

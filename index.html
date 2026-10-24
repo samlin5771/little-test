@@ -123,6 +123,7 @@
 
                 <!-- 倒數下面的區塊：可以在「編輯首頁」選要不要顯示、排順序 -->
                 <section class="today-sec" id="homeMods">
+                    <div class="home-mod" data-mod="class" id="homeClass"></div>
                     <div class="home-mod" data-mod="time">
                         <div class="sec-head">
                             <h3>今天</h3>
@@ -219,6 +220,9 @@
         <section id="tab-room" class="tab"></section>
 
         <section id="tab-calendar" class="tab">
+          <!-- v60：行事曆／課表切換 -->
+          <div class="cal-switch"><div class="seg two" id="calViewSeg" role="tablist" aria-label="行事曆或課表"><button data-cv="cal" class="active" role="tab" aria-selected="true">行事曆</button><button data-cv="tt" role="tab" aria-selected="false">課表</button></div></div>
+          <div class="tt-view" id="ttView" hidden></div>
           <div class="cal-layout">
             <div class="cal-main">
             <div class="cal-head">
@@ -651,6 +655,75 @@
     </div>
 
     <!-- 分享卡片 -->
+    <!-- v60 課表：⋯ 選單 -->
+    <div class="modal bottom" id="ttMenuModal" role="dialog" aria-modal="true" aria-labelledby="ttMenuTitle">
+        <div class="sheet">
+            <div class="grabber" data-close></div>
+            <h2 id="ttMenuTitle">課表</h2>
+            <div class="menu-list">
+                <button data-ttm="share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>分享課表給同學</button>
+                <button data-ttm="import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>匯入課表</button>
+                <button data-ttm="time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>節數和上課時間</button>
+                <button data-ttm="clear" class="danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>清空課表</button>
+            </div>
+            <div class="sheet-btns"><button class="btn" data-close style="flex:1">取消</button></div>
+        </div>
+    </div>
+
+    <!-- v60 課表：編輯一格 -->
+    <div class="modal" id="ttCellModal" role="dialog" aria-modal="true" aria-labelledby="ttCellTitle">
+        <div class="sheet tt-cell-sheet">
+            <h2 id="ttCellTitle">第 1 節</h2>
+            <label class="field-label" for="ttName">科目</label>
+            <input type="text" class="field" id="ttName" maxlength="12" placeholder="例如：數學" autocomplete="off" enterkeyhint="done">
+            <div class="tt-suggest" id="ttSuggest"></div>
+            <p class="field-label">顏色</p>
+            <div class="tt-colors" id="ttColors" role="group" aria-label="顏色"></div>
+            <label class="cde-switch"><span>單雙週上不同的課<small>例如單週物理、雙週化學</small></span><input type="checkbox" id="ttAlt" role="switch"><i aria-hidden="true"></i></label>
+            <div id="ttAltWrap" hidden>
+                <label class="field-label" for="ttName2">雙週的科目</label>
+                <input type="text" class="field" id="ttName2" maxlength="12" placeholder="例如：化學" autocomplete="off" enterkeyhint="done">
+            </div>
+            <label class="field-label" for="ttNote" style="margin-top:12px">備註（可不填）</label>
+            <input type="text" class="field" id="ttNote" maxlength="30" placeholder="例如：要帶實驗衣、小考" autocomplete="off" enterkeyhint="done">
+            <div class="sheet-btns">
+                <button class="btn sess-del" id="ttClearCell">清除</button>
+                <span class="spacer"></span>
+                <button class="btn" data-close>取消</button>
+                <button class="btn btn-accent" id="ttSaveCell">儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- v60 課表：節數和上課時間 -->
+    <div class="modal" id="ttTimeModal" role="dialog" aria-modal="true" aria-labelledby="ttTimeTitle">
+        <div class="sheet tt-time-sheet">
+            <h2 id="ttTimeTitle">節數和上課時間</h2>
+            <p class="tt-time-note">每間學校的時間不一樣，照你的學校改就好。午休會依時間自動顯示。</p>
+            <div class="tt-times" id="ttTimes"></div>
+            <div class="tt-time-acts"><button class="btn btn-small" id="ttLess">－ 減少一節</button><button class="btn btn-small" id="ttMore">＋ 增加一節</button></div>
+            <div id="ttParityWrap">
+                <p class="field-label" style="margin-top:14px">這一週是</p>
+                <div class="seg two" id="ttParity"><button data-par="0">單週</button><button data-par="1">雙週</button></div>
+                <p class="tt-time-note" style="margin-top:6px">有設定單雙週不同的課才會用到</p>
+            </div>
+            <div class="sheet-btns"><span class="spacer"></span><button class="btn" data-close>取消</button><button class="btn btn-accent" id="ttSaveTime">儲存</button></div>
+        </div>
+    </div>
+
+    <!-- v60 課表：匯入 -->
+    <div class="modal" id="ttImportModal" role="dialog" aria-modal="true" aria-labelledby="ttImportTitle">
+        <div class="sheet tt-import-sheet">
+            <h2 id="ttImportTitle">匯入課表</h2>
+            <div id="ttImportAsk">
+                <p class="tt-time-note">貼上同學分享給你的課表連結</p>
+                <textarea class="field" id="ttImportText" rows="3" placeholder="https://…?tt=…" autocomplete="off"></textarea>
+            </div>
+            <div class="tt-import-prev" id="ttImportPrev" hidden></div>
+            <div class="sheet-btns"><span class="spacer"></span><button class="btn" data-close>取消</button><button class="btn btn-accent" id="ttImportGo">匯入</button></div>
+        </div>
+    </div>
+
     <div class="modal" id="shareModal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
         <div class="sheet share-sheet">
             <h2 id="shareTitle">分享卡片</h2>
@@ -740,12 +813,30 @@
     </div>
 
     <!-- 第一次打開：簡易導覽 -->
+    <!-- v60：更新後第一次打開，告訴大家這次新增了什麼 -->
+    <div class="modal" id="whatsNewModal" role="dialog" aria-modal="true" aria-labelledby="wnTitle">
+        <div class="sheet tour-card">
+            <p class="tour-kicker">更新 · v60</p>
+            <h2 id="wnTitle">這次新增了什麼</h2>
+            <p class="tour-sub">三個新功能，不用設定也能先看看</p>
+            <ul class="tour-list">
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M9 4v16"/></svg></span><div><b>課表</b><span>在「行事曆」上方切換。可自訂課名、節數和上課時間，還能分享給同學一鍵匯入</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/></svg></span><div><b>首頁「今天的課」</b><span>現在第幾節、還有幾分下課，一打開就知道</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="10" y="3" width="5" height="5" rx="1"/><rect x="17" y="3" width="4" height="5" rx="1"/><rect x="3" y="10" width="5" height="5" rx="1"/><rect x="10" y="10" width="5" height="5" rx="1"/><rect x="3" y="17" width="5" height="4" rx="1"/></svg></span><div><b>讀書熱力圖</b><span>在讀書統計最下面，一格一天，可以分享成 IG 限動</span></div></li>
+            </ul>
+            <div class="sheet-btns">
+                <button class="btn" id="wnTry">看看課表</button>
+                <button class="btn btn-accent" data-close style="flex:1">知道了</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal" id="tourModal" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
         <div class="sheet tour-card">
             <p class="tour-kicker">歡迎使用</p>
             <h2 id="tourTitle">學測倒數 &amp; 讀書計畫</h2>
             <p class="tour-sub">一個地方搞定倒數、計畫、計時和讀書夥伴</p>
-            <ul class="tour-list"><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg></span><div><b>倒數計時</b><span>學測、模考倒數，今天讀了多久一眼看到</span></div></li><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg></span><div><b>每週進度＋學測範圍</b><span>排每週進度、勾學測單元，AI 幫你排下週</span></div></li><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 9 9h-9z"/></svg></span><div><b>讀書計時與統計</b><span>番茄鐘專注，自動記錄、畫成圖表</span></div></li><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.5.2 4 1.9 4.5 4.9"/></svg></span><div><b>讀書房間與聊天室</b><span>和朋友一起讀，看大家在讀什麼</span></div></li><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><div><b>行事曆與待辦</b><span>考試、行程、待辦事項都在這裡</span></div></li></ul>
+            <ul class="tour-list"><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg></span><div><b>倒數計時</b><span>學測、模考倒數，今天讀了多久一眼看到</span></div></li><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg></span><div><b>每週進度＋學測範圍</b><span>排每週進度、勾學測單元，AI 幫你排下週</span></div></li><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 9 9h-9z"/></svg></span><div><b>讀書計時與統計</b><span>番茄鐘專注，自動記錄、畫成圖表</span></div></li><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.5.2 4 1.9 4.5 4.9"/></svg></span><div><b>讀書房間與聊天室</b><span>和朋友一起讀，看大家在讀什麼</span></div></li><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><div><b>行事曆、課表與待辦</b><span>考試、行程、課表和待辦事項都在這裡</span></div></li></ul>
             <p class="tour-note">完整的圖文介紹在右上角<b>頭像 → 網站導覽</b>，隨時可以再看</p>
             <div class="sheet-btns">
                 <button class="btn" id="tourFull">看完整導覽</button>
@@ -778,7 +869,7 @@
                 <h1>學測倒數 &amp; 讀書計畫</h1>
                 <p>從倒數、排計畫、專注計時到和朋友一起讀書，這裡一次看懂每個功能怎麼用。</p>
             </div>
-            <nav class="guide-toc" aria-label="導覽目錄"><a href="#g-cd">倒數</a><a href="#g-wk">每週進度</a><a href="#g-syl">學測範圍</a><a href="#g-tm">計時</a><a href="#g-st">統計</a><a href="#g-rm">讀書房間</a><a href="#g-ch">聊天室</a><a href="#g-cal">行事曆・待辦</a><a href="#g-me">個人設定</a><a href="#g-key">電腦快捷鍵</a></nav>
+            <nav class="guide-toc" aria-label="導覽目錄"><a href="#g-cd">倒數</a><a href="#g-wk">每週進度</a><a href="#g-syl">學測範圍</a><a href="#g-tm">計時</a><a href="#g-st">統計</a><a href="#g-rm">讀書房間</a><a href="#g-ch">聊天室</a><a href="#g-cal">行事曆・待辦</a><a href="#g-tt">課表</a><a href="#g-me">個人設定</a><a href="#g-key">電腦快捷鍵</a></nav>
 
             <section class="g-sec" id="g-cd">
                 <p class="g-num num">01</p>
@@ -797,7 +888,7 @@
   <div class="g-check"><span></span><em class="g-td">待辦</em>交數學作業</div>
   <div class="g-btn">現在要讀什麼？</div>
 </div></figure>
-                <ul class="g-points"><li>上方切換<b>模考和學測</b>；考完的會自動收進「⋯」，換成下一場。</li><li>按最右邊的 <b>⋯</b> 打開「我的倒數」：可以<b>新增自己的倒數</b>（段考、英檢、生日…），選顏色、多天的日期，生日可以設成<b>每年重複</b>，也能顯示在行事曆上。上方最多放 3 個（<b>學測固定在最右邊</b>，另外可以再勾 2 個），拖曳右邊的 ☰ 排順序；沒放在上方的都留在「⋯」裡，點一下就能看。已經過完的倒數會變灰，並自動從上方拿掉、換成下一個要到的。</li><li>大數字是剩下的天數，下面是時分秒，還有考試日期和「下一場」還有幾天。</li><li><b>今天</b>區顯示今天讀了多久、離每日目標還差多少，進度條滿了就是達標。點<b>「目標 3 小時」</b>可以直接改每日目標。</li><li>有標重點複習的單元時，「今天」下面會提醒你，點一下就跳到學測範圍。</li><li>每週進度表裡「今天」的項目，和<b>排在今天（或已經逾期）的待辦</b>，都會列在這裡，可以直接打勾。</li><li>不知道讀什麼？按<b>現在要讀什麼？</b>，轉盤幫你隨機選一科。</li><li>最下面的<b>編輯首頁</b>：勾選要顯示哪些區塊、按住 ☰ 拖曳排順序。還可以打開<b>接下來的行程</b>和<b>讀書房間</b>（看朋友現在在讀什麼）兩個區塊。排法會跟著帳號同步。</li></ul>
+                <ul class="g-points"><li>上方切換<b>模考和學測</b>；考完的會自動收進「⋯」，換成下一場。</li><li>按最右邊的 <b>⋯</b> 打開「我的倒數」：可以<b>新增自己的倒數</b>（段考、英檢、生日…），選顏色、多天的日期，生日可以設成<b>每年重複</b>，也能顯示在行事曆上。上方最多放 3 個（<b>學測固定在最右邊</b>，另外可以再勾 2 個），拖曳右邊的 ☰ 排順序；沒放在上方的都留在「⋯」裡，點一下就能看。已經過完的倒數會變灰，並自動從上方拿掉、換成下一個要到的。</li><li>大數字是剩下的天數，下面是時分秒，還有考試日期和「下一場」還有幾天。</li><li>有設定課表的話，最上面的<b>今天的課</b>會顯示現在第幾節、還有幾分下課，和今天每一節課；週末或沒課時會縮成一行「今日無課程」。點一下就打開課表。</li><li><b>今天</b>區顯示今天讀了多久、離每日目標還差多少，進度條滿了就是達標。點<b>「目標 3 小時」</b>可以直接改每日目標。</li><li>有標重點複習的單元時，「今天」下面會提醒你，點一下就跳到學測範圍。</li><li>每週進度表裡「今天」的項目，和<b>排在今天（或已經逾期）的待辦</b>，都會列在這裡，可以直接打勾。</li><li>不知道讀什麼？按<b>現在要讀什麼？</b>，轉盤幫你隨機選一科。</li><li>最下面的<b>編輯首頁</b>：勾選要顯示哪些區塊、按住 ☰ 拖曳排順序。可以開關<b>今天的課</b>，還可以打開<b>接下來的行程</b>和<b>讀書房間</b>（看朋友現在在讀什麼）兩個區塊。排法會跟著帳號同步。</li></ul>
                 
             </section>
 
@@ -858,7 +949,7 @@
                 <h3>讀書統計</h3>
                 <p class="g-lead">看這週、這個月讀了多少，哪科讀得多、哪科該補。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-phone"><div class="g-total num">23<small>時</small>10<small>分</small></div><p class="g-cap left"><span class="up">↑ 比上週多 4 時</span></p><div class="g-chart"><div class="g-goal"></div><span class="g-col"><i style="height:11px;background:var(--s0)"></i><i style="height:15px;background:var(--s1)"></i><i style="height:19px;background:var(--s2)"></i><i style="height:11px;background:var(--s3)"></i></span><span class="g-col"><i style="height:8px;background:var(--s0)"></i><i style="height:19px;background:var(--s1)"></i><i style="height:15px;background:var(--s2)"></i></span><span class="g-col"><i style="height:15px;background:var(--s0)"></i><i style="height:11px;background:var(--s1)"></i><i style="height:23px;background:var(--s2)"></i><i style="height:17px;background:var(--s3)"></i></span><span class="g-col"><i style="height:19px;background:var(--s0)"></i><i style="height:11px;background:var(--s1)"></i><i style="height:19px;background:var(--s2)"></i></span><span class="g-col"><i style="height:17px;background:var(--s0)"></i><i style="height:23px;background:var(--s1)"></i><i style="height:15px;background:var(--s2)"></i><i style="height:17px;background:var(--s3)"></i></span><span class="g-col"><i style="height:11px;background:var(--s0)"></i><i style="height:15px;background:var(--s1)"></i><i style="height:23px;background:var(--s2)"></i><i style="height:13px;background:var(--s3)"></i></span><span class="g-col"><i style="height:10px;background:var(--s0)"></i><i style="height:13px;background:var(--s1)"></i><i style="height:15px;background:var(--s2)"></i></span></div><div class="g-split"><i style="width:22%;background:var(--s0)"></i><i style="width:19%;background:var(--s1)"></i><i style="width:24%;background:var(--s2)"></i><i style="width:20%;background:var(--s3)"></i><i style="width:15%;background:var(--s4)"></i></div><div class="g-dayrow">10/18 星期日 · 5 筆紀錄<span>›</span></div></div></figure>
-                <ul class="g-points"><li>最上面是總時數和「比上週多／少多少」，下面是日平均、連續讀書天數、達標天數。</li><li>在「達標每日 3 小時 ▾」可以<b>改每日目標</b>，倒數和計時頁會一起更新。</li><li>長條圖用科目顏色堆疊，綠色虛線是目標，達標的那天數字會變綠。</li><li>點長條選一天，再點下面那一列就會滑出<b>當天明細</b>：點一筆紀錄可以<b>修改或刪除</b>，也可以補登時間、分享成 IG 限動圖卡。</li><li>各科比例用一條彩色長條加排名表示。</li></ul>
+                <ul class="g-points"><li>最上面是總時數和「比上週多／少多少」，下面是日平均、連續讀書天數、達標天數。</li><li>在「達標每日 3 小時 ▾」可以<b>改每日目標</b>，倒數和計時頁會一起更新。</li><li>長條圖用科目顏色堆疊，綠色虛線是目標，達標的那天數字會變綠。</li><li>點長條選一天，再點下面那一列就會滑出<b>當天明細</b>：點一筆紀錄可以<b>修改或刪除</b>，也可以補登時間、分享成 IG 限動圖卡。</li><li>各科比例用一條彩色長條加排名表示。</li><li>最下面的<b>讀書熱力圖</b>：一格是一天，顏色越深讀越多，<b>最深色是達到每日目標</b>。可以看半年或一年，點一格會顯示那天讀了多久，也能<b>分享成 IG 限動圖卡</b>。</li></ul>
                 
             </section>
 
@@ -914,12 +1005,29 @@
   <div class="g-todo"><span class="swipe ok">✓ 完成</span><span class="item">交數學作業<em class="g-td-date">明天</em></span></div>
   <div class="g-todo"><span class="item">背英文單字</span><span class="swipe del">刪除</span></div>
 </div></figure>
-                <ul class="g-points"><li>行事曆左右滑換月份；點日期再按 ＋ 新增行程，可以選<b>單日或連續多天</b>；標成<b>重要</b>的日期會被圈起來。</li><li>考試日會用紅色標出；下面列出即將到來的行程和剩幾天。</li><li>待辦清單：輸入後按新增；<b>往右滑完成、往左滑刪除</b>，不小心刪掉可以按「復原」。</li><li>新增待辦時可以按輸入框旁的<b>日曆圖示選日期</b>（不選也可以）。有日期的待辦會排在前面，同時出現在<b>行事曆</b>那天（綠色小點），當天和逾期的也會列在倒數頁的<b>「今天」</b>，在哪裡打勾都可以。</li></ul>
+                <ul class="g-points"><li>行事曆左右滑換月份；點日期再按 ＋ 新增行程，可以選<b>單日或連續多天</b>；標成<b>重要</b>的日期會被圈起來。</li><li>考試日會用紅色標出；下面列出即將到來的行程和剩幾天。</li><li>最上面可以切換<b>行事曆／課表</b>，課表的用法在下一段。</li><li>待辦清單：輸入後按新增；<b>往右滑完成、往左滑刪除</b>，不小心刪掉可以按「復原」。</li><li>新增待辦時可以按輸入框旁的<b>日曆圖示選日期</b>（不選也可以）。有日期的待辦會排在前面，同時出現在<b>行事曆</b>那天（綠色小點），當天和逾期的也會列在倒數頁的<b>「今天」</b>，在哪裡打勾都可以。</li></ul>
+                
+            </section>
+
+            <section class="g-sec" id="g-tt">
+                <p class="g-num num">09</p>
+                <h3>課表</h3>
+                <p class="g-lead">在「行事曆」分頁最上面切換到「課表」。填好一次，首頁就會告訴你現在上什麼課。</p>
+                <figure class="g-fig" aria-hidden="true"><div class="g-phone">
+  <div class="g-row"><b>10/26 – 10/30</b><span class="g-cap">⋯</span></div>
+  <div class="g-tt"><span></span><span class="h">一</span><span class="h on">二</span><span class="h">三</span><span class="h">四</span><span class="h">五</span>
+    <span class="p">1</span><i style="--c:var(--s2)">英文</i><i style="--c:var(--s0)">數學</i><i style="--c:var(--s1)">地科</i><i style="--c:var(--s3)">國文</i><i class="n">藝術</i>
+    <span class="p">2</span><i style="--c:var(--s2)">英文</i><i style="--c:var(--s0)">數學</i><i class="n">體育</i><i style="--c:var(--s3)">國文</i><i class="n">藝術</i>
+    <span class="p">3</span><i class="n">專題</i><i class="now" style="--c:var(--s3)">國文</i><i style="--c:var(--s0)">數學</i><i class="n">選修</i><i class="n">綜合</i>
+    <span class="p">4</span><i class="n">專題</i><i style="--c:var(--s1)">物理<em>單</em></i><i style="--c:var(--s0)">數學</i><i class="n">選修</i><i class="n">班會</i>
+    <span class="p">8</span><i class="add">＋</i><i class="add">＋</i><i class="add">＋</i><i class="add">＋</i><i class="add">＋</i></div>
+</div></figure>
+                <ul class="g-points"><li><b>點一格</b>就能填科目，可以<b>自己打任何課名</b>，也可以點下面的常用科目。顏色會依科目自動配（數學藍、自然橘、英文綠、國文黃、社會粉），也能自己選。</li><li>有些課<b>單雙週輪流</b>（例如單週物理、雙週化學）：打開「單雙週上不同的課」，填雙週的科目就好。</li><li>每一格都可以寫<b>備註</b>（要帶的東西、小考），有備註的格子右上角會有小黃點。</li><li>右上角 <b>⋯</b> 可以<b>改節數（最多 10 節）和每一節的上下課時間</b>，照你的學校改；午休會依時間自動顯示。</li><li>同一班只要一個人填：按 ⋯ →<b>分享課表給同學</b>，同學點連結就能<b>一鍵匯入</b>（備註不會分享出去）。</li><li>行事曆上寫了「放假、補假、停課」的那天，課表會標成<b>放假</b>。</li><li>課表會跟著帳號同步，換手機或電腦也看得到。</li></ul>
                 
             </section>
 
             <section class="g-sec" id="g-me">
-                <p class="g-num num">09</p>
+                <p class="g-num num">10</p>
                 <h3>個人設定</h3>
                 <p class="g-lead">點右上角的頭像打開。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-phone">
@@ -934,7 +1042,7 @@
             </section>
 
             <section class="g-sec" id="g-key">
-                <p class="g-num num">10</p>
+                <p class="g-num num">11</p>
                 <h3>電腦快捷鍵</h3>
                 <p class="g-lead">用電腦時，這些按鍵可以更快操作。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-keys"><div><span class="kbd">1 – 5</span>切換分頁</div><div><span class="kbd">Space</span>開始／暫停計時</div><div><span class="kbd">N</span>新增待辦或行程</div><div><span class="kbd">← →</span>上一週、下一週（月）</div><div><span class="kbd">T</span>切換深淺色</div><div><span class="kbd">⌘K</span>指令面板：打字就能新增、開始專注</div><div><span class="kbd">?</span>快捷鍵表</div><div><span class="kbd">Esc</span>關閉視窗、返回上一頁</div></div></figure>
