@@ -45,7 +45,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_VER = '12.19.0';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v58';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v59';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -4788,7 +4788,15 @@ $('guideScreen').addEventListener('click', (e) => {
     if (!a) return;
     e.preventDefault();
     const t = document.querySelector(a.getAttribute('href'));
-    if (t) $('guideBody').scrollTo({ top: t.offsetTop - 70, behavior: 'smooth' });
+    if (!t) return;
+    // 看不到的段落平常先不畫（高度只是估計值），要跳過去前先全部排好，才算得出正確位置
+    const gb = $('guideBody'), toc = gb.querySelector('.guide-toc');
+    gb.classList.add('g-full');
+    requestAnimationFrame(() => {
+        // 用畫面上的實際位置算（offsetTop 是相對外框算的，會停錯地方），停在固定的目錄下面
+        const top = gb.scrollTop + t.getBoundingClientRect().top - gb.getBoundingClientRect().top - (toc ? toc.offsetHeight : 58) - 8;
+        gb.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    });
 });
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && $('guideScreen').classList.contains('open') && !document.querySelector('.modal.open')) { e.stopImmediatePropagation(); closeGuide(); }

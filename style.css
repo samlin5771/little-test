@@ -1508,6 +1508,7 @@ html { touch-action: pan-x pan-y; }              /* 擋雙指縮放，但不影�
 html, body { overscroll-behavior-y: none; }
 .bg-glow { contain: strict; }
 .g-sec { content-visibility: auto; contain-intrinsic-size: auto 900px; }   /* 導覽頁：看不到的段落先不畫 */
+.g-full .g-sec { content-visibility: visible; }   /* v58：點目錄跳段落時全部排好，才停得準 */
 .event-list, .todo-list, .seats { contain: layout paint; }
 @media (max-width: 899px) { .bg-glow { animation-duration: 20s; } }
 @media (prefers-reduced-motion: reduce) { .bg-glow { animation: none; } }
