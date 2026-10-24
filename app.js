@@ -44,8 +44,10 @@ const FIREBASE_CONFIG = {
     measurementId: "G-01SBVEFL1R"
 };
 const FIREBASE_VER = '12.19.0';
+// v61 推播：Firebase 主控台 → 專案設定 → Cloud Messaging → Web Push 憑證 的「金鑰組」（公開的，可以放在這裡）
+const VAPID_KEY = 'BGD80hd0Xdk6Irow67T2c0x6txEOqT_dnwv3r5IaByGhq86PDQm47egvg_Dni2uHyRfv_ZSECzdnpFc_Fs0wagE';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v60';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v61';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -61,7 +63,7 @@ const LS = {
     install: 'study_install_seen', tour: 'study_tour_seen', chatSeen: 'study_chat_seen', photoCount: 'study_photo_count',
     countdowns: 'study_countdowns', home: 'study_home', progView: 'study_prog_view', sylOpen: 'study_syl_open',
     lastActive: 'study_last_active', cloud: 'study_cloud_cache',
-    tt: 'study_timetable', calView: 'study_cal_view', heat: 'study_heat_range', seenVer: 'study_seen_ver'   // v60 課表、行事曆／課表切換、熱力圖範圍
+    tt: 'study_timetable', calView: 'study_cal_view', heat: 'study_heat_range', seenVer: 'study_seen_ver', push: 'study_push', pushId: 'study_push_id'   // v60 課表、行事曆／課表切換、熱力圖範圍
 };   // 這台裝置存的所有設定都在這裡（改名字會讓舊資料讀不到，不要改）
 // 沒有頭像時的預設圖（顏色跟著主題色）
 function defaultAvatar() {
@@ -480,7 +482,7 @@ function setFold(row, fold, open) {
     $(fold).inert = !open;
     $(row).setAttribute('aria-expanded', open);
 }
-function closeFolds() { setFold('accentRow', 'accentFold', false); setFold('bgRow', 'bgFold', false); setFold('notifyRow', 'notifyFold', false); }
+function closeFolds() { setFold('accentRow', 'accentFold', false); setFold('bgRow', 'bgFold', false); setFold('notifyRow', 'notifyFold', false); if ($('pushFold')) setFold('pushRow', 'pushFold', false); }
 $('accentRow').addEventListener('click', () => setFold('accentRow', 'accentFold', !$('accentFold').classList.contains('open')));
 
 $('themeBtn').addEventListener('click', () => {
@@ -880,7 +882,7 @@ $('topExtra').addEventListener('click', (e) => {
 const syncScrollLock = () => document.body.classList.toggle('modal-open', !!document.querySelector('.modal.open'));
 function openModal(id) {
     // 個人設定：每次打開都從最上面（帳號資料）開始；順便先在背景載好隱私權政策，點進去不用等
-    if (id === 'accountModal') { const sh = $(id).querySelector('.sheet'); if (sh) sh.scrollTop = 0; setTimeout(preloadPrivacy, 400); }
+    if (id === 'accountModal') { const sh = $(id).querySelector('.sheet'); if (sh) sh.scrollTop = 0; setTimeout(preloadPrivacy, 400); renderPushRow(); }
     $(id).classList.add('open'); syncScrollLock();
 }
 function closeModal(id) {
@@ -1964,7 +1966,7 @@ window.addEventListener('storage', (e) => {
         state = loadLocal(); renderAll();
     }
 });
-const saveTpref = () => lsSet(LS.tpref, tpref);
+const saveTpref = () => { lsSet(LS.tpref, tpref); try { pushSync(); } catch (e) {} };   // 每日目標也給每日提醒用
 
 const fmtClock = (ms) => {
     const sec = Math.max(0, Math.round(ms / 1000));
@@ -4056,6 +4058,7 @@ function updateChatBadges() {
 function systemNotify(title, body, code) {
     try {
         if (!('Notification' in window) || Notification.permission !== 'granted') return;
+        if (pushPref.on && pushPref.chat && localStorage.getItem(LS.pushId)) return;   // 有開推播：交給推播伺服器，不重複通知
         const opt = { body: body.slice(0, 120), tag: 'room-' + code, renotify: true, icon: 'icon-192.png', badge: 'favicon-32.png', data: { room: code } };
         if (navigator.serviceWorker?.controller) navigator.serviceWorker.ready.then(reg => reg.showNotification(title, opt));
         else new Notification(title, opt);
@@ -4063,7 +4066,133 @@ function systemNotify(title, body, code) {
 }
 navigator.serviceWorker?.addEventListener('message', (e) => {
     if (e.data?.openRoom) { roomView = e.data.openRoom; showTab('tab-room'); openChat(e.data.openRoom); }
+    else if (e.data?.openTab && document.getElementById(e.data.openTab)) showTab(e.data.openTab);   // v61 每日提醒：點了打開計時
 });
+
+/* =====================================================
+ * v61 推播通知：網站沒開也收得到聊天訊息、每日讀書提醒
+ *   這台裝置的推播 token 存在 Firestore 的 pushTokens（只有自己讀寫得到），由 Cloud Functions 發送
+ *   iPhone 要先「加入主畫面」，從主畫面打開才收得到（iOS 16.4 以上）
+ * ===================================================== */
+let pushPref = Object.assign({ on: false, chat: true, daily: true, time: '20:00' }, lsGet(LS.push, {}));
+const PUSH_TIMES = ['18:00', '19:00', '20:00', '20:30', '21:00', '21:30', '22:00', '22:30'];
+if (!PUSH_TIMES.includes(pushPref.time)) pushPref.time = '20:00';
+const savePushPref = () => lsSet(LS.push, pushPref);
+let pushMsg = null, pushBusy = false;
+function pushSupport() {
+    if (!VAPID_KEY) return { ok: false, why: '推播即將開放，敬請期待' };
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+        return { ok: false, why: isIOS() && !isStandalone() ? '先用 Safari 把網站「加入主畫面」，從主畫面打開後才能開啟推播（iOS 16.4 以上）' : '這個瀏覽器不支援推播通知' };
+    }
+    if (isIOS() && !isStandalone()) return { ok: false, why: '先用 Safari 把網站「加入主畫面」，從主畫面打開後才能開啟推播' };
+    if (Notification.permission === 'denied') return { ok: false, why: '通知被關掉了：請到瀏覽器或手機的「設定」裡允許這個網站傳送通知' };
+    return { ok: true };
+}
+// 推播資料的文件名稱：帳號＋token 的雜湊（不把 token 直接當名字）；舊瀏覽器沒有 crypto.subtle 時用簡單的雜湊
+async function sha256(t) {
+    try {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
+        return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) {
+        let h1 = 0x811c9dc5, h2 = 0x01000193;
+        for (let i = 0; i < t.length; i++) { const c = t.charCodeAt(i); h1 = Math.imul(h1 ^ c, 16777619) >>> 0; h2 = Math.imul(h2 + c, 2246822519) >>> 0; }
+        return 'h' + h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0') + t.length.toString(16);
+    }
+}
+async function pushToken() {
+    if (!pushMsg) {
+        const m = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-messaging.js`);
+        pushMsg = { m, messaging: m.getMessaging(fb.app) };
+    }
+    const reg = await navigator.serviceWorker.ready;
+    return pushMsg.m.getToken(pushMsg.messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+}
+// 把這台裝置的推播設定寫到雲端（伺服器照這份資料決定要不要通知）
+async function pushSave(extra) {
+    if (!currentUser || !fb) return false;
+    const token = await pushToken();
+    if (!token) return false;
+    const id = await sha256(currentUser.uid + ':' + token);
+    const [hh, mm] = pushPref.time.split(':').map(Number);
+    await fb.fs.setDoc(fb.fs.doc(fb.db, 'pushTokens', id), {
+        uid: currentUser.uid, token, platform: 'web', ios: isIOS(),
+        chat: !!pushPref.chat, daily: !!pushPref.daily, time: pushPref.time, hh, mm,
+        goal: tpref.goal || 180, updatedAt: Date.now(), ...(extra || {})
+    }, { merge: true });
+    lsSet(LS.pushId, id);
+    return true;
+}
+async function pushRemove() {
+    const id = localStorage.getItem(LS.pushId);
+    if (!id || !fb || !currentUser) { try { localStorage.removeItem(LS.pushId); } catch (e) {} return; }
+    try { await fb.fs.deleteDoc(fb.fs.doc(fb.db, 'pushTokens', id)); } catch (e) {}
+    try { localStorage.removeItem(LS.pushId); } catch (e) {}
+}
+async function enablePush() {
+    if (pushBusy) return;
+    const sup = pushSupport();
+    if (!sup.ok) { toast(sup.why); renderPushRow(); return; }
+    if (!currentUser) { toast('推播要先登入 Google 帳號'); return; }
+    pushBusy = true; renderPushRow();
+    try {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') { toast('沒有允許通知，推播沒有開啟'); return; }
+        pushPref.on = true; savePushPref();
+        if (await pushSave({ activeUntil: 0 })) toast('已開啟推播通知');
+        else throw new Error('no-token');
+    } catch (e) {
+        console.warn('開啟推播失敗：', e);
+        pushPref.on = false; savePushPref();
+        toast('開啟推播失敗，請稍後再試');
+    } finally { pushBusy = false; renderPushRow(); }
+}
+async function disablePush() {
+    pushPref.on = false; savePushPref();
+    await pushRemove();
+    renderPushRow(); toast('已關閉推播通知');
+}
+// 設定改了（開關、提醒時間、每日目標）：更新雲端那份
+let pushSyncT = 0;
+function pushSync() {
+    if (!pushPref.on || !currentUser || !fb || !VAPID_KEY || Notification?.permission !== 'granted') return;
+    clearTimeout(pushSyncT);
+    pushSyncT = setTimeout(() => pushSave().catch(e => console.warn('推播設定同步失敗：', e)), 600);
+}
+// 正在用網站的時候，聊天訊息由網站自己顯示，不要再推播一次：每 3 分鐘告訴伺服器「我在」，離開時立刻取消
+let pushBeatT = 0, pushLastBeat = 0;
+function pushBeat(force) {
+    const id = localStorage.getItem(LS.pushId);
+    if (!id || !pushPref.on || !currentUser || !fb) return;
+    const visible = document.visibilityState === 'visible';
+    if (visible && !force && Date.now() - pushLastBeat < 170000) return;
+    pushLastBeat = visible ? Date.now() : 0;
+    fb.fs.setDoc(fb.fs.doc(fb.db, 'pushTokens', id), { activeUntil: visible ? Date.now() + 240000 : 0 }, { merge: true }).catch(() => {});
+}
+document.addEventListener('visibilitychange', () => pushBeat(true));
+window.addEventListener('pagehide', () => { if (document.visibilityState !== 'visible') pushBeat(true); });
+clearInterval(pushBeatT); pushBeatT = setInterval(() => pushBeat(false), 30000);
+function renderPushRow() {
+    if (!$('pushState')) return;
+    const sup = pushSupport();
+    const on = pushPref.on && !!localStorage.getItem(LS.pushId) && sup.ok;
+    $('pushState').textContent = pushBusy ? '開啟中…' : on ? '已開啟' : '未開啟';
+    $('pushNote').textContent = !sup.ok ? sup.why : !currentUser ? '登入 Google 帳號後就能開啟。' : on ? '網站沒開也會通知你；正在用網站時，聊天訊息會照常顯示在畫面上方。' : '開啟後，網站沒開也收得到聊天訊息和讀書提醒。';
+    $('pushEnable').hidden = on || !sup.ok || !currentUser;
+    $('pushEnable').disabled = pushBusy;
+    $('pushOff').hidden = !on;
+    $('pushOpts').hidden = !on;
+    $('pushChat').checked = !!pushPref.chat;
+    $('pushDaily').checked = !!pushPref.daily;
+    $('pushTime').value = pushPref.time;
+    $('pushTime').disabled = !pushPref.daily;
+}
+$('pushTime').innerHTML = PUSH_TIMES.map(t => `<option value="${t}">${t}</option>`).join('');
+$('pushRow').addEventListener('click', () => { renderPushRow(); setFold('pushRow', 'pushFold', !$('pushFold').classList.contains('open')); });
+$('pushEnable').addEventListener('click', enablePush);
+$('pushOff').addEventListener('click', disablePush);
+$('pushChat').addEventListener('change', (e) => { pushPref.chat = e.target.checked; savePushPref(); pushSync(); });
+$('pushDaily').addEventListener('change', (e) => { pushPref.daily = e.target.checked; savePushPref(); renderPushRow(); pushSync(); });
+$('pushTime').addEventListener('change', (e) => { pushPref.time = e.target.value; savePushPref(); pushSync(); });
 
 /* --- 全螢幕聊天室 --- */
 function openChat(code) {
@@ -5952,6 +6081,13 @@ if (removedDupes) saveLocal();
 { const c = loadCloudCache(); if (c) { state = c.state; cachedUid = c.uid; cloudBase = c.base; cloudDirty = c.dirty; } }
 applyHome();
 applyCalView();   // v60：上次停在課表就打開課表
+// v61：點每日提醒打開網站時網址會帶 ?tab=…，直接切到那一頁
+(function openTabFromUrl() {
+    const m = location.search.match(/[?&]tab=(tab-[a-z]+)/);
+    if (!m) return;
+    try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+    if (document.getElementById(m[1])) setTimeout(() => showTab(m[1]), 0);
+})();
 renderExamChips();
 // 關掉 App 期間一輪已經結束的話，打開時直接記錄（不響）
 if (timer.phase === 'focus' && timer.duration && !timer.pausedAt && focusElapsed() >= timer.duration) finishFocus(true, true);
@@ -6072,6 +6208,7 @@ function onAuthChanged(user) {
     }
     loadRoomProfile(user);
     renderAccount('同步中…');
+    setTimeout(() => { pushSync(); pushBeat(true); renderPushRow(); }, 1500);   // 推播 token 可能會換，登入時更新一次
     setTimeout(handlePendingJoin, 800);
     let first = true;
     // 副本是同一個帳號的才算數；換帳號就先清掉，避免看到別人的資料
@@ -6131,6 +6268,7 @@ $('loginBtn').addEventListener('click', async () => {
     if (currentUser) {
         if (confirm('確定要登出嗎？')) {
             if (cloudDirty) await flushCloud();   // 還沒送上雲端的修改先送出去
+            await pushRemove();   // 登出後這台不再收到這個帳號的推播
             await authM.signOut(auth); closeModal('accountModal');
         }
         return;
@@ -6159,7 +6297,7 @@ $('loginBtn').addEventListener('click', async () => {
 /* --- v55：刪除帳號與所有資料 --- */
 const DEL_PENDING = 'study_del_pending';
 const LOCAL_DATA_KEYS = () => [LS.todos, LS.weekly, LS.events, LS.sessions, LS.syllabus, LS.countdowns, LS.timer, LS.tpref, LS.room,
-    LS.chatSeen, LS.photoCount, LS.home, LS.cloud, LS.aiPref, LS.aiCount, LS.exam, LS.progView, LS.sylOpen, LS.minTip, SESS_JOURNAL, LS.tt, LS.calView, LS.heat];
+    LS.chatSeen, LS.photoCount, LS.home, LS.cloud, LS.aiPref, LS.aiCount, LS.exam, LS.progView, LS.sylOpen, LS.minTip, SESS_JOURNAL, LS.tt, LS.calView, LS.heat, LS.push, LS.pushId];
 function openDelSheet(note) {
     if (!currentUser) return;
     $('delInput').value = '';
@@ -6222,6 +6360,7 @@ async function deleteAccount() {
         roomStop();
         // 2. 房間裡的個人狀態、3. 雲端的讀書資料
         delSay('正在刪除雲端資料…');
+        await pushRemove();
         await fs.deleteDoc(fs.doc(db, 'profiles', me)).catch(() => {});
         await fs.deleteDoc(fs.doc(db, 'users', me));
         // 4. 這台裝置上的讀書資料（主題色、深淺色等外觀設定保留）

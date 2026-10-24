@@ -547,6 +547,21 @@
                 </div>
                 <button class="nt-try" id="notifyTry" type="button">試試看</button>
                 </div></div>
+                <button class="acct-row" id="pushRow" aria-expanded="false" aria-controls="pushFold">
+                    <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/><path d="M19.5 3.5c1.2 1 2 2.6 2 4.3M4.5 3.5c-1.2 1-2 2.6-2 4.3"/></svg></span>
+                    <span class="acct-label">推播通知</span><span class="grow"></span>
+                    <span class="acct-value" id="pushState">未開啟</span><svg class="acct-fold-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <div class="acct-fold" id="pushFold" inert><div class="acct-fold-in"><div class="push-box">
+                    <p class="push-note" id="pushNote"></p>
+                    <button class="btn btn-accent push-on" id="pushEnable" type="button">開啟推播通知</button>
+                    <div id="pushOpts" hidden>
+                        <label class="cde-switch"><span>聊天訊息<small>朋友在讀書房間傳訊息時</small></span><input type="checkbox" id="pushChat" role="switch"><i aria-hidden="true"></i></label>
+                        <label class="cde-switch push-daily"><span>每日讀書提醒<small>還沒達到每日目標時提醒你</small></span><input type="checkbox" id="pushDaily" role="switch"><i aria-hidden="true"></i></label>
+                        <div class="push-time"><span>提醒時間</span><select class="field" id="pushTime" aria-label="每日提醒時間"></select></div>
+                    </div>
+                    <button class="text-link push-off" id="pushOff" type="button" hidden>關閉這台裝置的推播</button>
+                </div></div></div>
             </div>
             <div class="acct-group">
                 <button class="acct-row" id="guideRow">
@@ -816,13 +831,14 @@
     <!-- v60：更新後第一次打開，告訴大家這次新增了什麼 -->
     <div class="modal" id="whatsNewModal" role="dialog" aria-modal="true" aria-labelledby="wnTitle">
         <div class="sheet tour-card">
-            <p class="tour-kicker">更新 · v60</p>
+            <p class="tour-kicker">版本更新</p>
             <h2 id="wnTitle">這次新增了什麼</h2>
-            <p class="tour-sub">三個新功能，不用設定也能先看看</p>
+            <p class="tour-sub">四個新功能，不用設定也能先看看</p>
             <ul class="tour-list">
                 <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M9 4v16"/></svg></span><div><b>課表</b><span>在「行事曆」上方切換。可自訂課名、節數和上課時間，還能分享給同學一鍵匯入</span></div></li>
                 <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/></svg></span><div><b>首頁「今天的課」</b><span>現在第幾節、還有幾分下課，一打開就知道</span></div></li>
                 <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="10" y="3" width="5" height="5" rx="1"/><rect x="17" y="3" width="4" height="5" rx="1"/><rect x="3" y="10" width="5" height="5" rx="1"/><rect x="10" y="10" width="5" height="5" rx="1"/><rect x="3" y="17" width="5" height="4" rx="1"/></svg></span><div><b>讀書熱力圖</b><span>在讀書統計最下面，一格一天，可以分享成 IG 限動</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg></span><div><b>推播通知</b><span>網站沒開也收得到聊天訊息和每日讀書提醒，在個人設定裡打開</span></div></li>
             </ul>
             <div class="sheet-btns">
                 <button class="btn" id="wnTry">看看課表</button>
@@ -1037,7 +1053,7 @@
   <div class="g-acct-row">網站導覽<span>›</span></div>
   <div class="g-acct-row">新增到主畫面<span>›</span></div>
 </div></figure>
-                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。手機和電腦<b>同時使用</b>、或是沒網路時改的東西，連上網路後會一筆一筆合併，不會互相蓋掉。</li><li><b>沒有網路</b>時畫面下方會出現「離線中」的小提示，照樣可以計時、改進度；連上網路後會顯示「同步中」，同步好就自己收起來。</li><li>個人設定裡的<b>隱私權政策</b>，寫清楚收集了哪些資料、誰看得到、怎麼刪除。</li><li>不想用了可以按個人設定最下面的<b>刪除帳號與資料</b>：雲端資料、聊天訊息和照片都會永久刪除，並離開所有房間（要輸入「刪除」確認，Google 可能會請你再登入一次）。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 8 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>訊息通知</b>：選聊天訊息要用<b>頂部橫幅</b>（顯示誰傳的和兩行訊息）還是<b>頂部小膠囊</b>（最不佔空間，點一下展開），按「試試看」可以先看效果。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
+                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。手機和電腦<b>同時使用</b>、或是沒網路時改的東西，連上網路後會一筆一筆合併，不會互相蓋掉。</li><li><b>沒有網路</b>時畫面下方會出現「離線中」的小提示，照樣可以計時、改進度；連上網路後會顯示「同步中」，同步好就自己收起來。</li><li>個人設定裡的<b>隱私權政策</b>，寫清楚收集了哪些資料、誰看得到、怎麼刪除。</li><li>不想用了可以按個人設定最下面的<b>刪除帳號與資料</b>：雲端資料、聊天訊息和照片都會永久刪除，並離開所有房間（要輸入「刪除」確認，Google 可能會請你再登入一次）。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 8 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>訊息通知</b>：選聊天訊息要用<b>頂部橫幅</b>（顯示誰傳的和兩行訊息）還是<b>頂部小膠囊</b>（最不佔空間，點一下展開），按「試試看」可以先看效果。</li><li><b>推播通知</b>：登入後打開，<b>網站沒開也收得到</b>朋友的聊天訊息，和<b>每日讀書提醒</b>（到了你選的時間、今天還沒達標才會提醒）。兩種可以分開開關；正在用網站時，聊天訊息照常顯示在畫面上方，不會重複通知。iPhone 要先<b>加入主畫面</b>、從主畫面打開才能開啟（iOS 16.4 以上）。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
                 
             </section>
 
