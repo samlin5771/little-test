@@ -47,7 +47,7 @@ const FIREBASE_VER = '12.19.0';
 // v61 推播：Firebase 主控台 → 專案設定 → Cloud Messaging → Web Push 憑證 的「金鑰組」（公開的，可以放在這裡）
 const VAPID_KEY = 'BGD80hd0Xdk6Irow67T2c0x6txEOqT_dnwv3r5IaByGhq86PDQm47egvg_Dni2uHyRfv_ZSECzdnpFc_Fs0wagE';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v64';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v65';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -63,7 +63,7 @@ const LS = {
     install: 'study_install_seen', tour: 'study_tour_seen', chatSeen: 'study_chat_seen', photoCount: 'study_photo_count',
     countdowns: 'study_countdowns', home: 'study_home', progView: 'study_prog_view', sylOpen: 'study_syl_open',
     lastActive: 'study_last_active', cloud: 'study_cloud_cache',
-    tt: 'study_timetable', calView: 'study_cal_view', heat: 'study_heat_range', seenVer: 'study_seen_ver', push: 'study_push', pushId: 'study_push_id', notif: 'study_notif', pokes: 'study_pokes', hol: 'study_holidays'   // v60 課表、行事曆／課表切換、熱力圖範圍
+    tt: 'study_timetable', calView: 'study_cal_view', heat: 'study_heat_range', seenVer: 'study_seen_ver', push: 'study_push', pushId: 'study_push_id', notif: 'study_notif', pokes: 'study_pokes', hol: 'study_holidays', guestNew: 'study_guest_sessions'   // v60 課表、行事曆／課表切換、熱力圖範圍
 };   // 這台裝置存的所有設定都在這裡（改名字會讓舊資料讀不到，不要改）
 // 沒有頭像時的預設圖（顏色跟著主題色）
 function defaultAvatar() {
@@ -2149,6 +2149,8 @@ function recordSession(subject, start, minutes, pomo) {
     const rec = { id: uid(), subject, start, minutes: Math.round(minutes), pomo: !!pomo };
     state.sessions.push(rec);
     journalAdd(rec);
+    // 沒登入時記的：記下來，之後登入（就算帳號裡已經有資料）也會加進帳號，不會不見
+    if (!currentUser && !cachedUid) { const g = lsGet(LS.guestNew, []); lsSet(LS.guestNew, [...(Array.isArray(g) ? g : []), rec.id].slice(-500)); }
     if (!cloudReady) earlySessions.push(rec);   // 雲端還沒連上前記錄的，連上後補上傳
     save();
     publishProfile();
@@ -6782,9 +6784,17 @@ function onAuthChanged(user) {
             cloudReady = true;
             const local = loadLocal();
             if (!isEmpty(cloud)) {
-                next = cloudDirty ? mergeState(cloudBase, state, cloud) : cloud;   // 有還沒送出的修改：跟雲端合併
+                next = cloudDirty ? mergeState(cloudBase, state, cloud) : cloneState(cloud);   // 有還沒送出的修改：跟雲端合併（複製一份：下面補進去的紀錄不能算成「雲端本來就有」）
                 const missing = earlySessions.filter(x => !next.sessions.some(y => y.id === x.id));
                 if (missing.length) { next.sessions.push(...missing); cloudDirty = true; }
+                // 登入前（沒登入時）在這台記的讀書時間：加進帳號
+                const gIds = new Set(lsGet(LS.guestNew, []) || []);
+                const guest = local.sessions.filter(x => gIds.has(x.id) && !cloud.sessions.some(y => y.id === x.id));
+                if (guest.length) {
+                    guest.forEach(x => { if (!next.sessions.some(y => y.id === x.id)) next.sessions.push({ ...x }); });
+                    cloudDirty = true;
+                    setTimeout(() => toast(`已把登入前記錄的 ${guest.length} 筆讀書時間加到帳號`), 600);
+                }
             } else if (cloudDirty) {
                 next = state;   // 雲端是空的：直接把這台的資料送上去
             } else if (!isEmpty(local)) {
@@ -6794,8 +6804,14 @@ function onAuthChanged(user) {
             } else {
                 next = normalize({});
             }
+            earlySessions.length = 0;   // 已經補進這次的資料了；之後換帳號或重新登入不會再補一次
         } else {
-            next = cloudDirty ? mergeState(cloudBase, state, cloud) : cloud;   // 別台改了：這台還沒送出的修改保留
+            next = cloudDirty ? mergeState(cloudBase, state, cloud) : cloneState(cloud);   // 別台改了：這台還沒送出的修改保留
+        }
+        // 登入前記的讀書時間：確定雲端有了才拿掉記號（沒網路、還沒送上去之前都會保留）
+        if (!snap.metadata.fromCache) {
+            const g = lsGet(LS.guestNew, []), have = new Set(cloud.sessions.map(x => x.id));
+            if (Array.isArray(g) && g.length) { const left = g.filter(id => !have.has(id)); left.length ? lsSet(LS.guestNew, left) : localStorage.removeItem(LS.guestNew); }
         }
         cloudBase = cloneState(cloud);   // 複製一份，不能跟畫面上的資料共用（不然新增的紀錄會被當成雲端已經有、又被合併刪掉）
         if (journalRestore(next, !snap.metadata.fromCache && !cloudDirty)) cloudDirty = true;   // 剛記錄還沒確認上雲端的，一定保留
@@ -6819,6 +6835,8 @@ $('loginBtn').addEventListener('click', async () => {
     if (currentUser) {
         if (confirm('確定要登出嗎？')) {
             if (cloudDirty) await flushCloud();   // 還沒送上雲端的修改先送出去
+            // 沒網路送不出去：讀書紀錄有另外保存（再登入同一個帳號會補回去），但其他還沒同步的修改會不見，先問一次
+            if (cloudDirty && !confirm('現在沒有網路，有些修改還沒同步到雲端（讀書紀錄會保留，再登入就會補回）。\n待辦、行程等其他修改登出後會不見，確定要登出嗎？')) return;
             await pushRemove();   // 登出後這台不再收到這個帳號的推播
             pokeStop();
             // 暱稱、頭像顏色跟著帳號：登出後清掉，換別的帳號登入才不會用到上一個人的
