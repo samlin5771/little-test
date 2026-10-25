@@ -240,7 +240,7 @@
                     </button>
                 </div>
             </div>
-            <div class="cal-weekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+            <div class="cal-weekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span class="we">六</span><span class="we">日</span></div>
             <div class="cal-grid" id="calGrid"></div>
             <div class="legend">
                 <span><i></i>行程</span>
@@ -835,8 +835,9 @@
         <div class="sheet tour-card wn-card">
             <p class="tour-kicker">版本更新</p>
             <h2 id="wnTitle">這次新增了什麼</h2>
-            <p class="tour-sub">通知變得更完整，還多了幾個和朋友一起讀的小功能</p>
+            <p class="tour-sub">行事曆會標國定假日，通知也變得更完整</p>
             <ul class="tour-list">
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M12 13.2l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2-1.45-1.4 2-.3z"/></svg></span><div><b>國定假日</b><span>行事曆的週末和國定假日改成紅字並寫上名稱，課表和首頁也會顯示放假、補班</span></div></li>
                 <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg></span><div><b>通知設定</b><span>每日讀書提醒、早安倒數、番茄鐘時間到、行程和待辦提前提醒、勿擾時段，時間都能自己選</span></div></li>
                 <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h3l6 4V6L7 10z"/><path d="M16.5 9a4 4 0 0 1 0 6"/></svg></span><div><b>叫朋友讀書</b><span>在讀書房間點朋友的頭像，按「叫他讀書！」他就會收到通知</span></div></li>
                 <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 8L5 12.5l5 4.5"/><path d="M5.5 12.5H14a5 5 0 0 1 5 5V19"/></svg></span><div><b>回覆、表情也會通知</b><span>有人回覆你的訊息或對你的訊息按表情，都會提醒你</span></div></li>
@@ -1020,11 +1021,11 @@
                 <p class="g-lead">考試、行程和雜事，都在這兩頁。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-phone">
   <div class="g-row"><b>10 月</b><span class="g-cap">← 左右滑換月 →</span></div>
-  <div class="g-cal"><span class="">12</span><span class="">13</span><span class="">14</span><span class="">15</span><span class="">16</span><span class="">17</span><span class="today">18</span><span class="td">19</span><span class="">20</span><span class="imp">21</span><span class="">22</span><span class="">23</span><span class="">24</span><span class="">25</span><span class="">26</span><span class="">27</span><span class="exam">28</span><span class="exam">29</span><span class="">30</span><span class="">31</span></div>
+  <div class="g-cal"><span class="">12</span><span class="">13</span><span class="">14</span><span class="">15</span><span class="">16</span><span class="we">17</span><span class="today">18</span><span class="td">19</span><span class="">20</span><span class="imp">21</span><span class="">22</span><span class="">23</span><span class="we">24</span><span class="we">25</span><span class="">26</span><span class="">27</span><span class="exam">28</span><span class="exam">29</span><span class="">30</span><span class="we">31</span></div>
   <div class="g-todo"><span class="swipe ok">✓ 完成</span><span class="item">交數學作業<em class="g-td-date">明天</em></span></div>
   <div class="g-todo"><span class="item">背英文單字</span><span class="swipe del">刪除</span></div>
 </div></figure>
-                <ul class="g-points"><li>行事曆左右滑換月份；點日期再按 ＋ 新增行程，可以選<b>單日或連續多天</b>；標成<b>重要</b>的日期會被圈起來。</li><li>考試日會用紅色標出；下面列出即將到來的行程和剩幾天。</li><li>最上面可以切換<b>行事曆／課表</b>，課表的用法在下一段。</li><li>待辦清單：輸入後按新增；<b>往右滑完成、往左滑刪除</b>，不小心刪掉可以按「復原」。</li><li>新增待辦時可以按輸入框旁的<b>日曆圖示選日期</b>（不選也可以）。有日期的待辦會排在前面，同時出現在<b>行事曆</b>那天（綠色小點），當天和逾期的也會列在倒數頁的<b>「今天」</b>，在哪裡打勾都可以。</li><li>選了日期之後，下面還可以<b>加上時間</b>（例如 22:00 交作業）。有時間的待辦可以<b>提前提醒</b>你，要提前多久在通知設定裡改。</li></ul>
+                <ul class="g-points"><li>行事曆左右滑換月份；點日期再按 ＋ 新增行程，可以選<b>單日或連續多天</b>；標成<b>重要</b>的日期會被圈起來。</li><li>考試日會用紅色標出；下面列出即將到來的行程和剩幾天。</li><li><b>週末和國定假日</b>的日期是紅字，假日底下會寫名稱（例如國慶日、春節、補假）；週末要補班的日子會標<b>補班</b>。假日照人事行政總處公告的行事曆，每年自動更新。</li><li>最上面可以切換<b>行事曆／課表</b>，課表的用法在下一段。</li><li>待辦清單：輸入後按新增；<b>往右滑完成、往左滑刪除</b>，不小心刪掉可以按「復原」。</li><li>新增待辦時可以按輸入框旁的<b>日曆圖示選日期</b>（不選也可以）。有日期的待辦會排在前面，同時出現在<b>行事曆</b>那天（綠色小點），當天和逾期的也會列在倒數頁的<b>「今天」</b>，在哪裡打勾都可以。</li><li>選了日期之後，下面還可以<b>加上時間</b>（例如 22:00 交作業）。有時間的待辦可以<b>提前提醒</b>你，要提前多久在通知設定裡改。</li></ul>
                 
             </section>
 
@@ -1041,7 +1042,7 @@
     <span class="p">4</span><i class="n">專題</i><i style="--c:var(--s1)">物理<em>單</em></i><i style="--c:var(--s0)">數學</i><i class="n">選修</i><i class="n">班會</i>
     <span class="p">8</span><i class="add">＋</i><i class="add">＋</i><i class="add">＋</i><i class="add">＋</i><i class="add">＋</i></div>
 </div></figure>
-                <ul class="g-points"><li><b>點一格</b>就能填科目，可以<b>自己打任何課名</b>，也可以點下面的常用科目。顏色會依科目自動配（數學藍、自然橘、英文綠、國文黃、社會粉），也能自己選。</li><li>有些課<b>單雙週輪流</b>（例如單週物理、雙週化學）：打開「單雙週上不同的課」，填雙週的科目就好。</li><li>每一格都可以寫<b>備註</b>（要帶的東西、小考），有備註的格子右上角會有小黃點。</li><li>右上角 <b>⋯</b> 可以<b>改節數（最多 10 節）和每一節的上下課時間</b>，照你的學校改；午休會依時間自動顯示。</li><li>同一班只要一個人填：按 ⋯ →<b>分享課表給同學</b>，同學點連結就能<b>一鍵匯入</b>（備註不會分享出去）。</li><li>行事曆上寫了「放假、補假、停課」的那天，課表會標成<b>放假</b>。</li><li>課表會跟著帳號同步，換手機或電腦也看得到。</li></ul>
+                <ul class="g-points"><li><b>點一格</b>就能填科目，可以<b>自己打任何課名</b>，也可以點下面的常用科目。顏色會依科目自動配（數學藍、自然橘、英文綠、國文黃、社會粉），也能自己選。</li><li>有些課<b>單雙週輪流</b>（例如單週物理、雙週化學）：打開「單雙週上不同的課」，填雙週的科目就好。</li><li>每一格都可以寫<b>備註</b>（要帶的東西、小考），有備註的格子右上角會有小黃點。</li><li>右上角 <b>⋯</b> 可以<b>改節數（最多 10 節）和每一節的上下課時間</b>，照你的學校改；午休會依時間自動顯示。</li><li>同一班只要一個人填：按 ⋯ →<b>分享課表給同學</b>，同學點連結就能<b>一鍵匯入</b>（備註不會分享出去）。</li><li>行事曆上寫了「放假、補假、停課」的那天，課表會標成<b>放假</b>。<b>國定假日</b>不用自己加，會自動標上，首頁也會顯示「今天放假」。</li><li>課表會跟著帳號同步，換手機或電腦也看得到。</li></ul>
                 
             </section>
 

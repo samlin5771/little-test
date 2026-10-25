@@ -47,7 +47,7 @@ const FIREBASE_VER = '12.19.0';
 // v61 推播：Firebase 主控台 → 專案設定 → Cloud Messaging → Web Push 憑證 的「金鑰組」（公開的，可以放在這裡）
 const VAPID_KEY = 'BGD80hd0Xdk6Irow67T2c0x6txEOqT_dnwv3r5IaByGhq86PDQm47egvg_Dni2uHyRfv_ZSECzdnpFc_Fs0wagE';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v63';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v64';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -63,7 +63,7 @@ const LS = {
     install: 'study_install_seen', tour: 'study_tour_seen', chatSeen: 'study_chat_seen', photoCount: 'study_photo_count',
     countdowns: 'study_countdowns', home: 'study_home', progView: 'study_prog_view', sylOpen: 'study_syl_open',
     lastActive: 'study_last_active', cloud: 'study_cloud_cache',
-    tt: 'study_timetable', calView: 'study_cal_view', heat: 'study_heat_range', seenVer: 'study_seen_ver', push: 'study_push', pushId: 'study_push_id', notif: 'study_notif', pokes: 'study_pokes'   // v60 課表、行事曆／課表切換、熱力圖範圍
+    tt: 'study_timetable', calView: 'study_cal_view', heat: 'study_heat_range', seenVer: 'study_seen_ver', push: 'study_push', pushId: 'study_push_id', notif: 'study_notif', pokes: 'study_pokes', hol: 'study_holidays'   // v60 課表、行事曆／課表切換、熱力圖範圍
 };   // 這台裝置存的所有設定都在這裡（改名字會讓舊資料讀不到，不要改）
 // 沒有頭像時的預設圖（顏色跟著主題色）
 function defaultAvatar() {
@@ -1642,6 +1642,62 @@ const eventsOn = (ds) => state.events.filter(e => e.start <= ds && evEnd(e) >= d
 const addDaysStr = (ds, n) => { const d = parseYmd(ds); d.setDate(d.getDate() + n); return ymd(d); };
 const spanText = (e) => `${shortDate(e.start)} – ${shortDate(e.end)}，共 ${daysBetween(e.start, e.end) + 1} 天`;
 
+/* =====================================================
+ * v64 國定假日：台灣政府行政機關辦公日曆（人事行政總處公告）
+ *   內建 2025–2027；網路上的整理版（ruyut/TaiwanCalendar）有新年度就自動抓下來存著
+ *   每一天：{ n: 名稱, off: true } 放假；{ n: '補班', work: true } 週末補行上班
+ * ===================================================== */
+const HOL_BUILTIN = {"2025": "0101開國紀念日|0127小年夜|0128農曆除夕|0129春節|0130春節|0131春節|0208!|0228和平紀念日|0403補假|0404兒童節及民族掃墓節|0530補假|0531端午節|0928孔子誕辰紀念日|0929補假|1006中秋節|1010國慶日|1024補假|1025臺灣光復暨金門古寧頭大捷紀念日|1225行憲紀念日", "2026": "0101開國紀念日|0215小年夜|0216農曆除夕|0217春節|0218春節|0219春節|0220補假|0227補假|0228和平紀念日|0403補假|0404兒童節|0405清明節|0406補假|0501勞動節|0619端午節|0925中秋節|0928孔子誕辰紀念日/教師節|1009補假|1010國慶日|1025臺灣光復暨金門古寧頭大捷紀念日|1026補假|1225行憲紀念日", "2027": "0101開國紀念日|0204小年夜|0205農曆除夕|0206春節|0207春節|0208春節|0209補假|0210補假|0228和平紀念日|0301補假|0404兒童節|0405清明節|0406補假|0430補假|0501勞動節|0609端午節|0915中秋節|0928孔子誕辰紀念日/教師節|1010國慶日|1011補假|1025臺灣光復暨金門古寧頭大捷紀念日|1224補假|1225行憲紀念日|1231補假"};
+// 平常講的名字（標題、首頁、電腦版）；手機格子太窄的另外縮短
+const HOL_NAME = { '開國紀念日': '元旦', '農曆除夕': '除夕', '兒童節及民族掃墓節': '兒童節', '孔子誕辰紀念日/教師節': '教師節', '孔子誕辰紀念日': '教師節', '臺灣光復暨金門古寧頭大捷紀念日': '光復節' };
+const HOL_CELL = { '和平紀念日': '228', '行憲紀念日': '行憲' };
+let holCache = (() => { const c = lsGet(LS.hol, null); return c && typeof c === 'object' && c.y ? c : { y: {}, at: 0 }; })();
+const holMaps = {};
+function holYear(y) {
+    if (holMaps[y]) return holMaps[y];
+    const src = typeof holCache.y[y] === 'string' ? holCache.y[y] : HOL_BUILTIN[y];
+    const m = {};
+    if (src) src.split('|').forEach(x => {
+        const md = x.slice(0, 4), d = x.slice(4);
+        if (!/^\d{4}$/.test(md) || !d) return;
+        if (d === '!') { m[md] = { n: '補班', full: '補班', work: true }; return; }
+        const name = HOL_NAME[d] || d;
+        m[md] = { n: HOL_CELL[name] || name, full: name, off: true };
+    });
+    return (holMaps[y] = m);
+}
+// ds：'YYYY-MM-DD'
+function holOn(ds) { return holYear(ds.slice(0, 4))[ds.slice(5, 7) + ds.slice(8, 10)] || null; }
+// 週六、週日
+const isWeekendDs = (ds) => { const w = parseYmd(ds).getDay(); return w === 0 || w === 6; };
+// 有新年度或公告更新：一週最多抓一次（今年、明年），抓不到就用內建的
+async function holRefresh() {
+    if (Date.now() - (holCache.at || 0) < 7 * 86400000 || !navigator.onLine) return;
+    const y0 = new Date().getFullYear();
+    let changed = false;
+    for (const y of [y0, y0 + 1]) {
+        try {
+            const r = await fetch(`https://cdn.jsdelivr.net/gh/ruyut/TaiwanCalendar/data/${y}.json`, { cache: 'no-cache' });
+            if (!r.ok) continue;
+            const arr = await r.json();
+            if (!Array.isArray(arr) || arr.length < 360) continue;
+            const parts = [];
+            arr.forEach(x => {
+                if (!x || typeof x.date !== 'string' || x.date.length !== 8) return;
+                const md = x.date.slice(4), desc = String(x.description || '').trim().slice(0, 30), we = x.week === '六' || x.week === '日';
+                if (x.isHoliday && desc && desc !== '週末') parts.push(md + desc.replace(/\|/g, '/'));
+                else if (!x.isHoliday && we) parts.push(md + '!');
+            });
+            const str = parts.join('|');
+            if (str && str !== holCache.y[y]) { holCache.y[y] = str; delete holMaps[y]; changed = true; }
+        } catch (e) { /* 離線或被擋：用內建的 */ }
+    }
+    holCache.at = Date.now();
+    lsSet(LS.hol, holCache);
+    if (changed) { try { renderCalendar(); renderTT(); renderHomeClass(); } catch (e) {} }
+}
+setTimeout(() => { holRefresh(); }, 4000);
+
 function renderCalendar() {
     const t = todayStr();
     $('calYear').textContent = calY;
@@ -1655,7 +1711,8 @@ function renderCalendar() {
         const ds = `${calY}-${pad(calM + 1)}-${pad(n)}`;
         const evs = eventsOn(ds), exs = examsOn(ds);
         const imp = evs.some(e => e.important);
-        const cls = ['cal-cell', ds === t ? 'today' : '', ds < t ? 'past' : '', ds === selDate ? 'selected' : '', exs.length ? 'exam' : '', imp ? 'imp-day' : ''].join(' ');
+        const hol = holOn(ds), rest = hol ? hol.off : isWeekendDs(ds);
+        const cls = ['cal-cell', ds === t ? 'today' : '', ds < t ? 'past' : '', ds === selDate ? 'selected' : '', exs.length ? 'exam' : '', imp ? 'imp-day' : '', rest ? 'rest' : '', hol?.off ? 'hol' : '', hol?.work ? 'work' : ''].join(' ');
         const singles = evs.filter(e => !e.end), multi = evs.find(e => e.end);
         const tds = todosOn(ds), cds = cdsOn(ds);
         const dots = [...cds.map(c => `<i style="background:${c.color}"></i>`), ...singles.map(e => `<i class="${e.important ? 'imp' : ''}"></i>`), ...tds.map(() => '<i class="td"></i>')].slice(0, 3).join('');
@@ -1667,13 +1724,14 @@ function renderCalendar() {
             bar = `<span class="cal-bar${multi.important ? ' imp' : ''}${head ? ' head' : ''}${tail ? ' tail' : ''}"></span>`;
         }
         const titles = [
+            ...(hol ? [`<span class="hol${hol.work ? ' work' : ''}">${esc(hol.full)}</span>`] : []),
             ...exs.map(e => `<span class="exam">${esc(e.short)}</span>`),
             ...cds.map(c => `<span class="cdt" style="--cd-color:${c.color}">${esc(c.short)}</span>`),
             ...evs.map(e => `<span class="${e.important ? 'imp' : ''}${e.end ? ' multi' : ''}${e.end && ds !== e.start ? ' cont' : ''}">${esc(e.title)}</span>`),
             ...tds.map(x => `<span class="td">${esc(x.text)}</span>`)
         ].slice(0, 3).join('');
-        const label = `${calM + 1}月${n}日${exs.length ? '，考試' : ''}${imp ? '，有重要行程' : ''}${evs.length ? `，${evs.length} 個行程` : ''}${tds.length ? `，${tds.length} 個待辦` : ''}`;
-        html += `<button class="${cls}" data-date="${ds}" aria-label="${label}"><span class="cal-num num">${n}</span><span class="cal-dots">${dots}</span>${bar}<span class="cal-titles">${titles}</span></button>`;
+        const label = `${calM + 1}月${n}日${hol ? '，' + hol.full : ''}${exs.length ? '，考試' : ''}${imp ? '，有重要行程' : ''}${evs.length ? `，${evs.length} 個行程` : ''}${tds.length ? `，${tds.length} 個待辦` : ''}`;
+        html += `<button class="${cls}" data-date="${ds}" aria-label="${label}"><span class="cal-num num">${n}</span>${hol ? `<span class="cal-hol">${esc(hol.n)}</span>` : ''}<span class="cal-dots">${dots}</span>${bar}<span class="cal-titles">${titles}</span></button>`;
     }
     const rest = (7 - (offset + total) % 7) % 7;
     for (let i = 0; i < rest; i++) html += '<div class="cal-cell blank"></div>';
@@ -1700,7 +1758,8 @@ function eventRowHtml(item, showRel) {
 function renderDayList() {
     const t = todayStr();
     const d = parseYmd(selDate);
-    $('selDayTitle').textContent = `${d.getMonth() + 1} 月 ${d.getDate()} 日 · 星期${WEEK_ZH[d.getDay()]}${selDate === t ? '（今天）' : ''}`;
+    const hol = holOn(selDate);
+    $('selDayTitle').innerHTML = `${d.getMonth() + 1} 月 ${d.getDate()} 日 · 星期${WEEK_ZH[d.getDay()]}${selDate === t ? '（今天）' : ''}${hol ? `<span class="day-hol${hol.work ? ' work' : ''}">${esc(hol.full)}</span>` : ''}`;
     const items = [
         ...examsOn(selDate).map(e => ({
             date: selDate, title: e.name, exam: true,
@@ -5451,7 +5510,7 @@ document.addEventListener('keydown', (e) => {
 }, true);
 // 第一次打開：手機瀏覽器先教「加到主畫面」（一定要按我知道了），接著簡易導覽；其他情況只顯示簡易導覽
 // v60：用過舊版的人，更新後第一次打開會看到「這次新增了什麼」（第一次用的人看簡易導覽就好，不會連跳兩個視窗）
-const WHATS_NEW = 'v62';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
+const WHATS_NEW = 'v64';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
 setTimeout(() => {
     if (document.querySelector('.modal.open') || document.body.classList.contains('guide-open')) return;
     const needInstall = !localStorage.getItem(LS.install) && !isStandalone() && isMobile();
@@ -5821,7 +5880,7 @@ function ttClassAt(date, d, p) {
 }
 // 放假：行事曆上那天有寫「放假、補假、停課…」的行程
 const TT_OFF_RE = /放假|補假|停課|颱風假|連假|國定假日|休假|校慶補假/;
-const ttOffDay = (ds) => state.events.some(e => e.start <= ds && evEnd(e) >= ds && TT_OFF_RE.test(e.title || ''));
+const ttOffDay = (ds) => !!holOn(ds)?.off || state.events.some(e => e.start <= ds && evEnd(e) >= ds && TT_OFF_RE.test(e.title || ''));
 // 顯示哪一週：平日顯示本週；週末顯示下一週（這週的課已經上完了）
 function ttWeek(now = new Date()) {
     const mon = mondayOf(now);
@@ -5855,7 +5914,7 @@ function renderTT() {
     h += '<div class="tt" role="grid" aria-label="課表"><div></div>';
     week.forEach(d => {
         const ds = ymd(d), off = ttOffDay(ds);
-        h += `<div class="tt-dh${ds === t ? ' today' : ''}${off ? ' off' : ''}"><b>${WEEK_ZH[d.getDay()]}</b><span>${d.getDate()}</span>${off ? '<em>放假</em>' : ''}</div>`;
+        h += `<div class="tt-dh${ds === t ? ' today' : ''}${off ? ' off' : ''}"><b>${WEEK_ZH[d.getDay()]}</b><span>${d.getDate()}</span>${off ? `<em>${esc(holOn(ds)?.off ? holOn(ds).n : '放假')}</em>` : ''}</div>`;
     });
     tt.periods.forEach((p, i) => {
         const prev = tt.periods[i - 1];
@@ -6133,7 +6192,8 @@ function renderHomeClass() {
     const mini = (icon, html) => `<button class="cls-mini" data-hc="open">${icon}<span class="grow">${html}</span>${ICON_NEXT_SM}</button>`;
     if (!ttHasData()) { setHtml(el, mini(ICON_BOOK_CLOCK, '<b>設定課表</b>，這裡就會顯示今天的課')); return; }
     const classes = dow > 4 || ttOffDay(t) ? [] : tt.periods.map((p, i) => ({ p, i, k: ttClassAt(now, dow, i) })).filter(x => x.k && x.k.name);
-    if (!classes.length) { setHtml(el, mini(ICON_BOOK_CLOCK, `<b>今日無課程</b>${ttOffDay(t) ? '（放假）' : ''}`)); return; }
+    const hol = holOn(t);
+    if (!classes.length) { setHtml(el, mini(ICON_BOOK_CLOCK, hol?.off ? `<b>今天放假</b> · ${esc(hol.full)}` : hol?.work ? '<b>今天補班</b>' : `<b>今日無課程</b>${ttOffDay(t) ? '（放假）' : ''}`)); return; }
     const last = classes[classes.length - 1];
     if (nowMin >= ttMin(last.p.e)) { setHtml(el, mini(ICON_BOOK_CLOCK, `<b>今天的課上完了</b> · 放學 ${last.p.e}`)); return; }
     const cur = classes.find(x => nowMin >= ttMin(x.p.s) && nowMin < ttMin(x.p.e));

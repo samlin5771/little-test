@@ -2886,3 +2886,33 @@ body.cal-tt .cal-layout, body.cal-tt #calFab { display: none !important; }
 /* 叫朋友讀書小卡：橫的手機放在頭像旁邊 */
 .pk-pop.side-r::before, .pk-pop.side-l::before { top: var(--ay, 50%); left: -7px; transform: translateY(-50%) rotate(-45deg); }
 .pk-pop.side-l::before { left: auto; right: -7px; transform: translateY(-50%) rotate(135deg); }
+
+/* =====================================================
+ * v64 國定假日、週末顏色
+ * ===================================================== */
+:root { --rest-text: #C4473A; --rest-bg: rgba(196, 71, 58, 0.065); }
+[data-theme="dark"] { --rest-text: #EF8572; --rest-bg: rgba(239, 133, 114, 0.085); }
+.cal-hol { font-size: 10px; line-height: 1; margin-top: -2px; max-width: 100%; overflow: hidden; white-space: nowrap; color: var(--rest-text); font-weight: 600; font-family: 'Noto Sans TC', sans-serif; letter-spacing: -0.2px; }
+.cal-cell.work .cal-hol { color: var(--muted); }
+.cal-cell.past .cal-hol { opacity: 0.6; }
+.day-hol { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; vertical-align: 2px; background: var(--rest-bg); color: var(--rest-text); }
+.day-hol.work { background: var(--surface-2); color: var(--muted); }
+/* 週末和國定假日：數字和「六、日」用紅字（補班日照平常） */
+.cal-weekdays .we { color: var(--rest-text); }
+.cal-cell.rest:not(.today):not(.exam):not(.imp-day) .cal-num { color: var(--rest-text); }
+.cal-cell.rest.past:not(.today) .cal-num { opacity: 0.55; }
+@media (min-width: 768px) {
+    .cal-hol { display: none; }
+    .cal-titles span.hol { background: var(--rest-bg); color: var(--rest-text); font-weight: 600; }
+    .cal-titles span.hol.work { background: var(--surface-2); color: var(--muted); }
+}
+@media (max-width: 767px) {
+    /* 有假日名稱的那一列比較高：整個月每一列一樣高，格子才不會參差 */
+    .cal-grid { grid-auto-rows: 1fr; }
+    .cal-cell.hol, .cal-cell.work { gap: 3px; }
+    .cal-cell.hol .cal-dots, .cal-cell.work .cal-dots { margin-top: 1px; }
+}
+.g-cal span.we { color: var(--rest-text); }
+/* 標題多了假日標籤也不會把「＋ 新增」擠成兩行 */
+#addOnDayBtn { flex-shrink: 0; white-space: nowrap; }
+#selDayTitle { min-width: 0; }
