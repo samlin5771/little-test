@@ -47,7 +47,7 @@ const FIREBASE_VER = '12.19.0';
 // v61 推播：Firebase 主控台 → 專案設定 → Cloud Messaging → Web Push 憑證 的「金鑰組」（公開的，可以放在這裡）
 const VAPID_KEY = 'BGD80hd0Xdk6Irow67T2c0x6txEOqT_dnwv3r5IaByGhq86PDQm47egvg_Dni2uHyRfv_ZSECzdnpFc_Fs0wagE';
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v65';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v66';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -6656,10 +6656,13 @@ const timerLive = () => timer.phase === 'focus' || (timer.phase === 'break' && D
 const lastActive = () => { try { return Number(localStorage.getItem(LS.lastActive)) || 0; } catch (e) { return 0; } };
 const markActive = () => { try { localStorage.setItem(LS.lastActive, String(Date.now())); } catch (e) {} };
 (function startTab() {
+    // 同一次使用（重新整理、切到背景被系統重新載入）：sessionStorage 還在；滑掉、關掉網頁再打開：sessionStorage 是空的
+    let sameSession = false;
+    try { sameSession = sessionStorage.getItem('study_alive') === '1'; sessionStorage.setItem('study_alive', '1'); } catch (e) {}
     if (resumed) return;
     const saved = localStorage.getItem(LS.tab) || 'tab-countdown';
-    const fresh = Date.now() - lastActive() < 3 * 60000;
-    showTab(timerLive() ? 'tab-timer' : (fresh ? saved : 'tab-countdown'));
+    const fresh = sameSession && Date.now() - lastActive() < 3 * 60000;   // 關掉再打開：一律從倒數頁開始
+    showTab(timerLive() ? 'tab-timer' : (fresh ? saved : 'tab-countdown'));   // 點通知打開的（網址帶 ?tab= 或 ?chat=）稍後會再切過去
 })();
 onAppHide(markActive);
 onAppShow(() => {
