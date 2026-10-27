@@ -46,8 +46,11 @@ const FIREBASE_CONFIG = {
 const FIREBASE_VER = '12.19.0';
 // v61 推播：Firebase 主控台 → 專案設定 → Cloud Messaging → Web Push 憑證 的「金鑰組」（公開的，可以放在這裡）
 const VAPID_KEY = 'BGD80hd0Xdk6Irow67T2c0x6txEOqT_dnwv3r5IaByGhq86PDQm47egvg_Dni2uHyRfv_ZSECzdnpFc_Fs0wagE';
+// v67：AI 排計畫暫時隱藏（不太穩定）。要打開改成 true 就好，程式和資料都還在
+const AI_ON = false;
+if (AI_ON) document.documentElement.classList.add('ai-on');
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v66';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v67';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -852,6 +855,7 @@ function openNoticeChat() {
  * ===================================================== */
 const tabBtns = document.querySelectorAll('.tab-btn');
 function showTab(id) {
+    if (!AI_ON && id === 'tab-ai') id = 'tab-weekly';   // AI 排計畫隱藏中：之前停在這頁、舊連結都改到每週進度
     if (!document.getElementById(id)) id = 'tab-countdown';
     const SUB = { 'tab-stats': 'tab-timer', 'tab-room': 'tab-timer', 'tab-ai': 'tab-weekly', 'tab-syllabus': 'tab-weekly' };   // 子頁面屬於哪個分頁
     const navId = SUB[id] || id;
@@ -1196,6 +1200,7 @@ function renderWeek() {
 
     const todayIdx = days.findIndex(d => ymd(d) === t);
     $('thisWeekBtn').style.display = todayIdx >= 0 ? 'none' : '';
+    $('thisWeekBtn').parentElement.style.display = todayIdx >= 0 && !AI_ON ? 'none' : '';   // AI 隱藏時，本週那一排沒東西就整排收起來，不留空白
     const sel = selectedDayIdx ?? (todayIdx >= 0 ? todayIdx : 0);
 
     // 手機：日期選擇＋當天各科
@@ -3042,7 +3047,7 @@ function buildPalette(q) {
     }
     const go = [['倒數', 'countdown'], ['進度', 'weekly'], ['計時', 'timer'], ['行事曆', 'calendar'], ['待辦', 'todo']];
     go.forEach(([n, id], i) => { if (match(n, id, '前往')) items.push({ group: '前往', label: n, key: String(i + 1), run: () => showTab('tab-' + id) }); });
-    if (match('AI', '讀書計畫', '計畫', 'plan')) items.push({ group: '前往', label: 'AI 讀書計畫', run: () => showTab('tab-ai') });
+    if (AI_ON && match('AI', '讀書計畫', '計畫', 'plan')) items.push({ group: '前往', label: 'AI 讀書計畫', run: () => showTab('tab-ai') });
     if (match('學測範圍', '範圍', '單元', '重點複習', 'syllabus')) items.push({ group: '前往', label: '學測範圍', run: () => showTab('tab-syllabus') });
     if (match('課表', '上課', '節次', 'timetable')) items.push({ group: '前往', label: '課表', run: () => { calView = 'tt'; lsSet(LS.calView, calView); showTab('tab-calendar'); applyCalView(); } });
     if (match('房間', '讀書房間', '朋友', 'room')) items.push({ group: '前往', label: '讀書房間', run: () => { roomView = null; showTab('tab-room'); } });

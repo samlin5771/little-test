@@ -2916,3 +2916,5 @@ body.cal-tt .cal-layout, body.cal-tt #calFab { display: none !important; }
 /* 標題多了假日標籤也不會把「＋ 新增」擠成兩行 */
 #addOnDayBtn { flex-shrink: 0; white-space: nowrap; }
 #selDayTitle { min-width: 0; }
+/* v67：AI 排計畫暫時隱藏（app.js 的 AI_ON 改成 true 就會出現） */
+html:not(.ai-on) #aiPlanBtn, html:not(.ai-on) .ai-only { display: none !important; }
