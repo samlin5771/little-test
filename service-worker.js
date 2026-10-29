@@ -1,6 +1,6 @@
 // 快取版本號：以後更新 index.html、style.css、app.js 任何一個時，把這個數字改一下（例如 v11, v12...）
 // 才能讓使用者的手機抓到新版本並清掉舊快取
-const CACHE_NAME = 'study-countdown-v69';
+const CACHE_NAME = 'study-countdown-v70';
 
 // 開啟時要預先快取的本機檔案
 const PRECACHE_URLS = [
@@ -17,7 +17,7 @@ const PRECACHE_URLS = [
 ];
 
 // 可以存進快取、讓 App 離線也能開的外部資源（Firebase 程式庫、字型）
-const CACHEABLE_CDN_HOSTS = ['www.gstatic.com', 'fonts.googleapis.com', 'fonts.gstatic.com', 'cdnjs.cloudflare.com'];   // v69 讀書地圖的 Leaflet 也存起來
+const CACHEABLE_CDN_HOSTS = ['www.gstatic.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 // 安裝：把基本檔案存進快取
 self.addEventListener('install', (event) => {

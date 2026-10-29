@@ -815,26 +815,6 @@
         <div class="guide-body nf-body" id="nfBody"></div>
     </section>
 
-    <!-- v69：讀書地圖（雙北咖啡廳、圖書館） -->
-    <section class="mp-screen" id="mapScreen" role="dialog" aria-modal="true" aria-labelledby="mpTitle">
-        <div class="mp-side">
-            <header class="mp-top">
-                <button class="icon-btn ghost" id="mpBack" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
-                <h2 id="mpTitle">讀書地圖</h2>
-                <button class="icon-btn" id="mpLocate" aria-label="移到我的位置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/><circle cx="12" cy="12" r="7.5"/></svg></button>
-            </header>
-            <label class="mp-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input type="search" id="mpQ" placeholder="搜尋地點、地址、捷運站" enterkeyhint="search" autocomplete="off" aria-label="搜尋地點"><button type="button" class="mp-clear" id="mpClear" hidden aria-label="清除搜尋">×</button></label>
-            <div class="mp-chips" id="mpChips" role="group" aria-label="篩選"></div>
-            <div class="mp-sheet" id="mpSheet">
-                <div class="mp-grab" id="mpGrab" aria-hidden="true"><i></i></div>
-                <div class="mp-list" id="mpList"></div>
-                <div class="mp-detail" id="mpDetail" hidden></div>
-            </div>
-        </div>
-        <div class="mp-map" id="mpMap" aria-label="地圖"></div>
-        <div class="mp-msg" id="mpMsg" hidden></div>
-    </section>
-
     <!-- v62：選時間的滾輪 -->
     <div class="modal bottom" id="wheelModal" role="dialog" aria-modal="true" aria-labelledby="whTitle">
         <div class="sheet wh-sheet">
@@ -855,16 +835,16 @@
         <div class="sheet tour-card wn-card">
             <p class="tour-kicker">版本更新</p>
             <h2 id="wnTitle">這次新增了什麼</h2>
-            <p class="tour-sub">不知道去哪讀書？打開地圖找找看</p>
+            <p class="tour-sub">讀書計時變得更舒服，倒數也更整齊</p>
             <ul class="tour-list">
-                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg></span><div><b>讀書地圖</b><span>找雙北有插座、不限時、安靜的咖啡廳和圖書館，可以收藏、寫筆記、一鍵導航</span></div></li>
                 <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/></svg></span><div><b>全螢幕時鐘更好看</b><span>圓圈放大置中，下面多了今天已讀、今天幾輪、離學測幾天；電腦上專注畫面也放大了</span></div></li>
                 <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/></svg></span><div><b>還在讀嗎？</b><span>自由計時滿 3 小時會問一下，忘記按結束的話可以改成實際讀的時間</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8.5 14.5l2.2 2.2 4.8-4.8"/></svg></span><div><b>倒數更整齊</b><span>「我的倒數」裡結束的會收成「已結束」；學測考完會自動換成下一屆</span></div></li>
             </ul>
-            <p class="tour-note">讀書地圖在<b>計時</b>頁上方。定位只在你的手機上用，不會上傳。</p>
+            <p class="tour-note">「全螢幕時鐘」在<b>開始專注後</b>的計時頁，按一下就能打開。</p>
             <div class="sheet-btns">
                 <button class="btn" data-close>知道了</button>
-                <button class="btn btn-accent" id="wnTry" style="flex:1">打開讀書地圖</button>
+                <button class="btn btn-accent" id="wnTry" style="flex:1">去計時頁看看</button>
             </div>
         </div>
     </div>
@@ -907,7 +887,7 @@
                 <h1>學測倒數 &amp; 讀書計畫</h1>
                 <p>從倒數、排計畫、專注計時到和朋友一起讀書，這裡一次看懂每個功能怎麼用。</p>
             </div>
-            <nav class="guide-toc" aria-label="導覽目錄"><a href="#g-cd">倒數</a><a href="#g-wk">每週進度</a><a href="#g-syl">學測範圍</a><a href="#g-tm">計時</a><a href="#g-st">統計</a><a href="#g-rm">讀書房間</a><a href="#g-ch">聊天室</a><a href="#g-map">讀書地圖</a><a href="#g-cal">行事曆・待辦</a><a href="#g-tt">課表</a><a href="#g-me">個人設定</a><a href="#g-nf">通知</a><a href="#g-key">電腦快捷鍵</a></nav>
+            <nav class="guide-toc" aria-label="導覽目錄"><a href="#g-cd">倒數</a><a href="#g-wk">每週進度</a><a href="#g-syl">學測範圍</a><a href="#g-tm">計時</a><a href="#g-st">統計</a><a href="#g-rm">讀書房間</a><a href="#g-ch">聊天室</a><a href="#g-cal">行事曆・待辦</a><a href="#g-tt">課表</a><a href="#g-me">個人設定</a><a href="#g-nf">通知</a><a href="#g-key">電腦快捷鍵</a></nav>
 
             <section class="g-sec" id="g-cd">
                 <p class="g-num num">01</p>
@@ -926,7 +906,7 @@
   <div class="g-check"><span></span><em class="g-td">待辦</em>交數學作業</div>
   <div class="g-btn">現在要讀什麼？</div>
 </div></figure>
-                <ul class="g-points"><li>上方切換<b>模考和學測</b>；考完的會自動收進「⋯」，換成下一場。</li><li>按最右邊的 <b>⋯</b> 打開「我的倒數」：可以<b>新增自己的倒數</b>（段考、英檢、生日…），選顏色、多天的日期，生日可以設成<b>每年重複</b>，也能顯示在行事曆上。上方最多放 3 個（<b>學測固定在最右邊</b>，另外可以再勾 2 個），拖曳右邊的 ☰ 排順序；沒放在上方的都留在「⋯」裡，點一下就能看。已經過完的倒數會變灰，並自動從上方拿掉、換成下一個要到的。</li><li>大數字是剩下的天數，下面是時分秒，還有考試日期和「下一場」還有幾天。</li><li>有設定課表的話，最上面的<b>今天的課</b>會顯示現在第幾節、還有幾分下課，和今天每一節課；週末或沒課時會縮成一行「今日無課程」。點一下就打開課表。</li><li><b>今天</b>區顯示今天讀了多久、離每日目標還差多少，進度條滿了就是達標。點<b>「目標 3 小時」</b>可以直接改每日目標。</li><li>有標重點複習的單元時，「今天」下面會提醒你，點一下就跳到學測範圍。</li><li>每週進度表裡「今天」的項目，和<b>排在今天（或已經逾期）的待辦</b>，都會列在這裡，可以直接打勾。</li><li>不知道讀什麼？按<b>現在要讀什麼？</b>，轉盤幫你隨機選一科。</li><li>最下面的<b>編輯首頁</b>：勾選要顯示哪些區塊、按住 ☰ 拖曳排順序。可以開關<b>今天的課</b>，還可以打開<b>接下來的行程</b>和<b>讀書房間</b>（看朋友現在在讀什麼）兩個區塊。排法會跟著帳號同步。</li></ul>
+                <ul class="g-points"><li>上方切換<b>模考和學測</b>；考完的會自動收進「⋯」，換成下一場。</li><li>按最右邊的 <b>⋯</b> 打開「我的倒數」：可以<b>新增自己的倒數</b>（段考、英檢、生日…），選顏色、多天的日期，生日可以設成<b>每年重複</b>，也能顯示在行事曆上。上方最多放 3 個（<b>學測固定在最右邊</b>，另外可以再勾 2 個），拖曳右邊的 ☰ 排順序；沒放在上方的都留在「⋯」裡，點一下就能看。已經過完的倒數會自動從上方拿掉、換成下一個要到的；在「我的倒數」裡會收成一列<b>「已結束（幾個）」</b>，點開才看得到。</li><li><b>學測考完</b>（最後一天過了）會自動換成<b>下一屆</b>的學測。大考中心還沒公布日期時，先用預估的日期倒數，日期旁邊會標「預估日期」。</li><li>大數字是剩下的天數，下面是時分秒，還有考試日期和「下一場」還有幾天。</li><li>有設定課表的話，最上面的<b>今天的課</b>會顯示現在第幾節、還有幾分下課，和今天每一節課；週末或沒課時會縮成一行「今日無課程」。點一下就打開課表。</li><li><b>今天</b>區顯示今天讀了多久、離每日目標還差多少，進度條滿了就是達標。點<b>「目標 3 小時」</b>可以直接改每日目標。</li><li>有標重點複習的單元時，「今天」下面會提醒你，點一下就跳到學測範圍。</li><li>每週進度表裡「今天」的項目，和<b>排在今天（或已經逾期）的待辦</b>，都會列在這裡，可以直接打勾。</li><li>不知道讀什麼？按<b>現在要讀什麼？</b>，轉盤幫你隨機選一科。</li><li>最下面的<b>編輯首頁</b>：勾選要顯示哪些區塊、按住 ☰ 拖曳排順序。可以開關<b>今天的課</b>，還可以打開<b>接下來的行程</b>和<b>讀書房間</b>（看朋友現在在讀什麼）兩個區塊。排法會跟著帳號同步。</li></ul>
                 
             </section>
 
@@ -1033,21 +1013,8 @@
                 
             </section>
 
-            <section class="g-sec" id="g-map">
-                <p class="g-num num">08</p>
-                <h3>讀書地圖</h3>
-                <p class="g-lead">找雙北適合讀書的咖啡廳和圖書館：有沒有插座、能不能久坐、安不安靜，一看就知道。</p>
-                <figure class="g-fig" aria-hidden="true"><div class="g-phone g-mapp">
-  <div class="g-mchips"><span class="on">有插座</span><span class="on">不限時</span><span>安靜</span><span><i style="background:#C98A2E"></i>咖啡廳</span></div>
-  <div class="g-mmap"><i class="c" style="left:22%;top:38%"></i><i class="c" style="left:58%;top:24%"></i><i class="l" style="left:70%;top:62%"></i><b style="left:44%;top:56%"></b></div>
-  <div class="g-mrow"><span class="g-mic c"></span><span><b>安靜咖啡</b><small><em>營業到 22:00</em> · 350 m</small></span></div>
-  <div class="g-mrow"><span class="g-mic l"></span><span><b>市立圖書館分館</b><small><em>營業到 21:00</em> · 800 m</small></span></div>
-</div></figure>
-                <ul class="g-points"><li>在<b>計時</b>頁按「<b>讀書地圖</b>」打開。橘色是<b>咖啡廳</b>、綠色是<b>圖書館</b>；拉遠是小圓點，拉近會變成圖釘。</li><li>上面的按鈕可以<b>篩選</b>：營業中、有插座、不限時、安靜、Wi-Fi、咖啡廳／圖書館、我的收藏，可以一次選好幾個。也可以<b>搜尋</b>店名、地址或捷運站。</li><li>按右上角的<b>定位</b>，地圖會移到你附近，清單照距離排。位置只在你的手機上用，<b>不會上傳</b>。iPhone 如果每次都問，可以到「設定 → 隱私權與安全性 → 定位服務 → Safari 網站」改成「使用 App 期間」。</li><li>點一個地點可以看插座、Wi-Fi、安靜、限時、營業時間，寫<b>只有自己看得到的筆記</b>，按愛心<b>收藏</b>（跟著帳號同步）。</li><li>按「<b>用 Apple 地圖導航</b>」（Android、電腦是 Google 地圖）直接開始導航；「看街景」會打開 Google 地圖的街景。</li><li>咖啡廳資料來自 <b>Cafe Nomad</b>、圖書館來自 <b>OpenStreetMap</b>，每天自動更新。資料有錯可以按「資料有錯？」去原網站更正。</li></ul>
-            </section>
-
             <section class="g-sec" id="g-cal">
-                <p class="g-num num">09</p>
+                <p class="g-num num">08</p>
                 <h3>行事曆與待辦</h3>
                 <p class="g-lead">考試、行程和雜事，都在這兩頁。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-phone">
@@ -1061,7 +1028,7 @@
             </section>
 
             <section class="g-sec" id="g-tt">
-                <p class="g-num num">10</p>
+                <p class="g-num num">09</p>
                 <h3>課表</h3>
                 <p class="g-lead">在「行事曆」分頁最上面切換到「課表」。填好一次，首頁就會告訴你現在上什麼課。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-phone">
@@ -1078,7 +1045,7 @@
             </section>
 
             <section class="g-sec" id="g-me">
-                <p class="g-num num">11</p>
+                <p class="g-num num">10</p>
                 <h3>個人設定</h3>
                 <p class="g-lead">點右上角的頭像打開。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-phone">
@@ -1093,7 +1060,7 @@
             </section>
 
             <section class="g-sec" id="g-nf">
-                <p class="g-num num">12</p>
+                <p class="g-num num">11</p>
                 <h3>通知</h3>
                 <p class="g-lead">個人設定 →「通知」。打開推播後，網站沒開也收得到提醒，每一種都可以自己決定要不要、幾點提醒。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-phone g-nfp">
@@ -1113,7 +1080,7 @@
             </section>
 
             <section class="g-sec" id="g-key">
-                <p class="g-num num">13</p>
+                <p class="g-num num">12</p>
                 <h3>電腦快捷鍵</h3>
                 <p class="g-lead">用電腦時，這些按鍵可以更快操作。</p>
                 <figure class="g-fig" aria-hidden="true"><div class="g-keys"><div><span class="kbd">1 – 5</span>切換分頁</div><div><span class="kbd">Space</span>開始／暫停計時</div><div><span class="kbd">N</span>新增待辦或行程</div><div><span class="kbd">← →</span>上一週、下一週（月）</div><div><span class="kbd">T</span>切換深淺色</div><div><span class="kbd">⌘K</span>指令面板：打字就能新增、開始專注</div><div><span class="kbd">?</span>快捷鍵表</div><div><span class="kbd">Esc</span>關閉視窗、返回上一頁</div></div></figure>

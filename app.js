@@ -27,8 +27,18 @@ const EXAMS = {
     mock1: { name: '第一次模擬考', short: '模考一', date: '2026-09-02', end: '2026-09-03' },
     mock2: { name: '第二次模擬考', short: '模考二', date: '2026-10-28', end: '2026-10-29' },
     mock3: { name: '第三次模擬考', short: '模考三', date: '2026-12-08', end: '2026-12-09' },
-    gsat:  { name: '116 學測',     short: '學測',   date: '2027-01-22', end: '2027-01-24' } // 多天的考試加上 end
+    gsat:  { name: '116 學測',     short: '學測',   date: '2027-01-22', end: '2027-01-24' } // 多天的考試加上 end（實際用下面的 GSAT_YEARS）
 };
+// v70 每一屆學測：考完（最後一天過了）自動換下一屆。est＝大考中心還沒公布，先用預估日期，公布後改成正式日期、拿掉 est
+const GSAT_YEARS = [
+    { y: 116, date: '2027-01-22', end: '2027-01-24' },
+    { y: 117, date: '2028-01-21', end: '2028-01-23', est: true }
+];
+(function pickGsat() {
+    const d = new Date(), t = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const g = GSAT_YEARS.find(x => (x.end || x.date) >= t) || GSAT_YEARS[GSAT_YEARS.length - 1];
+    EXAMS.gsat = { name: `${g.y} 學測`, short: '學測', date: g.date, ...(g.end ? { end: g.end } : {}), ...(g.est ? { est: true } : {}) };
+})();
 // 科目順序不要改，舊的進度資料是靠順序對應的
 const SUBJECTS = ['數學', '自然', '英文', '國文', '社會'];
 const SLOTS = 2;
@@ -49,8 +59,9 @@ const VAPID_KEY = 'BGD80hd0Xdk6Irow67T2c0x6txEOqT_dnwv3r5IaByGhq86PDQm47egvg_Dni
 // v67：AI 排計畫暫時隱藏（不太穩定）。要打開改成 true 就好，程式和資料都還在
 const AI_ON = false;
 if (AI_ON) document.documentElement.classList.add('ai-on');
+// v70：讀書地圖先拿掉了（還沒達到想要的效果）。程式碼在 v69 的版本裡，之後要做可以從那裡拿回來
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v69';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v70';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -689,6 +700,8 @@ $('bgGrid').addEventListener('click', (e) => {
 $('bgRow').addEventListener('click', () => setFold('bgRow', 'bgFold', !$('bgFold').classList.contains('open')));
 // 主題色和背景跟著帳號同步（深淺色每台裝置各自決定）
 let prefsTimer = 0;
+let mapKeep = null;
+try { localStorage.removeItem('study_places'); } catch {}   // v69 地圖存在這台的地點資料（很大），用不到了先清掉，網站開比較快   // v70 讀書地圖先拿掉了：帳號裡舊的收藏、筆記原封不動留著（之後地圖回來還在）
 function savePrefs() {
     if (!currentUser || !fb || !cloudReady) return;
     clearTimeout(prefsTimer);
@@ -696,7 +709,7 @@ function savePrefs() {
         fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), {
             prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow', notify: localStorage.getItem(LS.notify) || 'banner', home: homePref, tt, notif,
                 room: { name: roomPref.name || '', color: AV_COLORS.includes(roomPref.color) ? roomPref.color : '', hidden: !!roomPref.hidden },
-                map: { fav: mapPref.fav, note: mapPref.note } }
+                ...(mapKeep ? { map: mapKeep } : {}) }
         }, { mergeFields: ['prefs'] }).catch(e => console.warn('設定同步失敗：', e));
     }, 400);
 }
@@ -725,11 +738,7 @@ function applyCloudPrefs(p) {
             publishProfile(); renderRoom(); renderHomeRoom();
         }
     }
-    // v69 讀書地圖的收藏和筆記也跟著帳號
-    if (p.map && typeof p.map === 'object') {
-        const fav = p.map.fav && typeof p.map.fav === 'object' ? p.map.fav : {}, note = p.map.note && typeof p.map.note === 'object' ? p.map.note : {};
-        if (JSON.stringify(fav) !== JSON.stringify(mapPref.fav) || JSON.stringify(note) !== JSON.stringify(mapPref.note)) { mapPref.fav = fav; mapPref.note = note; saveMapPref(false); if (mpOpen) { if (mpSel) mpRenderDetail(); else mpRender(); } }
-    } else if (Object.keys(mapPref.fav).length || Object.keys(mapPref.note).length) savePrefs();
+    if (p.map && typeof p.map === 'object') mapKeep = p.map;
     if (p.home) {   // 首頁排法也跟著帳號
         const h = normHome(p.home);
         if (JSON.stringify(h) !== JSON.stringify(homePref)) { homePref = h; lsSet(LS.home, h); applyHome(); }
@@ -967,7 +976,7 @@ function cdNextDate(c) {
 }
 function cdAll() {
     return [
-        ...examEntries.map(([k, e]) => ({ key: k, builtin: true, name: e.name, short: e.short, date: e.date, end: e.end })),
+        ...examEntries.map(([k, e]) => ({ key: k, builtin: true, name: e.name, short: e.short, date: e.date, end: e.end, ...(e.est ? { est: true } : {}) })),
         ...state.countdowns.items.map(c => ({ key: c.id, builtin: false, name: c.name, short: c.short, date: cdNextDate(c), end: c.end, color: c.color, yearly: c.yearly, cal: c.cal }))
     ];
 }
@@ -1058,6 +1067,7 @@ function tick() {
         const ee = parseYmd(exam.end);
         dateHtml += ` – <strong>${pad(ee.getMonth() + 1)}/${pad(ee.getDate())}</strong>（${WEEK_ZH[ee.getDay()]}）`;
     }
+    if (exam.est) dateHtml += '<em class="cd-est">預估日期</em>';   // 下一屆學測還沒公布
     setHtml($('cdDate'), dateHtml);
     if (diff > 0) {
         roll($('days'), pad(Math.floor(diff / 86400000)));
@@ -1069,12 +1079,14 @@ function tick() {
         ['days', 'hours', 'minutes', 'seconds'].forEach(id => roll($(id), '00'));
         setText($('cdNote'), now < examEndTime(exam) ? (exam.builtin ? '考試進行中，加油！' : '就是今天！') : (exam.builtin ? '這場已經考完了，辛苦了！' : '這天已經過了'));
     }
-    const next = examEntries.map(([, e]) => ({ ...e, diff: examTime(e.date) - now }))
+    // 下一場：不算現在正在看的這一場（不然會重複顯示）；還有考試沒考完時不說「全部完成」
+    const next = examEntries.filter(([k]) => k !== exam.key).map(([, e]) => ({ ...e, diff: examTime(e.date) - now }))
         .filter(e => e.diff > 0).sort((a, b) => a.diff - b.diff)[0];
     if (homeRoomDue < now) { homeRoomDue = now + 15000; renderHomeRoom(); }
+    const allDone = examEntries.every(([, e]) => examEndTime(e) <= now);
     setHtml($('nextExamLine'), next
         ? `下一場：${esc(next.name)} · 還有 <strong>${Math.ceil(next.diff / 86400000)}</strong> 天`
-        : '所有考試都完成了，恭喜！');
+        : allDone ? '所有考試都完成了，恭喜！' : '');
 }
 
 // 今天：讀了多久（對照每日目標）＋進度表中「今天」有寫內容的格子
@@ -2298,7 +2310,6 @@ function endBreak(startNext) {
 /* --- 畫面 --- */
 const ICON_PEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>';
 const ICON_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
-const ICON_PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg>';
 const ICON_CHART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>';
 const ICON_ROOM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:16px;height:16px"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.5.2 4 1.9 4.5 4.9"/></svg>';
 const ringSvg = (cls) => `<svg viewBox="0 0 290 290" aria-hidden="true"><circle class="ring-track" cx="145" cy="145" r="134"/><circle class="ring-bar ${cls || ''}" cx="145" cy="145" r="134" stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="${RING_C.toFixed(2)}"/></svg>`;
@@ -2471,7 +2482,6 @@ function renderTimer() {
                     <svg class="go-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
                 </button>
             </div>
-            <button class="map-row" data-act="map"><span class="go-ic">${ICON_PIN}</span><span class="go-tx"><b>讀書地圖</b><small>找雙北有插座、不限時的地方讀書</small></span><svg class="go-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
             ${mini ? `<button class="mini-now" data-act="expand"><span class="mn-ring" style="--fp:0"></span><span class="mn-tx"><b>${SUBJECTS[timer.subject]} ${timer.pausedAt ? '已暫停' : '專注中'}</b><small>計時在背景繼續，點這裡回到碼錶</small></span>${ICON_DOWN.replace('M6 9l6 6 6-6', 'M6 15l6-6 6 6')}</button>` : `<div class="subj-grid">${subjButtons(tpref.subject, 'data-subj')}</div>
             <div class="seg" role="tablist" aria-label="計時模式" style="margin-top:12px">${MODES.map((x, i) =>
                 `<button role="tab" aria-selected="${i === tpref.mode}" class="${i === tpref.mode ? 'active' : ''}" data-mode="${i}">${x.label}</button>`).join('')}</div>
@@ -2717,7 +2727,6 @@ $('tab-timer').addEventListener('click', (e) => {
     else if (act === 'stats') { statOffset = 0; statSel = null; renderStats(); showTab('tab-stats'); }
     else if (act === 'pip') openPip();
     else if (act === 'standby') openStandby();
-    else if (act === 'map') openMap();
     else if (act === 'room') { if (timer.phase === 'focus') focusMin = true; roomView = null; showTab('tab-room'); }
     else if (act === 'minimize') { focusMin = true; lsSet(LS.minTip, true); renderTimer(); window.scrollTo({ top: 0 }); }
     else if (act === 'expand') openFocusFull();
@@ -3082,7 +3091,6 @@ function buildPalette(q) {
     }
     const go = [['倒數', 'countdown'], ['進度', 'weekly'], ['計時', 'timer'], ['行事曆', 'calendar'], ['待辦', 'todo']];
     go.forEach(([n, id], i) => { if (match(n, id, '前往')) items.push({ group: '前往', label: n, key: String(i + 1), run: () => showTab('tab-' + id) }); });
-    if (match('地圖', '讀書地圖', '咖啡廳', '圖書館', 'map')) items.push({ group: '前往', label: '讀書地圖', run: () => openMap() });
     if (AI_ON && match('AI', '讀書計畫', '計畫', 'plan')) items.push({ group: '前往', label: 'AI 讀書計畫', run: () => showTab('tab-ai') });
     if (match('學測範圍', '範圍', '單元', '重點複習', 'syllabus')) items.push({ group: '前往', label: '學測範圍', run: () => showTab('tab-syllabus') });
     if (match('課表', '上課', '節次', 'timetable')) items.push({ group: '前往', label: '課表', run: () => { calView = 'tt'; lsSet(LS.calView, calView); showTab('tab-calendar'); applyCalView(); } });
@@ -5556,7 +5564,7 @@ document.addEventListener('keydown', (e) => {
 }, true);
 // 第一次打開：手機瀏覽器先教「加到主畫面」（一定要按我知道了），接著簡易導覽；其他情況只顯示簡易導覽
 // v60：用過舊版的人，更新後第一次打開會看到「這次新增了什麼」（第一次用的人看簡易導覽就好，不會連跳兩個視窗）
-const WHATS_NEW = 'v69';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
+const WHATS_NEW = 'v70';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
 setTimeout(() => {
     if (document.querySelector('.modal.open') || document.body.classList.contains('guide-open')) return;
     const needInstall = !localStorage.getItem(LS.install) && !isStandalone() && isMobile();
@@ -5566,7 +5574,7 @@ setTimeout(() => {
     else if (needTour) openTour();
     else if (localStorage.getItem(LS.seenVer) !== WHATS_NEW) { lsSet(LS.seenVer, WHATS_NEW); openModal('whatsNewModal'); }
 }, 1200);
-$('wnTry').addEventListener('click', () => { closeModal('whatsNewModal'); setTimeout(openMap, 150); });
+$('wnTry').addEventListener('click', () => { closeModal('whatsNewModal'); focusMin = false; showTab('tab-timer'); });
 
 /* =====================================================
  * 帳號畫面
@@ -5774,11 +5782,15 @@ function renderCdManage() {
         </li>`;
     };
     $('cdmPinned').innerHTML = pins.map(k => all.find(c => c.key === k)).filter(Boolean).map(c => row(c, true)).join('') || '<li class="empty">還沒有放任何倒數，勾選下面的就會出現在上方</li>';
-    $('cdmRest').innerHTML = rest.map(c => row(c, false)).join('') || '<li class="empty">全部都放在上方了</li>';
+    // v70 已經結束的收成一列「已結束（N）」，點開才看得到
+    const live = rest.filter(c => !cdEnded(c)), ended = rest.filter(c => cdEnded(c));
+    const endHtml = ended.length ? `<li class="cdm-endrow"><button class="cdm-endbtn" data-cdend aria-expanded="${cdEndOpen}">已結束（${ended.length}）<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></li>${cdEndOpen ? ended.map(c => row(c, false)).join('') : ''}` : '';
+    $('cdmRest').innerHTML = (live.map(c => row(c, false)).join('') || (ended.length ? '' : '<li class="empty">全部都放在上方了</li>')) + endHtml;
     $('cdmRestHead').hidden = !rest.length && !all.length;
     $('cdmCount').textContent = `${pins.length} / ${CD_MAX}`;
 }
-function openCdManage() { renderCdManage(); openModal('cdModal'); }
+let cdEndOpen = false;
+function openCdManage() { cdEndOpen = false; renderCdManage(); openModal('cdModal'); }
 function setPins(p, off) {
     p = p.filter(k => k !== CD_FIXED).slice(0, CD_MAX - 1);   // 學測不用存，永遠固定在最右邊
     state.countdowns = { ...state.countdowns, pins: p, off: off || state.countdowns.off || [] };
@@ -5796,6 +5808,7 @@ $('cdModal').addEventListener('click', (e) => {
         else setPins([...pins, k], off);
         return;
     }
+    if (e.target.closest('[data-cdend]')) { cdEndOpen = !cdEndOpen; renderCdManage(); return; }
     const pick = e.target.closest('[data-cdpick]');
     if (pick) { closeModal('cdModal'); cdPicked = true; selectCd(pick.dataset.cdpick); return; }
     const ed = e.target.closest('[data-cdedit]');
@@ -6683,365 +6696,6 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('fullscreenchange', () => { /* 只是離開瀏覽器全螢幕：時鐘畫面保留，再點右上角就能關 */ });
 
 /* =====================================================
- * v69 讀書地圖：雙北適合讀書的咖啡廳（Cafe Nomad，作者同意使用）和圖書館（OpenStreetMap）
- *   地點資料由伺服器每天整理好放在 places/，網站讀完存在這台裝置（離線也能看上次的）
- *   地圖：Leaflet＋OpenStreetMap（免費、不用金鑰）；導航：iPhone 打開 Apple 地圖，其他打開 Google 地圖
- *   我的位置只在這台裝置上算距離，不會上傳
- * ===================================================== */
-const LEAFLET = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4';
-const PL_CACHE = 'study_places', MAP_PREF = 'study_map';
-const MP_TYPES = { c: { n: '咖啡廳', color: '#C98A2E', cls: 'cafe' }, l: { n: '圖書館', color: '#2F9E6E', cls: 'lib' } };
-const MP_IC = {
-    c: '<path d="M4.5 9h12v5a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5z"/><path d="M16.5 10.5h1.5a2.5 2.5 0 0 1 0 5h-1.6"/>',
-    l: '<path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5z"/><path d="M12 6.5v13"/>'
-};
-const mpSvg = (k, w = 2) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MP_IC[k]}</svg>`;
-const MP_FILTERS = [
-    { k: 'open', n: '營業中' }, { k: 'socket', n: '有插座' }, { k: 'nolimit', n: '不限時' }, { k: 'quiet', n: '安靜' }, { k: 'wifi', n: 'Wi-Fi' },
-    { k: 't:c', n: '咖啡廳', dot: MP_TYPES.c.color }, { k: 't:l', n: '圖書館', dot: MP_TYPES.l.color }, { k: 'fav', n: '我的收藏' }
-];
-const MP_CENTER = [25.0418, 121.5436], MP_ZOOM = 14;   // 預設：大安、忠孝復興一帶
-let mapPref = (() => { const x = lsGet(MAP_PREF, {}); return { fav: x && typeof x.fav === 'object' ? x.fav : {}, note: x && typeof x.note === 'object' ? x.note : {}, f: Array.isArray(x?.f) ? x.f.filter(k => MP_FILTERS.some(f => f.k === k)) : [] }; })();
-const saveMapPref = (sync = true) => { lsSet(MAP_PREF, mapPref); if (sync) savePrefs(); };
-let places = [], placesMeta = null, mp = null, mpSel = null, mpMe = null, mpQuery = '', mpLoading = false, mpOpen = false, mpExpanded = false;
-
-// --- 營業時間：Cafe Nomad 是中文的自由文字、OpenStreetMap 是 opening_hours 格式；看不懂的就顯示原文 ---
-const OSM_DAY = { Mo: 1, Tu: 2, We: 3, Th: 4, Fr: 5, Sa: 6, Su: 0 };
-const ZH_DAY = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 0, 天: 0 };
-const hm2 = (h, m) => Number(h) * 60 + Number(m || 0);
-function osmRanges(str, dow) {   // 今天的營業時段 [[開, 關], ...]（分鐘）；null＝看不懂
-    if (!str) return null;
-    if (/^\s*24\/7\s*$/.test(str)) return [[0, 1440]];
-    let today = null;
-    for (const rule of str.split(';').map(x => x.trim()).filter(Boolean)) {
-        const m = rule.match(/^((?:Mo|Tu|We|Th|Fr|Sa|Su)(?:\s*[-,]\s*(?:Mo|Tu|We|Th|Fr|Sa|Su))*)?\s*(.*)$/);
-        if (!m) return null;
-        let hit = !m[1];
-        if (m[1]) for (const part of m[1].split(',')) {
-            const [a, b] = part.split('-').map(x => OSM_DAY[x.trim()]);
-            if (a == null) return null;
-            if (b == null) { if (a === dow) hit = true; }
-            else for (let d = a, i = 0; i < 8; d = (d + 1) % 7, i++) { if (d === dow) hit = true; if (d === b) break; }
-        }
-        if (!hit) continue;
-        const t = m[2].trim();
-        if (/^off|closed$/i.test(t)) { today = []; continue; }
-        const rs = [...t.matchAll(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/g)].map(x => [hm2(x[1], x[2]), hm2(x[3], x[4])]);
-        if (!rs.length) return null;
-        today = rs;   // 後面的規則蓋過前面的
-    }
-    return today;
-}
-function zhRanges(str, dow) {
-    if (!str) return null;
-    if (/24\s*(小時|hr|H)/i.test(str)) return [[0, 1440]];
-    // 「週一公休」「每週二、三公休」「星期日休息」
-    const off = str.match(/(?:週|周|星期|禮拜)([一二三四五六日天、,，與和及]+)(?:公休|休息|店休|休)/);
-    if (off && [...off[1]].some(c => ZH_DAY[c] === dow)) return [];
-    const rs = [...str.matchAll(/(\d{1,2})\s*[:：]\s*(\d{2})\s*(?:~|～|-|－|–|—|至|到)\s*(?:翌日|隔天|隔日|次日|凌晨)?\s*(\d{1,2})\s*[:：]\s*(\d{2})/g)].map(x => [hm2(x[1], x[2]), hm2(x[3], x[4])]);
-    return rs.length ? [rs[0]] : null;   // 有好幾段時通常是平日／假日不同：先用第一段，詳情裡會顯示原文
-}
-// 現在有沒有開：{ open: true, until: 'HH:MM' } / { open: false, today: false } / null（不知道）
-function placeOpen(p, d = new Date()) {
-    const dow = d.getDay(), now = d.getHours() * 60 + d.getMinutes();
-    const rs = p.t === 'l' ? osmRanges(p.o, dow) : zhRanges(p.o, dow);
-    if (!rs) return null;
-    if (!rs.length) return { open: false, off: true };
-    for (const [a, b0] of rs) {
-        const b = b0 <= a ? b0 + 1440 : b0;   // 開到半夜
-        if (a === 0 && b >= 1440 && b0 >= 1440) return { open: true, allDay: true, until: '24:00' };
-        if ((now >= a && now < b) || (now + 1440 >= a && now + 1440 < b)) return { open: true, until: b0 === 0 || b0 >= 1440 ? '24:00' : `${pad(Math.floor(b0 / 60) % 24)}:${pad(b0 % 60)}` };
-    }
-    const next = rs.map(([a]) => a).find(a => a > now);
-    return { open: false, opens: next != null ? `${pad(Math.floor(next / 60))}:${pad(next % 60)}` : null };
-}
-function openText(p) {
-    const st = placeOpen(p);
-    if (!st) return p.o ? '' : '營業時間未提供';
-    if (st.open) return `<em class="ok">${st.allDay ? '24 小時營業' : `營業到 ${st.until}`}</em>`;
-    if (st.off) return '<em class="no">今天公休</em>';
-    return `<em class="no">休息中${st.opens ? `・${st.opens} 開` : ''}</em>`;
-}
-// 兩點距離（公尺）
-function distM(a, b) {
-    const R = 6371000, r = Math.PI / 180, dla = (b[0] - a[0]) * r, dlo = (b[1] - a[1]) * r;
-    const x = Math.sin(dla / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dlo / 2) ** 2;
-    return 2 * R * Math.asin(Math.sqrt(x));
-}
-const fmtDist = (m) => m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
-function placeTags(p) {
-    const t = [];
-    if (p.t === 'l') t.push(['免費', 'g'], ['不限時', 'g']);
-    if (p.s === 1) t.push(['有插座', 'g']); else if (p.s === 0.5) t.push(['部分座位有插座']); else if (p.s === 0) t.push(['沒有插座']);
-    if (p.t === 'c') { if (p.l === 0) t.push(['不限時', 'g']); else if (p.l === 1) t.push(['有限時']); else if (p.l === 0.5) t.push(['看情況限時']); }
-    if (p.q >= 4) t.push([`安靜 ${p.q}`, 'g']); else if (p.q > 0) t.push([`安靜 ${p.q}`]);
-    if (p.w >= 4) t.push([`Wi-Fi ${p.w}`]);
-    return t.slice(0, 4);
-}
-function placePass(p, f) {
-    for (const k of f) {
-        if (k === 'socket' && !(p.s === 1 || p.s === 0.5)) return false;
-        if (k === 'nolimit' && !(p.t === 'l' || p.l === 0)) return false;
-        if (k === 'quiet' && !(p.q >= 4)) return false;
-        if (k === 'wifi' && !(p.w >= 4)) return false;
-        if (k === 'fav' && !mapPref.fav[p.i]) return false;
-        if (k === 'open') { const st = placeOpen(p); if (st && !st.open) return false; }   // 不知道營業時間的保留（詳情會寫）
-    }
-    const types = f.filter(k => k.startsWith('t:')).map(k => k.slice(2));
-    if (types.length && !types.includes(p.t)) return false;
-    if (mpQuery) {
-        const q = mpQuery.toLowerCase();
-        if (!(`${p.n} ${p.a} ${p.m}`.toLowerCase().includes(q))) return false;
-    }
-    return true;
-}
-
-// --- 載入資料 ---
-async function placesLoad() {
-    const c = lsGet(PL_CACHE, null);
-    if (c && Array.isArray(c.list) && !places.length) { places = c.list; placesMeta = { v: c.v, at: c.at }; }
-    if (!fb) return;
-    try {
-        const ref = (id) => fb.fs.doc(fb.db, 'places', id);
-        let snap = await fb.fs.getDoc(ref('meta'));
-        let meta = snap.exists() ? snap.data() : null;
-        if ((!meta || !meta.cafe) && currentUser) {   // 伺服器還沒抓過：請它抓一次（大約 10～30 秒）
-            mpMessage('第一次打開，正在整理雙北的地點資料…');
-            try {
-                const fm = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-functions.js`);
-                await fm.httpsCallable(fm.getFunctions(fb.app, 'asia-east1'), 'placesRefresh', { timeout: 280000 })({});
-            } catch (e) { console.warn('地點資料更新失敗：', e); }
-            snap = await fb.fs.getDoc(ref('meta')); meta = snap.exists() ? snap.data() : null;
-        }
-        if (!meta || (!meta.cafe && !meta.lib)) { if (!places.length) mpMessage(currentUser ? '地點資料還沒準備好，請稍後再打開一次' : '登入後就會下載地點資料'); return; }
-        if (c && c.v === meta.v && places.length) { mpMessage(''); return; }
-        const ids = [];
-        for (const src of ['cafe', 'lib']) for (let k = 0; k < (meta[src]?.chunks || 0); k++) ids.push(`${src}_${k}`);
-        const parts = await Promise.all(ids.map(id => fb.fs.getDoc(ref(id)).then(x => (x.exists() ? x.data().list : []) || [])));
-        const list = parts.flat().filter(p => p && p.i && Number.isFinite(p.la) && Number.isFinite(p.lo));
-        if (!list.length) return;
-        places = list; placesMeta = { v: meta.v, at: meta.at };
-        try { localStorage.setItem(PL_CACHE, JSON.stringify({ v: meta.v, at: meta.at, list })); } catch (e) { /* 空間不夠就不存，下次再下載 */ }
-        mpMessage('');
-        mpRender();
-    } catch (e) {
-        console.warn('讀地點資料失敗：', e);
-        if (!places.length) mpMessage('沒有網路，地點資料載入不了');
-    }
-}
-function mpMessage(t) { const el = $('mpMsg'); if (!el) return; el.textContent = t; el.hidden = !t; }
-
-// --- Leaflet：第一次打開地圖才下載 ---
-let leafletP = null;
-function loadLeaflet() {
-    if (window.L && window.L.map) return Promise.resolve(window.L);
-    if (leafletP) return leafletP;
-    leafletP = new Promise((res, rej) => {
-        const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = `${LEAFLET}/leaflet.min.css`; css.crossOrigin = '';
-        document.head.appendChild(css);
-        const sc = document.createElement('script'); sc.src = `${LEAFLET}/leaflet.min.js`; sc.crossOrigin = '';
-        sc.onload = () => { let n = 0; (function wait() { if (window.L && window.L.map) res(window.L); else if (n++ > 100) rej(new Error('leaflet')); else setTimeout(wait, 50); })(); };
-        sc.onerror = () => { leafletP = null; rej(new Error('leaflet')); };
-        document.head.appendChild(sc);
-    });
-    return leafletP;
-}
-async function openMap() {
-    closeModal('accountModal');
-    $('mapScreen').classList.add('open');
-    document.body.classList.add('guide-open', 'map-open');
-    mpOpen = true;
-    syncScrollLock();
-    mpRenderChips();
-    if (!places.length) { const c = lsGet(PL_CACHE, null); if (c && Array.isArray(c.list)) { places = c.list; placesMeta = { v: c.v, at: c.at }; } }
-    try { await loadLeaflet(); } catch (e) { mpMessage('地圖載入不了，請檢查網路'); }
-    if (window.L && !mp) mpInit();
-    if (mp) setTimeout(() => mp.invalidateSize(), 60);
-    mpRender();
-    if (!mpLoading) { mpLoading = true; placesLoad().finally(() => { mpLoading = false; }); }
-}
-function closeMap() {
-    $('mapScreen').classList.remove('open');
-    document.body.classList.remove('guide-open', 'map-open');
-    mpOpen = false;
-    syncScrollLock();
-}
-let mpDots = null, mpPins = null, mpMeLayer = null;
-function mpInit() {
-    const L = window.L;
-    mp = L.map('mpMap', { zoomControl: false, attributionControl: true, preferCanvas: true, minZoom: 10, maxZoom: 19, maxBounds: [[24.4, 121.0], [25.5, 122.3]] }).setView(MP_CENTER, MP_ZOOM);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' }).addTo(mp);
-    mp.attributionControl.setPrefix(false);
-    if (matchMedia('(min-width: 900px)').matches) L.control.zoom({ position: 'bottomright' }).addTo(mp);
-    mpDots = L.layerGroup().addTo(mp); mpPins = L.layerGroup().addTo(mp); mpMeLayer = L.layerGroup().addTo(mp);
-    mp.on('moveend', () => mpRender(true));
-    mp.on('click', () => { if (mpSel) mpSelect(null); });
-}
-// 地圖上的點：拉遠時是小圓點（畫在 canvas，很多也不卡），拉近時換成圖釘
-function mpRenderMarkers(list) {
-    if (!mp) return;
-    const L = window.L;
-    mpDots.clearLayers(); mpPins.clearLayers();
-    const z = mp.getZoom(), b = mp.getBounds().pad(0.15);
-    const vis = list.filter(p => b.contains([p.la, p.lo]));
-    const pinMode = z >= 15 && vis.length <= 160;
-    for (const p of vis) {
-        const sel = mpSel && mpSel.i === p.i;
-        if (pinMode || sel) {
-            const icon = L.divIcon({ className: '', html: `<div class="mp-pin ${MP_TYPES[p.t].cls}${sel ? ' sel' : ''}${mapPref.fav[p.i] ? ' fav' : ''}"><b>${mpSvg(p.t, 2.2)}</b></div>`, iconSize: [36, 40], iconAnchor: [18, 38] });
-            L.marker([p.la, p.lo], { icon, keyboard: false, title: p.n, zIndexOffset: sel ? 1000 : 0 }).on('click', (e) => { L.DomEvent.stopPropagation(e); mpSelect(p, false); }).addTo(mpPins);
-        } else {
-            L.circleMarker([p.la, p.lo], { radius: z >= 13 ? 6 : 4.5, weight: 1.5, color: '#fff', fillColor: MP_TYPES[p.t].color, fillOpacity: 0.95 }).on('click', (e) => { L.DomEvent.stopPropagation(e); mpSelect(p, false); }).addTo(mpDots);
-        }
-    }
-    return vis;
-}
-function mpRef() { return mpMe || (mp ? [mp.getCenter().lat, mp.getCenter().lng] : MP_CENTER); }
-function mpRender(fromMove) {
-    if (!mpOpen) return;
-    const f = mapPref.f;
-    const list = places.filter(p => placePass(p, f));
-    const vis = mp ? mpRenderMarkers(list) : list;
-    if (mpSel && !fromMove) { mpRenderDetail(); return; }
-    if (mpSel) return;
-    const ref = mpRef();
-    const shown = (mp && !mpQuery ? vis : list).map(p => ({ p, d: distM(ref, [p.la, p.lo]) })).sort((a, b) => a.d - b.d);
-    const total = shown.length;
-    const rows = shown.slice(0, 40).map(({ p, d }) => `<li><button class="mp-card" data-pl="${esc(p.i)}">
-        <span class="mp-cic ${MP_TYPES[p.t].cls}">${mpSvg(p.t, 1.8)}</span>
-        <span class="mp-ct"><b>${esc(p.n)}</b><small>${openText(p) ? openText(p) + ' · ' : ''}${fmtDist(d)}</small>
-        <span class="mp-tags">${placeTags(p).map(([a, c]) => `<i class="${c || ''}">${esc(a)}</i>`).join('')}</span></span>
-        <span class="mp-fav${mapPref.fav[p.i] ? ' on' : ''}" data-fav="${esc(p.i)}" role="button" aria-label="${mapPref.fav[p.i] ? '取消收藏' : '收藏'}">${ICON_HEART}</span>
-    </button></li>`).join('');
-    const head = !places.length ? '' : `<div class="mp-head"><b>${mpQuery ? `「${esc(mpQuery)}」找到 ${total} 個` : `${mp ? '這附近' : ''} ${total} 個地點`}</b><span>${mpMe ? '依距離' : '依離地圖中心的距離'}</span></div>`;
-    const empty = !places.length ? '<p class="mp-empty">地點資料載入中…</p>' : !total ? `<p class="mp-empty">${f.length || mpQuery ? '沒有符合的地點，試試拿掉幾個篩選，或把地圖拉遠一點' : '這附近沒有地點，把地圖移一下看看'}</p>` : '';
-    setHtml($('mpList'), head + (rows ? `<ul class="mp-ul">${rows}</ul>` : '') + empty + (total > 40 ? '<p class="mp-more">只列出最近的 40 個，移動地圖可以看其他地方</p>' : '') + mpCredit());
-    $('mpList').hidden = false; $('mpDetail').hidden = true;
-}
-const ICON_HEART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>';
-const mpCredit = () => `<p class="mp-credit">咖啡廳資料：<a href="https://cafenomad.tw/" target="_blank" rel="noopener">Cafe Nomad</a>　圖書館、地圖：<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>${placesMeta?.at ? `<br>資料更新：${new Date(placesMeta.at).getMonth() + 1}/${new Date(placesMeta.at).getDate()}` : ''}</p>`;
-function mpRenderChips() {
-    setHtml($('mpChips'), MP_FILTERS.map(f => { const on = mapPref.f.includes(f.k); return `<button type="button" class="mp-chip${on ? ' on' : ''}" data-mf="${f.k}" aria-pressed="${on}">${f.dot ? `<i style="background:${f.dot}"></i>` : ''}${f.n}</button>`; }).join(''));
-}
-const isApple = () => /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent) && (isIOS() || /Macintosh/.test(navigator.userAgent));
-function navUrl(p, apple) {
-    return apple ? `https://maps.apple.com/?daddr=${p.la},${p.lo}&q=${encodeURIComponent(p.n)}&dirflg=w`
-        : `https://www.google.com/maps/dir/?api=1&destination=${p.la},${p.lo}&travelmode=walking`;
-}
-function mpSelect(p, center = true) {
-    mpSel = p;
-    if (p && mp && center) mp.setView([p.la, p.lo], Math.max(mp.getZoom(), 16));
-    if (p) { mpExpand(false); mpRenderDetail(); } else mpRender();
-    if (mp) mpRenderMarkers(places.filter(x => placePass(x, mapPref.f)));
-}
-function mpRenderDetail() {
-    const p = mpSel;
-    if (!p) return;
-    const d = distM(mpRef(), [p.la, p.lo]);
-    const box = (v, label) => `<div class="mp-dg"><b>${v}</b><span>${label}</span></div>`;
-    const cells = p.t === 'c' ? [
-        box(p.s === 1 ? '有' : p.s === 0.5 ? '部分' : p.s === 0 ? '沒有' : '—', '插座'),
-        box(p.w || '—', 'Wi-Fi'), box(p.q || '—', '安靜'),
-        box(p.l === 0 ? '不限時' : p.l === 1 ? '有限時' : p.l === 0.5 ? '看情況' : '—', '時間'),
-        box(p.st || '—', '座位'), box(p.m ? esc(p.m.replace(/捷運|站$/g, '')) || '—' : '—', '捷運')
-    ] : [box('免費', '入場'), box('不限時', '時間'), box('—', '插座看分館')];
-    const st = openText(p);
-    const apple = isApple();
-    const srcLink = p.t === 'c' ? `https://cafenomad.tw/shop/${encodeURIComponent(p.i.slice(1))}` : `https://www.openstreetmap.org/${{ n: 'node', w: 'way', r: 'relation' }[p.i[1]] || 'node'}/${p.i.slice(2)}`;
-    setHtml($('mpDetail'), `<div class="mp-dt">
-        <button class="mp-backlist" data-mpa="back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>回到清單</button>
-        <h3>${esc(p.n)}</h3>
-        <p class="mp-sub">${MP_TYPES[p.t].n} · ${fmtDist(d)}${st ? ' · ' + st : ''}</p>
-        ${p.a ? `<p class="mp-addr">${esc(p.a)}</p>` : ''}
-        <div class="mp-dgrid">${cells.join('')}</div>
-        ${p.o ? `<p class="mp-hours"><b>營業時間</b>${esc(p.o)}</p>` : ''}
-        <label class="mp-note"><span>我的筆記（只有你看得到）</span><textarea id="mpNote" rows="2" maxlength="200" placeholder="例如：二樓靠窗有插座，下午人比較多">${esc(mapPref.note[p.i] || '')}</textarea></label>
-        <div class="mp-btns">
-            <a class="btn btn-accent" href="${navUrl(p, apple)}" target="_blank" rel="noopener">${apple ? '用 Apple 地圖導航' : '用 Google 地圖導航'}</a>
-            <button class="btn mp-favbtn${mapPref.fav[p.i] ? ' on' : ''}" data-fav="${esc(p.i)}">${ICON_HEART}${mapPref.fav[p.i] ? '已收藏' : '收藏'}</button>
-        </div>
-        <p class="mp-src"><a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${p.la},${p.lo}" target="_blank" rel="noopener">看街景</a><a href="${navUrl(p, !apple)}" target="_blank" rel="noopener">改用 ${apple ? 'Google' : 'Apple'} 地圖</a><a href="${srcLink}" target="_blank" rel="noopener">資料有錯？到 ${p.t === 'c' ? 'Cafe Nomad' : 'OpenStreetMap'} 更正</a></p>
-    </div>`);
-    $('mpList').hidden = true; $('mpDetail').hidden = false;
-    $('mpDetail').scrollTop = 0;
-}
-function mpToggleFav(id) {
-    if (mapPref.fav[id]) delete mapPref.fav[id]; else mapPref.fav[id] = 1;
-    saveMapPref();
-    if (mpSel) mpRenderDetail(); else mpRender();
-    if (mp) mpRenderMarkers(places.filter(x => placePass(x, mapPref.f)));
-}
-function mpExpand(on) { mpExpanded = on; $('mapScreen').classList.toggle('mp-full', on); }
-function mpLocate() {
-    if (!navigator.geolocation) { toast('這個瀏覽器不能定位'); return; }
-    const b = $('mpLocate'); b.classList.add('busy');
-    navigator.geolocation.getCurrentPosition((pos) => {
-        b.classList.remove('busy');
-        mpMe = [pos.coords.latitude, pos.coords.longitude];
-        if (mp) {
-            mpMeLayer.clearLayers();
-            window.L.marker(mpMe, { icon: window.L.divIcon({ className: '', html: '<div class="mp-me"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), keyboard: false, interactive: false }).addTo(mpMeLayer);
-            const inArea = mpMe[0] > 24.67 && mpMe[0] < 25.31 && mpMe[1] > 121.28 && mpMe[1] < 122.01;
-            if (inArea) mp.setView(mpMe, 16); else toast('你目前不在雙北，地圖先停在台北');
-        }
-        mpRender();
-    }, (err) => {
-        b.classList.remove('busy');
-        toast(err.code === 1 ? '沒有定位權限：可以到手機設定打開，或直接搜尋捷運站' : '定位失敗，請再試一次');
-    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
-}
-$('mpBack').addEventListener('click', () => { if (mpSel) mpSelect(null); else closeMap(); });
-$('mpLocate').addEventListener('click', mpLocate);
-$('mpChips').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-mf]');
-    if (!b) return;
-    const k = b.dataset.mf, f = mapPref.f;
-    mapPref.f = f.includes(k) ? f.filter(x => x !== k) : [...f, k];
-    saveMapPref(false); mpRenderChips();
-    if (mpSel && !placePass(mpSel, mapPref.f)) mpSel = null;
-    mpRender();
-});
-let mpQT = 0;
-$('mpQ').addEventListener('input', () => {
-    $('mpClear').hidden = !$('mpQ').value;
-    clearTimeout(mpQT);
-    mpQT = setTimeout(() => { mpQuery = $('mpQ').value.trim().slice(0, 30); mpSel = null; mpRender(); }, 250);
-});
-$('mpQ').addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault(); $('mpQ').blur();
-    mpQuery = $('mpQ').value.trim().slice(0, 30); mpSel = null;
-    const hits = places.filter(p => placePass(p, mapPref.f));
-    if (mp && mpQuery && hits.length) mp.fitBounds(window.L.latLngBounds(hits.slice(0, 200).map(p => [p.la, p.lo])).pad(0.2), { maxZoom: 16 });
-    mpRender();
-});
-$('mpClear').addEventListener('click', () => { $('mpQ').value = ''; $('mpClear').hidden = true; mpQuery = ''; mpRender(); });
-$('mapScreen').addEventListener('click', (e) => {
-    const fav = e.target.closest('[data-fav]');
-    if (fav) { e.preventDefault(); e.stopPropagation(); mpToggleFav(fav.dataset.fav); return; }
-    const card = e.target.closest('[data-pl]');
-    if (card) { const p = places.find(x => x.i === card.dataset.pl); if (p) mpSelect(p); return; }
-    if (e.target.closest('[data-mpa="back"]')) mpSelect(null);
-});
-$('mapScreen').addEventListener('input', (e) => {
-    if (e.target.id !== 'mpNote' || !mpSel) return;
-    const v = e.target.value.slice(0, 200).trim();
-    if (v) mapPref.note[mpSel.i] = v; else delete mapPref.note[mpSel.i];
-    clearTimeout(mpQT); mpQT = setTimeout(() => saveMapPref(), 600);
-});
-// 手機：拖拉清單上方的小橫條，展開或收起
-(function () {
-    const g = $('mpGrab');
-    let y0 = null;
-    g.addEventListener('pointerdown', (e) => { y0 = e.clientY; g.setPointerCapture(e.pointerId); });
-    g.addEventListener('pointerup', (e) => { if (y0 == null) return; const dy = e.clientY - y0; y0 = null; if (Math.abs(dy) < 6) mpExpand(!mpExpanded); else mpExpand(dy < 0); });
-    g.addEventListener('pointercancel', () => { y0 = null; });
-})();
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && mpOpen && !document.querySelector('.modal.open')) { e.stopImmediatePropagation(); if (mpSel) mpSelect(null); else closeMap(); }
-}, true);
-
-/* =====================================================
  * 啟動：先用本機資料畫出畫面
  * ===================================================== */
 { const v = $('appVersion'); if (v) v.textContent = `目前版本 ${APP_VERSION}`; }
@@ -7261,7 +6915,7 @@ $('loginBtn').addEventListener('click', async () => {
             pokeStop();
             // 暱稱、頭像顏色跟著帳號：登出後清掉，換別的帳號登入才不會用到上一個人的
             roomPref = { name: '', hidden: false, enabled: false }; saveRoomPref();
-            mapPref = { fav: {}, note: {}, f: mapPref.f }; saveMapPref(false);   // 地圖收藏跟著帳號，登出後清掉
+            mapKeep = null; try { localStorage.removeItem('study_map'); } catch {}   // 舊的地圖收藏跟著帳號，登出後清掉
             await authM.signOut(auth); closeModal('accountModal');
         }
         return;
