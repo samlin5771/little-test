@@ -3005,3 +3005,148 @@ html:not(.ai-on) #aiPlanBtn, html:not(.ai-on) .ai-only { display: none !importan
     .focus-tools { gap: 6px; }
     .focus-tools .tool-btn { padding: 0 11px; font-size: 12.5px; }
 }
+
+/* =====================================================
+ * v69 讀書地圖
+ * ===================================================== */
+.map-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 58px; margin: -4px 0 14px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); color: var(--text); text-align: left; cursor: pointer; font-family: 'Noto Sans TC', sans-serif; transition: transform .15s; }
+.map-row:active { transform: scale(.985); }
+.map-row { border-color: rgba(76, 123, 217, .45); background: rgba(76, 123, 217, .12); }
+.map-row .go-ic { color: #3D68C0; background: rgba(76, 123, 217, .18); }
+.map-row .go-tx small { color: #3D68C0; }
+[data-theme="dark"] .map-row .go-ic, [data-theme="dark"] .map-row .go-tx small { color: #8FB0F5; }
+.mp-screen { position: fixed; inset: 0; z-index: 96; display: none; background: var(--bg); color: var(--text); font-family: 'Noto Sans TC', sans-serif; --sheet: 44dvh; }
+.mp-screen.open { display: block; animation: chatIn .22s ease-out; }
+.mp-side { display: contents; }
+.mp-map { position: absolute; inset: 0; z-index: 1; background: var(--surface-2); }
+.mp-top { position: absolute; left: 0; right: 0; top: 0; z-index: 4; display: flex; align-items: center; gap: 8px; padding: calc(10px + env(safe-area-inset-top)) 14px 6px; }
+.mp-top h2 { flex: 1; margin: 0; font-size: 19px; font-weight: 800; text-shadow: 0 0 10px rgba(var(--bg-rgb), .9); }
+.mp-top .icon-btn { background: rgba(var(--card-rgb), .92); border: 1px solid var(--line); box-shadow: 0 2px 10px rgba(0, 0, 0, .1); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+#mpLocate.busy svg { animation: spin 1s linear infinite; }
+.mp-search { position: absolute; left: 14px; right: 14px; top: calc(62px + env(safe-area-inset-top)); z-index: 4; display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 8px 0 15px; border-radius: 23px; background: rgba(var(--card-rgb), .95); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0, 0, 0, .1); color: var(--muted); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.mp-search svg { width: 18px; height: 18px; flex-shrink: 0; }
+.mp-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: 500 16px 'Noto Sans TC', sans-serif; outline: none; -webkit-appearance: none; appearance: none; }
+.mp-search input::-webkit-search-cancel-button { display: none; }
+.mp-clear { width: 32px; height: 32px; border-radius: 16px; border: 0; background: var(--surface-2); color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; }
+.mp-chips { position: absolute; left: 0; right: 0; top: calc(116px + env(safe-area-inset-top)); z-index: 4; display: flex; gap: 8px; overflow-x: auto; padding: 0 14px 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.mp-chips::-webkit-scrollbar { display: none; }
+.mp-chip { flex: 0 0 auto; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--line); background: rgba(var(--card-rgb), .95); color: var(--text); font: 600 13.5px 'Noto Sans TC', sans-serif; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, .08); white-space: nowrap; }
+.mp-chip i { width: 9px; height: 9px; border-radius: 5px; }
+.mp-chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
+[data-theme="dark"] .mp-chip.on { background: color-mix(in srgb, var(--accent) 22%, var(--card)); }
+.mp-sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; height: var(--sheet); display: flex; flex-direction: column; background: var(--modal-bg); border-radius: 24px 24px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, .14); transition: height .32s cubic-bezier(.22, 1, .36, 1); }
+.mp-screen.mp-full .mp-sheet { height: calc(100dvh - 120px - env(safe-area-inset-top)); }
+.mp-grab { flex-shrink: 0; height: 22px; display: grid; place-items: center; cursor: grab; touch-action: none; }
+.mp-grab i { width: 40px; height: 5px; border-radius: 3px; background: var(--line); }
+.mp-list, .mp-detail { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 0 16px calc(16px + env(safe-area-inset-bottom)); }
+.mp-list[hidden], .mp-detail[hidden] { display: none; }
+.mp-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 2px 0 6px; }
+.mp-head b { font-size: 15.5px; }
+.mp-head span { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.mp-ul { list-style: none; margin: 0; padding: 0; }
+.mp-ul li + li { border-top: 1px solid var(--line); }
+.mp-card { display: flex; gap: 12px; width: 100%; padding: 12px 0; border: 0; background: none; color: var(--text); text-align: left; cursor: pointer; align-items: center; font-family: inherit; }
+.mp-cic { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; flex-shrink: 0; }
+.mp-cic svg { width: 22px; height: 22px; }
+.mp-cic.cafe { background: rgba(201, 138, 46, .15); color: #B9791F; }
+.mp-cic.lib { background: rgba(47, 158, 110, .15); color: #25875C; }
+[data-theme="dark"] .mp-cic.cafe { color: #E3A54A; } [data-theme="dark"] .mp-cic.lib { color: #4CC48F; }
+.mp-ct { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mp-ct b { font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-ct small { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-ct em, .mp-sub em { font-style: normal; font-weight: 700; }
+.mp-screen em.ok { color: #2F9E6E; } .mp-screen em.no { color: var(--muted); }
+[data-theme="dark"] .mp-screen em.ok { color: #4CC48F; }
+.mp-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
+.mp-tags i { font-style: normal; font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 8px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.mp-tags i.g { background: rgba(47, 158, 110, .14); color: #25875C; }
+[data-theme="dark"] .mp-tags i.g { color: #4CC48F; }
+.mp-fav { width: 38px; height: 38px; border-radius: 19px; border: 1px solid var(--line); display: grid; place-items: center; flex-shrink: 0; color: var(--muted); background: var(--surface); }
+.mp-fav svg { width: 18px; height: 18px; }
+.mp-fav.on, .mp-favbtn.on { color: #E5484D; }
+.mp-fav.on svg, .mp-favbtn.on svg { fill: currentColor; }
+.mp-empty, .mp-more { font-size: 13.5px; color: var(--muted); text-align: center; padding: 18px 8px; margin: 0; line-height: 1.6; }
+.mp-more { padding: 10px 8px 0; font-size: 12px; }
+.mp-credit { font-size: 11px; color: var(--faint); text-align: center; line-height: 1.7; margin: 14px 0 0; }
+.mp-credit a, .mp-src a { color: inherit; }
+.mp-backlist { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; color: var(--muted); font: 600 13px 'Noto Sans TC', sans-serif; padding: 2px 0 8px; cursor: pointer; }
+.mp-backlist svg { width: 16px; height: 16px; }
+.mp-dt h3 { margin: 0 0 4px; font-size: 21px; font-weight: 800; line-height: 1.3; }
+.mp-sub { margin: 0; font-size: 13px; color: var(--muted); }
+.mp-addr { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.mp-dgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 14px 0 12px; }
+.mp-dg { padding: 10px 6px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); text-align: center; min-width: 0; }
+.mp-dg b { display: block; font: 800 16px 'Manrope', 'Noto Sans TC', sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-dg span { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.mp-hours { margin: 0 0 12px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+.mp-hours b { color: var(--text); margin-right: 8px; }
+.mp-note { display: block; margin-bottom: 12px; }
+.mp-note span { display: block; font-size: 12.5px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+.mp-note textarea { width: 100%; box-sizing: border-box; resize: none; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: 500 16px/1.5 'Noto Sans TC', sans-serif; padding: 10px 12px; }
+.mp-btns { display: flex; gap: 8px; }
+.mp-btns .btn { flex: 1; min-height: 50px; border-radius: 25px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; }
+.mp-btns .mp-favbtn { flex: 0 0 auto; padding: 0 20px; }
+.mp-favbtn svg { width: 18px; height: 18px; }
+.mp-src { display: flex; justify-content: flex-start; gap: 6px 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 12px 0 0; }
+.mp-msg { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 6; max-width: 80vw; padding: 12px 18px; border-radius: 16px; background: rgba(var(--card-rgb), .96); border: 1px solid var(--line); box-shadow: 0 8px 26px rgba(0, 0, 0, .14); font-size: 14px; font-weight: 600; text-align: center; }
+.mp-msg[hidden] { display: none; }
+/* 地圖上的點 */
+.mp-pin { position: relative; width: 36px; height: 40px; display: flex; justify-content: center; }
+.mp-pin b { width: 32px; height: 32px; border-radius: 50% 50% 50% 4px; transform: rotate(-45deg); display: grid; place-items: center; border: 2px solid #fff; box-shadow: 0 3px 9px rgba(0, 0, 0, .3); }
+.mp-pin b svg { width: 16px; height: 16px; color: #fff; transform: rotate(45deg); }
+.mp-pin.cafe b { background: #C98A2E; } .mp-pin.lib b { background: #2F9E6E; }
+.mp-pin.sel b { width: 40px; height: 40px; margin-top: -8px; box-shadow: 0 0 0 5px rgba(var(--accent-rgb), .35), 0 4px 12px rgba(0, 0, 0, .35); }
+.mp-pin.fav::after { content: ''; position: absolute; right: 0; top: -2px; width: 11px; height: 11px; border-radius: 6px; background: #E5484D; border: 2px solid #fff; }
+.mp-me { width: 18px; height: 18px; border-radius: 50%; background: #2F7BF6; border: 3px solid #fff; box-shadow: 0 0 0 9px rgba(47, 123, 246, .2); box-sizing: border-box; }
+/* 地圖顏色跟網站一致：淺色稍微淡一點、深色反轉成暗色地圖 */
+.mp-map .leaflet-tile-pane { filter: saturate(.75) brightness(1.02); }
+[data-theme="dark"] .mp-map .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.82) contrast(.9) saturate(.45); }
+.mp-map.leaflet-container { font-family: 'Noto Sans TC', sans-serif; background: var(--surface-2); }
+.mp-map .leaflet-control-attribution { font-size: 10px; background: rgba(var(--card-rgb), .8); color: var(--muted); }
+.mp-map .leaflet-control-attribution a { color: inherit; }
+.mp-screen:not(.mp-full) .mp-map .leaflet-bottom { bottom: var(--sheet); }
+/* 電腦、平板、手機橫放：左邊清單、右邊地圖 */
+@media (min-width: 900px), (orientation: landscape) and (max-height: 540px) {
+    .mp-screen.open { display: grid; grid-template-columns: min(420px, 38vw) 1fr; }
+    .mp-side { display: flex; flex-direction: column; min-height: 0; z-index: 3; background: var(--bg); border-right: 1px solid var(--line); }
+    .mp-top, .mp-search, .mp-chips { position: static; }
+    .mp-top { padding: 14px 16px 8px; }
+    .mp-top h2 { text-shadow: none; }
+    .mp-search { margin: 0 16px; box-shadow: none; }
+    .mp-chips { flex-wrap: wrap; overflow: visible; padding: 12px 16px 10px; }
+    .mp-chip { box-shadow: none; }
+    .mp-sheet { position: static; height: auto; flex: 1; min-height: 0; border-radius: 0; box-shadow: none; background: transparent; }
+    .mp-grab { display: none; }
+    .mp-map { position: relative; inset: auto; }
+    .mp-screen:not(.mp-full) .mp-map .leaflet-bottom { bottom: 0; }
+    .mp-msg { left: calc(min(420px, 38vw) + (100vw - min(420px, 38vw)) / 2); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+/* 手機：標題、搜尋、篩選後面加一層由上往下淡掉的底色，地圖再熱鬧也看得清楚 */
+.mp-screen::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: calc(150px + env(safe-area-inset-top)); z-index: 3; pointer-events: none; background: linear-gradient(rgba(var(--bg-rgb), .97) 0, rgba(var(--bg-rgb), .9) 62%, rgba(var(--bg-rgb), 0)); }
+@media (min-width: 900px), (orientation: landscape) and (max-height: 540px) { .mp-screen::before { display: none; } }
+/* 手機橫放：左邊清單變窄，按鈕和篩選小一點（放在最後，蓋過電腦版的設定） */
+@media (orientation: landscape) and (max-height: 540px) {
+    .mp-top { padding: calc(6px + env(safe-area-inset-top)) 12px 4px calc(12px + env(safe-area-inset-left)); }
+    .mp-search { margin: 0 12px 0 calc(12px + env(safe-area-inset-left)); height: 40px; }
+    .mp-chips { flex-wrap: nowrap; overflow-x: auto; padding: 8px 12px 6px calc(12px + env(safe-area-inset-left)); }
+    .mp-chip { height: 32px; font-size: 12.5px; padding: 0 11px; }
+    .mp-list, .mp-detail { padding-left: calc(14px + env(safe-area-inset-left)); }
+}
+[data-theme="dark"] .mp-map .leaflet-control-attribution { background: rgba(20, 20, 20, .7); color: #bbb; }
+/* 導覽：讀書地圖的示意圖 */
+.g-mapp { display: flex; flex-direction: column; gap: 8px; }
+.g-mchips { display: flex; gap: 5px; flex-wrap: wrap; }
+.g-mchips span { font-size: 9.5px; font-weight: 700; padding: 3px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); display: inline-flex; align-items: center; gap: 3px; }
+.g-mchips span.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
+.g-mchips i { width: 6px; height: 6px; border-radius: 3px; }
+.g-mmap { position: relative; height: 88px; border-radius: 12px; background: linear-gradient(90deg, transparent 31%, rgba(255,255,255,.7) 31%, rgba(255,255,255,.7) 34%, transparent 34%, transparent 66%, rgba(255,255,255,.7) 66%, rgba(255,255,255,.7) 69%, transparent 69%), linear-gradient(transparent 45%, rgba(255,255,255,.7) 45%, rgba(255,255,255,.7) 52%, transparent 52%), #E8E3D6; overflow: hidden; }
+[data-theme="dark"] .g-mmap { background: linear-gradient(90deg, transparent 31%, rgba(255,255,255,.08) 31%, rgba(255,255,255,.08) 34%, transparent 34%, transparent 66%, rgba(255,255,255,.08) 66%, rgba(255,255,255,.08) 69%, transparent 69%), linear-gradient(transparent 45%, rgba(255,255,255,.08) 45%, rgba(255,255,255,.08) 52%, transparent 52%), #2A2824; }
+.g-mmap i { position: absolute; width: 14px; height: 14px; border-radius: 50% 50% 50% 2px; transform: rotate(-45deg); border: 1.5px solid #fff; }
+.g-mmap i.c { background: #C98A2E; } .g-mmap i.l { background: #2F9E6E; }
+.g-mmap b { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: #2F7BF6; border: 2px solid #fff; box-shadow: 0 0 0 5px rgba(47,123,246,.2); }
+.g-mrow { display: flex; align-items: center; gap: 8px; }
+.g-mrow > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.g-mrow b { font-size: 11px; } .g-mrow small { font-size: 9.5px; color: var(--muted); } .g-mrow em { font-style: normal; color: #2F9E6E; font-weight: 700; }
+.g-mic { width: 24px; height: 24px; border-radius: 8px; flex-shrink: 0; }
+.g-mic.c { background: rgba(201,138,46,.25); } .g-mic.l { background: rgba(47,158,110,.25); }
