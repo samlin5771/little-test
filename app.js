@@ -50,7 +50,7 @@ const VAPID_KEY = 'BGD80hd0Xdk6Irow67T2c0x6txEOqT_dnwv3r5IaByGhq86PDQm47egvg_Dni
 const AI_ON = false;
 if (AI_ON) document.documentElement.classList.add('ai-on');
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v67';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v68';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -2203,6 +2203,31 @@ function chime() {
     } catch (e) {}
 }
 
+/* --- 自由計時太久：3 小時問一次「還在讀嗎？」，之後每 2 小時再問 --- */
+const FREE_ASK = 3 * 3600000, FREE_AGAIN = 2 * 3600000;
+const freeAskMs = () => FREE_ASK + (timer.askN || 0) * FREE_AGAIN;
+// 下一次要問的時間（自由計時、沒暫停才有）
+function freeAskAt() {
+    if (timer.phase !== 'focus' || timer.duration || timer.pausedAt) return null;
+    return timer.startAt + (timer.pausedTotal || 0) + freeAskMs();
+}
+function checkFreeAsk() {
+    if (timer.phase !== 'focus' || timer.duration || timer.pausedAt || $('freeAskModal').classList.contains('open')) return;
+    const el = focusElapsed();
+    if (el < freeAskMs()) return;
+    if (sbOpen) closeStandby();
+    const h = Math.floor(el / 3600000), m = Math.floor(el % 3600000 / 60000);
+    $('faText').textContent = `自由計時已經 ${h} 小時${m ? ` ${m} 分` : ''}了。如果只是忘記按結束，按「結束」之後可以改成實際讀的時間。`;
+    openModal('freeAskModal');
+}
+$('faGo').addEventListener('click', () => { timer.askN = (timer.askN || 0) + 1; saveTimer(); closeModal('freeAskModal'); toast('好，繼續加油！'); });
+$('faStop').addEventListener('click', () => {
+    closeModal('freeAskModal');
+    if (timer.phase !== 'focus') return;
+    finishFocus(false);
+    if (timer.phase === 'break' && timer.lastId) setTimeout(() => { openSessEditor(timer.lastId); toast('改成實際讀的時間再按儲存'); }, 250);
+});
+
 /* --- 計時動作 --- */
 function startFocus() {
     const m = MODES[tpref.mode];
@@ -2596,6 +2621,7 @@ function timerTick() {
         timer.chimed = true; saveTimer(); chime();
     }
     if (timer.phase !== 'idle') updateTimerLive();
+    checkFreeAsk();
     pillLive();
     const mr = document.querySelector('#tab-timer .mn-ring');
     if (mr && timer.phase === 'focus') mr.style.setProperty('--fp', $('focusPill').style.getPropertyValue('--fp') || 0);
@@ -4381,6 +4407,9 @@ function buildQueue(now = Date.now()) {
             }
         });
     }
+    // 自由計時太久：網站沒開也推一則「還在讀嗎？」（跟著「番茄鐘時間到」的開關）
+    const fa = freeAskAt();
+    if (fa && notif.pomo) push(fa, '還在讀嗎？', `自由計時已經 ${Math.round(freeAskMs() / 3600000)} 小時了，忘記按結束的話點這裡`, 'tab-timer', 'free' + timer.startAt);
     return out.sort((a, b) => a.at - b.at).slice(0, 120);
 }
 // 早安倒數要倒數哪些
@@ -4404,7 +4433,7 @@ function timerEndAt() {
 // 讀書中（專注、沒暫停）到什麼時候：番茄鐘用這一輪結束的時間；自由計時最多算 4 小時（按結束就會清掉）
 function focusUntilAt() {
     if (timer.phase !== 'focus' || timer.pausedAt) return null;
-    const end = timer.duration ? timer.startAt + (timer.pausedTotal || 0) + timer.duration : Date.now() + 4 * 3600000;
+    const end = timer.duration ? timer.startAt + (timer.pausedTotal || 0) + timer.duration : Math.min(Date.now() + 4 * 3600000, freeAskAt());   // 自由計時：到了要問「還在讀嗎」的時間就不算讀書中，提醒才推得出去
     return end > Date.now() ? end : null;
 }
 let schedT = 0, schedSig = '';
@@ -5517,7 +5546,7 @@ document.addEventListener('keydown', (e) => {
 }, true);
 // 第一次打開：手機瀏覽器先教「加到主畫面」（一定要按我知道了），接著簡易導覽；其他情況只顯示簡易導覽
 // v60：用過舊版的人，更新後第一次打開會看到「這次新增了什麼」（第一次用的人看簡易導覽就好，不會連跳兩個視窗）
-const WHATS_NEW = 'v64';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
+const WHATS_NEW = 'v68';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
 setTimeout(() => {
     if (document.querySelector('.modal.open') || document.body.classList.contains('guide-open')) return;
     const needInstall = !localStorage.getItem(LS.install) && !isStandalone() && isMobile();
@@ -5527,7 +5556,7 @@ setTimeout(() => {
     else if (needTour) openTour();
     else if (localStorage.getItem(LS.seenVer) !== WHATS_NEW) { lsSet(LS.seenVer, WHATS_NEW); openModal('whatsNewModal'); }
 }, 1200);
-$('wnTry').addEventListener('click', () => { closeModal('whatsNewModal'); setTimeout(openNotif, 150); });
+$('wnTry').addEventListener('click', () => { closeModal('whatsNewModal'); focusMin = false; showTab('tab-timer'); });
 
 /* =====================================================
  * 帳號畫面
@@ -6608,6 +6637,20 @@ function updateStandby(full) {
         const task = taskFor(timer.subject);
         $('sbSubj').innerHTML = `<i class="sdot s${timer.subject}"></i>${SUBJECTS[timer.subject]}`;
         setText($('sbTask'), task && !task.done ? task.text : '');
+    }
+    // 下面三張小卡：今天已讀（含這一輪）、今天番茄鐘幾輪、離學測（學測考完就換下一場考試）
+    const t = todayStr(), todayMin = Math.floor(dayMinutes(t) + el / 60000);
+    setText($('sbToday'), `${Math.floor(todayMin / 60)}:${pad(todayMin % 60)}`);
+    const rounds = String(roundsOn(t));
+    if ($('sbRounds').dataset.v !== rounds) { $('sbRounds').dataset.v = rounds; $('sbRounds').innerHTML = `${rounds}<small>輪</small>`; }
+    if (full) {
+        const ex = examEndTime({ ...EXAMS.gsat }) > now ? EXAMS.gsat : nextExam();
+        $('sbExamCard').hidden = !ex;
+        if (ex) {
+            const left = Math.max(0, daysBetween(t, ex.date));
+            $('sbExam').innerHTML = left ? `${left}<small>天</small>` : '今天';
+            setText($('sbExamL'), `離${ex.short}`);
+        }
     }
     const paused = !!timer.pausedAt;
     $('standby').classList.toggle('paused', paused);

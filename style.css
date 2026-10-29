@@ -2918,3 +2918,90 @@ body.cal-tt .cal-layout, body.cal-tt #calFab { display: none !important; }
 #selDayTitle { min-width: 0; }
 /* v67：AI 排計畫暫時隱藏（app.js 的 AI_ON 改成 true 就會出現） */
 html:not(.ai-on) #aiPlanBtn, html:not(.ai-on) .ai-only { display: none !important; }
+
+/* =====================================================
+ * v68 全螢幕時鐘（B 方案：三張小卡）、電腦專注畫面放大、還在讀嗎
+ * ===================================================== */
+.sb-mid { --ring: min(80vw, 50dvh, 600px); }
+.sb-cards { display: flex; gap: 10px; width: min(88vw, 480px); transition: opacity .5s; }
+.sb-card { flex: 1 1 0; min-width: 0; padding: 12px 6px 11px; border-radius: 18px; text-align: center; background: rgba(var(--card-rgb), .5); border: 1px solid var(--line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.sb-card[hidden] { display: none; }
+.sb-card b { display: block; font: 800 clamp(20px, min(5.6vw, 3dvh), 30px)/1.15 'Manrope', 'Noto Sans TC', sans-serif; color: var(--text); white-space: nowrap; }
+.sb-card b small { font-size: .58em; font-weight: 700; margin-left: 2px; font-family: 'Noto Sans TC', sans-serif; }
+.sb-card span { display: block; margin-top: 3px; font: 600 clamp(11.5px, 1.5dvh, 14px) 'Noto Sans TC', sans-serif; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.standby.idle .sb-cards { opacity: .85; }
+.sb-ctrl { flex-wrap: nowrap; }
+.sb-ctrl .sb-btn { white-space: nowrap; }
+/* 橫的螢幕（電腦、平板、手機橫放）：左邊大圓圈，右邊科目、小卡、按鈕 */
+@media (orientation: landscape) and (min-width: 900px), (orientation: landscape) and (max-height: 540px) {
+    .sb-mid { --ring: min(76dvh, 46vw, 680px); display: grid; grid-template-columns: auto auto; grid-template-areas: "ring head" "ring cards" "ring task" "ring ctrl"; grid-template-rows: 1fr auto auto 1fr; column-gap: clamp(28px, 6vw, 110px); row-gap: clamp(12px, 2.6dvh, 26px); align-items: center; justify-items: center; }
+    .sb-ring { grid-area: ring; }
+    .sb-head { grid-area: head; align-self: end; flex-direction: row; }
+    .sb-cards { grid-area: cards; width: clamp(300px, 34vw, 500px); }
+    .sb-task { grid-area: task; max-width: 34vw; }
+    .sb-ctrl { grid-area: ctrl; align-self: start; flex-wrap: nowrap; max-width: none; }
+}
+@media (orientation: landscape) and (min-width: 900px) and (min-height: 541px) {
+    .sb-subj { min-height: clamp(46px, 6dvh, 58px); font-size: clamp(20px, 2.8dvh, 28px); padding: 0 24px 0 18px; border-radius: 30px; }
+    .sb-now { font-size: clamp(20px, 2.8dvh, 28px); }
+    .sb-card { padding: clamp(12px, 2dvh, 20px) 8px; border-radius: 22px; }
+    .sb-card b { font-size: clamp(24px, 4dvh, 40px); }
+    .sb-card span { font-size: clamp(12px, 1.7dvh, 16px); }
+    .sb-task { font-size: clamp(15px, 2dvh, 19px); }
+    .sb-btn { min-height: clamp(50px, 6.4dvh, 70px); padding: 0 clamp(24px, 2.4vw, 36px); font-size: clamp(15px, 2dvh, 20px); border-radius: 36px; }
+    .sb-exit { width: clamp(50px, 6.4dvh, 70px); }
+    .sb-exit svg { width: clamp(20px, 2.4dvh, 26px); height: clamp(20px, 2.4dvh, 26px); }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+    .sb-mid { --ring: min(80dvh, 44vw); row-gap: 10px; }
+    .sb-cards { width: min(44vw, 340px); gap: 8px; }
+    .sb-card { padding: 7px 4px; border-radius: 14px; }
+    .sb-card b { font-size: 18px; }
+    .sb-card span { font-size: 11px; }
+    .sb-btn { min-height: 44px; padding: 0 18px; font-size: 14px; }
+    .sb-exit { width: 44px; }
+}
+
+/* 電腦、平板橫放：開始專注後的計時頁放大，左邊大圓圈、右邊科目、資訊和按鈕，整組置中 */
+@media (min-width: 1000px) and (min-height: 620px) and (orientation: landscape) {
+    body.focus-mode .timer-wrap.focus-wrap {
+        position: relative; max-width: 1240px; display: grid; grid-template-columns: auto minmax(340px, min(32vw, 460px));
+        grid-template-areas: "ring ." "ring head" "ring tip" "ring task" "ring dots" "ring btns" "ring extra" "ring .";
+        grid-template-rows: 1fr auto auto auto auto auto auto 1fr;
+        column-gap: clamp(56px, 7vw, 130px); row-gap: clamp(10px, 1.8dvh, 20px); align-content: center; justify-content: center; align-items: center;
+    }
+    body.focus-mode .focus-wrap .timer-head { grid-area: head; width: 100%; padding: 0; }
+    body.focus-mode .focus-wrap .min-tip { grid-area: tip; justify-self: end; margin: -4px 0 0; }
+    body.focus-mode .focus-wrap .chip-subj { min-height: clamp(48px, 5.6dvh, 58px); font-size: clamp(19px, 2.3dvh, 24px); padding: 0 22px 0 17px; border-radius: 30px; }
+    body.focus-mode .focus-wrap .chip-subj .sdot { width: 12px; height: 12px; border-radius: 6px; }
+    body.focus-mode .focus-wrap .timer-head .label { font-size: clamp(13px, 1.6dvh, 16px); }
+    body.focus-mode .focus-wrap .ring-wrap { grid-area: ring; width: min(68dvh, 46vw, 640px); margin: 0; }
+    body.focus-mode .focus-wrap .ring-time { font-size: clamp(92px, 12.5dvh, 150px); }
+    body.focus-mode .focus-wrap .ring-sub { font-size: clamp(15px, 1.9dvh, 20px); }
+    body.focus-mode .focus-wrap .task-line { grid-area: task; margin: 0; font-size: clamp(16px, 2.1dvh, 22px); text-align: center; }
+    body.focus-mode .focus-wrap .round-dots { grid-area: dots; margin: 0; transform: scale(1.15); }
+    body.focus-mode .focus-wrap .focus-btns { grid-area: btns; margin: 0; flex-wrap: nowrap; gap: 14px; }
+    body.focus-mode .focus-wrap .focus-btns .btn-big { min-height: clamp(58px, 6.8dvh, 74px); min-width: 0; flex: 1 1 0; max-width: 210px; font-size: clamp(16px, 2.1dvh, 21px); border-radius: 40px; }
+    body.focus-mode .focus-wrap .focus-extra { grid-area: extra; margin: 0; gap: clamp(12px, 1.8dvh, 18px); }
+    body.focus-mode .focus-wrap .focus-tools { flex-wrap: nowrap; }
+    body.focus-mode .focus-wrap .tool-btn { min-height: clamp(42px, 4.8dvh, 52px); font-size: clamp(13.5px, 1.65dvh, 16px); padding: 0 clamp(14px, 1.3vw, 20px); border-radius: 30px; white-space: nowrap; }
+    body.focus-mode .focus-wrap .tool-btn svg { width: clamp(16px, 2dvh, 20px); height: clamp(16px, 2dvh, 20px); }
+    body.focus-mode .focus-wrap .end-link { font-size: clamp(13px, 1.6dvh, 16px); }
+    body.focus-mode .focus-wrap .focus-extra .hint { font-size: clamp(12px, 1.4dvh, 14px); }
+}
+/* 手機橫放：工具按鈕維持一排 */
+@media (orientation: landscape) and (max-height: 540px) {
+    .focus-wrap .focus-tools { flex-wrap: nowrap; gap: 6px; }
+    .focus-wrap .tool-btn { padding: 0 10px; font-size: 12.5px; white-space: nowrap; }
+}
+/* 全螢幕時鐘的「縮小」按鈕：圓形，不受其他按鈕的左右留白影響 */
+.standby .sb-btn.sb-exit { padding: 0; flex-shrink: 0; }
+.tool-btn.on { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: var(--accent-soft); color: var(--accent-text); }
+
+/* 小螢幕（iPhone SE 等）：暫停、提早完成維持同一排；下面那排按鈕縮小一點 */
+@media (max-width: 360px) {
+    .focus-wrap .focus-btns { flex-wrap: nowrap; gap: 10px; }
+    .focus-wrap .focus-btns .btn-big { min-width: 0; flex: 1 1 0; max-width: 150px; padding-left: 10px; padding-right: 10px; }
+    .focus-tools { gap: 6px; }
+    .focus-tools .tool-btn { padding: 0 11px; font-size: 12.5px; }
+}
