@@ -146,6 +146,12 @@
                             現在要讀什麼？
                         </button>
                     </div>
+                    <div class="home-mod" data-mod="lunch">
+                        <button class="btn btn-wide lunch-btn" id="lunchBtn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0z"/><path d="M8 20.5h8"/><path d="M14 8.5l5-5"/><path d="M11 8.5l5.5-5.5"/></svg>
+                            今天吃什麼？
+                        </button>
+                    </div>
                     <div class="home-mod" data-mod="upcoming">
                         <h3 class="mod-title">接下來</h3>
                         <ul class="hu-list" id="homeUpcoming"></ul>
@@ -333,6 +339,31 @@
             <div class="sheet-btns" id="rouletteBtns" style="visibility:hidden">
                 <button class="btn" id="spinAgainBtn">再轉一次</button>
                 <button class="btn btn-accent" data-close>好！去讀書</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 吃飯抽籤 -->
+    <div class="modal" id="lunchModal" role="dialog" aria-modal="true" aria-labelledby="lunchTitle">
+        <div class="sheet lunch-sheet">
+            <h2 id="lunchTitle">今天吃什麼？</h2>
+            <div class="lunch-wheel-box">
+                <div class="lunch-wheel" id="lunchWheel"></div>
+                <i class="lunch-pin" aria-hidden="true"></i>
+                <button class="lunch-go" id="lunchGo" aria-label="轉">轉</button>
+            </div>
+            <div class="lunch-side">
+                <div class="lunch-result" id="lunchResult" aria-live="polite">&nbsp;</div>
+                <button class="lunch-skip" id="lunchSkip" aria-pressed="false"><i></i>最近 2 天吃過的先不抽</button>
+                <div class="lunch-edit" id="lunchEdit" hidden>
+                    <div class="lunch-chips" id="lunchChips"></div>
+                    <div class="lunch-add"><input class="field" id="lunchInput" maxlength="10" placeholder="新增選項，例如：牛肉麵" enterkeyhint="done"><button class="btn" id="lunchAdd">新增</button></div>
+                </div>
+                <div class="sheet-btns">
+                    <button class="btn" id="lunchEditBtn">編輯選項</button>
+                    <span class="spacer"></span>
+                    <button class="btn btn-accent" id="lunchOk" disabled>就吃這個</button>
+                </div>
             </div>
         </div>
     </div>
@@ -526,7 +557,13 @@
                     <button class="bg-opt" data-bg="petal"><span class="th t-petal"></span>花瓣</button>
                     <button class="bg-opt" data-bg="grid"><span class="th t-grid"></span>方格紙</button>
                     <button class="bg-opt" data-bg="plain"><span class="th t-plain"></span>極簡</button>
+                    <button class="bg-opt" data-bg="sky"><span class="th t-sky"></span>天空</button>
+                    <button class="bg-opt" data-bg="photo"><span class="th t-photo" id="bgPhotoTh"></span>照片</button>
                 </div>
+                <div class="bg-photo-acts" id="bgPhotoActs" hidden>
+                    <button class="btn" id="bgPhotoEdit">調整照片</button><button class="btn" id="bgPhotoChange">換一張</button>
+                </div>
+                <input type="file" accept="image/*" id="bgPhotoFile" hidden>
                 </div></div>
                 <div class="acct-row acct-mode">
                     <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor"/></svg></span>
@@ -835,16 +872,16 @@
         <div class="sheet tour-card wn-card">
             <p class="tour-kicker">版本更新</p>
             <h2 id="wnTitle">這次新增了什麼</h2>
-            <p class="tour-sub">讀書計時變得更舒服，倒數也更整齊</p>
+            <p class="tour-sub">背景可以用自己的照片，還多了會變的天空和吃飯抽籤</p>
             <ul class="tour-list">
-                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/></svg></span><div><b>全螢幕時鐘更好看</b><span>圓圈放大置中，下面多了今天已讀、今天幾輪、離學測幾天；電腦上專注畫面也放大了</span></div></li>
-                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/></svg></span><div><b>還在讀嗎？</b><span>自由計時滿 3 小時會問一下，忘記按結束的話可以改成實際讀的時間</span></div></li>
-                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8.5 14.5l2.2 2.2 4.8-4.8"/></svg></span><div><b>倒數更整齊</b><span>「我的倒數」裡結束的會收成「已結束」；學測考完會自動換成下一屆</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.4"/></svg></span><div><b>用自己的照片當背景</b><span>選一張喜歡的照片，可以調模糊和淡化，字一樣看得清楚；登入的話換裝置也看得到</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></span><div><b>會變的天空</b><span>新背景：跟著現在的時間變成清晨、白天、夕陽和星空</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0z"/><path d="M8 20.5h8"/><path d="M14 8.5l5-5"/><path d="M11 8.5l5.5-5.5"/></svg></span><div><b>今天吃什麼？</b><span>首頁的吃飯轉盤，選項可以自己改，還能跳過最近吃過的</span></div></li>
             </ul>
-            <p class="tour-note">「全螢幕時鐘」在<b>開始專注後</b>的計時頁，按一下就能打開。</p>
+            <p class="tour-note">背景在右上角<b>頭像 → 背景</b>裡換。</p>
             <div class="sheet-btns">
                 <button class="btn" data-close>知道了</button>
-                <button class="btn btn-accent" id="wnTry" style="flex:1">去計時頁看看</button>
+                <button class="btn btn-accent" id="wnTry" style="flex:1">去換背景</button>
             </div>
         </div>
     </div>
@@ -905,8 +942,9 @@
   <div class="g-check"><span></span>社會 第二冊 1-2 課</div>
   <div class="g-check"><span></span><em class="g-td">待辦</em>交數學作業</div>
   <div class="g-btn">現在要讀什麼？</div>
+  <div class="g-btn g-btn2">今天吃什麼？</div>
 </div></figure>
-                <ul class="g-points"><li>上方切換<b>模考和學測</b>；考完的會自動收進「⋯」，換成下一場。</li><li>按最右邊的 <b>⋯</b> 打開「我的倒數」：可以<b>新增自己的倒數</b>（段考、英檢、生日…），選顏色、多天的日期，生日可以設成<b>每年重複</b>，也能顯示在行事曆上。上方最多放 3 個（<b>學測固定在最右邊</b>，另外可以再勾 2 個），拖曳右邊的 ☰ 排順序；沒放在上方的都留在「⋯」裡，點一下就能看。已經過完的倒數會自動從上方拿掉、換成下一個要到的；在「我的倒數」裡會收成一列<b>「已結束（幾個）」</b>，點開才看得到。</li><li><b>學測考完</b>（最後一天過了）會自動換成<b>下一屆</b>的學測。大考中心還沒公布日期時，先用預估的日期倒數，日期旁邊會標「預估日期」。</li><li>大數字是剩下的天數，下面是時分秒，還有考試日期和「下一場」還有幾天。</li><li>有設定課表的話，最上面的<b>今天的課</b>會顯示現在第幾節、還有幾分下課，和今天每一節課；週末或沒課時會縮成一行「今日無課程」。點一下就打開課表。</li><li><b>今天</b>區顯示今天讀了多久、離每日目標還差多少，進度條滿了就是達標。點<b>「目標 3 小時」</b>可以直接改每日目標。</li><li>有標重點複習的單元時，「今天」下面會提醒你，點一下就跳到學測範圍。</li><li>每週進度表裡「今天」的項目，和<b>排在今天（或已經逾期）的待辦</b>，都會列在這裡，可以直接打勾。</li><li>不知道讀什麼？按<b>現在要讀什麼？</b>，轉盤幫你隨機選一科。</li><li>最下面的<b>編輯首頁</b>：勾選要顯示哪些區塊、按住 ☰ 拖曳排順序。可以開關<b>今天的課</b>，還可以打開<b>接下來的行程</b>和<b>讀書房間</b>（看朋友現在在讀什麼）兩個區塊。排法會跟著帳號同步。</li></ul>
+                <ul class="g-points"><li>上方切換<b>模考和學測</b>；考完的會自動收進「⋯」，換成下一場。</li><li>按最右邊的 <b>⋯</b> 打開「我的倒數」：可以<b>新增自己的倒數</b>（段考、英檢、生日…），選顏色、多天的日期，生日可以設成<b>每年重複</b>，也能顯示在行事曆上。上方最多放 3 個（<b>學測固定在最右邊</b>，另外可以再勾 2 個），拖曳右邊的 ☰ 排順序；沒放在上方的都留在「⋯」裡，點一下就能看。已經過完的倒數會自動從上方拿掉、換成下一個要到的；在「我的倒數」裡會收成一列<b>「已結束（幾個）」</b>，點開才看得到。</li><li><b>學測考完</b>（最後一天過了）會自動換成<b>下一屆</b>的學測。大考中心還沒公布日期時，先用預估的日期倒數，日期旁邊會標「預估日期」。</li><li>大數字是剩下的天數，下面是時分秒，還有考試日期和「下一場」還有幾天。</li><li>有設定課表的話，最上面的<b>今天的課</b>會顯示現在第幾節、還有幾分下課，和今天每一節課；週末或沒課時會縮成一行「今日無課程」。點一下就打開課表。</li><li><b>今天</b>區顯示今天讀了多久、離每日目標還差多少，進度條滿了就是達標。點<b>「目標 3 小時」</b>可以直接改每日目標。</li><li>有標重點複習的單元時，「今天」下面會提醒你，點一下就跳到學測範圍。</li><li>每週進度表裡「今天」的項目，和<b>排在今天（或已經逾期）的待辦</b>，都會列在這裡，可以直接打勾。</li><li>不知道讀什麼？按<b>現在要讀什麼？</b>，轉盤幫你隨機選一科。</li><li>不知道吃什麼？按<b>今天吃什麼？</b>轉一下吃飯轉盤，停在上面箭頭那格就是答案；按<b>就吃這個</b>會記下來，勾著「最近 2 天吃過的先不抽」時，最近吃過的會變灰、不會被抽到。<b>編輯選項</b>可以刪掉或新增（最多 12 個），選項會跟著帳號同步。</li><li>最下面的<b>編輯首頁</b>：勾選要顯示哪些區塊、按住 ☰ 拖曳排順序。可以開關<b>今天的課</b>，還可以打開<b>接下來的行程</b>和<b>讀書房間</b>（看朋友現在在讀什麼）兩個區塊。排法會跟著帳號同步。</li></ul>
                 
             </section>
 
@@ -1051,11 +1089,11 @@
                 <figure class="g-fig" aria-hidden="true"><div class="g-phone">
   <div class="g-acct"><span class="av"></span><div><b>林小明</b><small>● 雲端同步已開啟</small></div></div>
   <div class="g-acct-row">主題色<span class="sw"><i style="background:#E9B154"></i><i style="background:#5ED3A8"></i><i style="background:#A99BF0"></i><i style="background:#F4A3BE"></i><i style="background:#6CB4EE"></i><i style="background:#FF8B74"></i><i style="background:#A9C46C"></i><i style="background:#C3CAD6"></i></span></div>
-  <div class="g-bgs"><span class="th t-stars"></span><span class="th t-aurora"></span><span class="th t-rain"></span><span class="th t-mist"></span><span class="th t-grid"></span></div>
+  <div class="g-bgs"><span class="th t-stars"></span><span class="th t-aurora"></span><span class="th t-rain"></span><span class="th t-sky"></span><span class="th t-photo"></span></div>
   <div class="g-acct-row">網站導覽<span>›</span></div>
   <div class="g-acct-row">新增到主畫面<span>›</span></div>
 </div></figure>
-                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。手機和電腦<b>同時使用</b>、或是沒網路時改的東西，連上網路後會一筆一筆合併，不會互相蓋掉。</li><li><b>沒有網路</b>時畫面下方會出現「離線中」的小提示，照樣可以計時、改進度；連上網路後會顯示「同步中」，同步好就自己收起來。</li><li>個人設定裡的<b>隱私權政策</b>，寫清楚收集了哪些資料、誰看得到、怎麼刪除。</li><li>不想用了可以按個人設定最下面的<b>刪除帳號與資料</b>：雲端資料、聊天訊息和照片都會永久刪除，並離開所有房間（要輸入「刪除」確認，Google 可能會請你再登入一次）。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 8 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>通知</b>：個人設定裡只有一列「通知」，點進去是完整的通知設定頁（下一段有詳細說明）。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
+                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。手機和電腦<b>同時使用</b>、或是沒網路時改的東西，連上網路後會一筆一筆合併，不會互相蓋掉。</li><li><b>沒有網路</b>時畫面下方會出現「離線中」的小提示，照樣可以計時、改進度；連上網路後會顯示「同步中」，同步好就自己收起來。</li><li>個人設定裡的<b>隱私權政策</b>，寫清楚收集了哪些資料、誰看得到、怎麼刪除。</li><li>不想用了可以按個人設定最下面的<b>刪除帳號與資料</b>：雲端資料、聊天訊息和照片都會永久刪除，並離開所有房間（要輸入「刪除」確認，Google 可能會請你再登入一次）。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 10 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡、天空、照片，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>天空</b>：跟著現在的時間變，清晨、白天、夕陽、晚上的星星和月亮；淺色是淡淡的天色、深色是夜空般的深色。</li><li><b>照片</b>：選一張自己的照片當背景，可以調<b>模糊</b>、<b>淡化</b>，拖曳預覽移動位置；文字和卡片會自動保持看得清楚。選了以後背景下面會多「調整照片」「換一張」。登入的話照片會跟著帳號，換裝置也看得到（只有自己看得到）。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>通知</b>：個人設定裡只有一列「通知」，點進去是完整的通知設定頁（下一段有詳細說明）。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
                 
             </section>
 
@@ -1195,6 +1233,31 @@
     <!-- 聊天訊息通知：頂部橫幅／頂部小膠囊（個人設定裡選） -->
     <div class="nbanner" id="nBanner" role="status" aria-live="polite" hidden></div>
     <div class="npill" id="nPill" role="status" aria-live="polite" hidden></div>
+
+    <!-- 照片背景 -->
+    <div class="modal" id="bgPhotoModal" role="dialog" aria-modal="true" aria-labelledby="bgPhotoTitle">
+        <div class="sheet bgp-sheet">
+            <h2 id="bgPhotoTitle">照片背景</h2>
+            <div class="bgp-prev" id="bgpPrev">
+                <img id="bgpImg" alt="">
+                <i class="bgp-veil" id="bgpVeil"></i>
+                <div class="bgp-mock" aria-hidden="true">
+                    <small>離學測</small><b>83</b><span>天</span>
+                    <div class="bgp-card"><em></em><em></em><em></em></div>
+                </div>
+            </div>
+            <p class="bgp-tip">拖曳上面的預覽可以移動照片</p>
+            <label class="bgp-row"><span>模糊</span><input type="range" id="bgpBlur" min="0" max="30" step="1"></label>
+            <label class="bgp-row"><span>淡化</span><input type="range" id="bgpVeilR" min="20" max="90" step="1"></label>
+            <p class="note" id="bgpNote">登入後照片會跟著帳號，換手機、電腦也看得到（只有你自己看得到）；文字和卡片會自動保持看得清楚。</p>
+            <div class="sheet-btns">
+                <button class="btn" id="bgpRemove">移除照片</button>
+                <span class="spacer"></span>
+                <button class="btn" data-close>取消</button>
+                <button class="btn btn-accent" id="bgpSave">套用</button>
+            </div>
+        </div>
+    </div>
 
     <script type="module" src="app.js"></script>
 

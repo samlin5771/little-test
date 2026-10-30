@@ -228,6 +228,47 @@ html.bg-still .bg-fx *, html.bg-still .bg-fx *::before, html.bg-still .bg-fx *::
 .b-grid::after { content: ''; position: absolute; top: 0; bottom: 0; left: 34px; width: 1.5px; background: rgba(var(--accent-rgb), .5); }
 [data-theme="dark"] .b-grid { background-color: #0C0E12;
     background-image: linear-gradient(rgba(242, 240, 233, .055) 1px, transparent 1px), linear-gradient(90deg, rgba(242, 240, 233, .055) 1px, transparent 1px); }
+/* v72 天空：跟著時間變（顏色由 JS 每 5 分鐘算一次）；星星只在夜晚、太陽月亮沿著弧線走 */
+.b-tsky { inset: 0; background: linear-gradient(180deg, #CFE3F4, #F7F5EF); transition: background 2s; }
+.b-tstars { inset: 0; opacity: 0; transition: opacity 2s;
+    background: radial-gradient(1.2px 1.2px at 12% 18%, #fff, transparent), radial-gradient(1px 1px at 28% 8%, #fff, transparent), radial-gradient(1.4px 1.4px at 46% 22%, #fff, transparent),
+        radial-gradient(1px 1px at 63% 12%, #fff, transparent), radial-gradient(1.2px 1.2px at 81% 26%, #fff, transparent), radial-gradient(1px 1px at 92% 9%, #fff, transparent),
+        radial-gradient(1px 1px at 8% 42%, rgba(255,255,255,.8), transparent), radial-gradient(1.2px 1.2px at 36% 38%, rgba(255,255,255,.8), transparent), radial-gradient(1px 1px at 72% 44%, rgba(255,255,255,.7), transparent),
+        radial-gradient(1px 1px at 55% 58%, rgba(255,255,255,.5), transparent), radial-gradient(1px 1px at 20% 64%, rgba(255,255,255,.45), transparent), radial-gradient(1px 1px at 88% 60%, rgba(255,255,255,.45), transparent); }
+.b-orb { width: 120px; height: 120px; margin: -60px; border-radius: 50%; transition: left 2s, top 2s, opacity 2s; }
+.b-orb.sun { background: radial-gradient(circle, rgba(255, 236, 190, .95) 0 16%, rgba(255, 214, 150, .45) 30%, rgba(255, 200, 140, 0) 70%); }
+.b-orb.moon { width: 90px; height: 90px; margin: -45px; background: radial-gradient(circle, rgba(250, 248, 236, .85) 0 17%, rgba(230, 236, 255, .28) 32%, transparent 70%); }
+[data-theme="dark"] .b-orb.sun { background: radial-gradient(circle, rgba(255, 214, 160, .7) 0 13%, rgba(255, 170, 110, .22) 32%, transparent 70%); }
+.th.t-sky { background: radial-gradient(circle at 70% 62%, rgba(255, 230, 180, .95) 0 7%, transparent 20%), linear-gradient(180deg, #9FB6E0 0%, #E7B9B2 60%, #F7D7B5 100%); }
+/* v72 我的照片：照片（先模糊）＋一層目前主題的底色（淡化），卡片底色加深一點，文字才看得清楚 */
+.b-photo { inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.b-veil { inset: 0; background: var(--bg); opacity: .55; }
+html[data-bg="photo"][data-theme="light"] { --surface: rgba(255, 255, 255, .5); }
+html[data-bg="photo"][data-theme="dark"] { --surface: rgba(12, 13, 18, .42); }
+.th.t-photo { background: var(--surface) center / cover no-repeat; display: flex; align-items: center; justify-content: center; }
+.th.t-photo:not(.has)::before { content: '+'; font-size: 26px; font-weight: 300; color: var(--muted); line-height: 1; }
+.bg-photo-acts { display: flex; gap: 8px; padding: 0 14px 14px; }
+.bg-photo-acts .btn { flex: 1; min-height: 38px; font-size: 13px; }
+.bgp-sheet h2 { margin-bottom: 12px; }
+.bgp-prev { position: relative; width: 200px; height: 356px; margin: 0 auto; border-radius: 18px; overflow: hidden;
+    border: 1.5px solid var(--line); background: var(--bg); touch-action: none; cursor: grab; isolation: isolate; }
+.bgp-prev.drag { cursor: grabbing; }
+.bgp-prev img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+.bgp-veil { position: absolute; inset: 0; background: var(--bg); }
+.bgp-mock { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding-top: 13cqh; pointer-events: none; color: var(--text); font-family: 'Noto Sans TC', sans-serif; }
+.bgp-mock small { font-size: 10px; color: var(--muted); letter-spacing: .1em; }
+.bgp-mock b { font: 600 clamp(28px, 13cqh, 52px)/1 Manrope, sans-serif; margin: 6px 0 2px; }
+.bgp-prev { container-type: size; }
+.bgp-mock span { font-size: 10px; color: var(--muted); }
+.bgp-card { margin-top: 8cqh; width: min(78%, 220px); padding: 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: grid; gap: 6px; }
+.bgp-card { background: rgba(255, 255, 255, .5); }
+[data-theme="dark"] .bgp-card { background: rgba(12, 13, 18, .42); }
+.bgp-card em { display: block; height: 7px; border-radius: 4px; background: var(--faint); }
+.bgp-card em:nth-child(1) { width: 70%; background: var(--muted); } .bgp-card em:nth-child(3) { width: 45%; }
+.bgp-tip { text-align: center; font-size: 12px; color: var(--faint); margin: 8px 0 12px; font-family: 'Noto Sans TC', sans-serif; }
+.bgp-row { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; font-size: 14px; font-family: 'Noto Sans TC', sans-serif; }
+.bgp-row span { width: 36px; flex: none; color: var(--muted); }
+.bgp-row input { flex: 1; min-width: 0; accent-color: var(--accent); height: 28px; }
 /* 雨夜：隔著玻璃窗，外面是模糊的城市燈光 */
 .b-rain-sky { inset: 0; background: linear-gradient(180deg, #DCE3EA 0%, #E9ECEE 55%, #F2F1EE 100%); }
 [data-theme="dark"] .b-rain-sky { background: linear-gradient(180deg, #0B1220 0%, #0A0E18 50%, #07080C 100%); }
@@ -1247,6 +1288,7 @@ body.guide-open { overflow: hidden; }
 .g-check.on span { background: var(--accent); border-color: var(--accent); }
 .g-check.on { color: var(--muted); text-decoration: line-through; }
 .g-btn { margin-top: 2px; padding: 8px; border-radius: 14px; background: var(--accent); color: var(--on-accent); text-align: center; font-weight: 700; font-size: 10.5px; }
+.g-btn.g-btn2 { margin-top: 6px; background: transparent; color: var(--text); border: 1px solid var(--line); }
 .g-days7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
 .g-days7 span { display: flex; flex-direction: column; align-items: center; padding: 4px 0; border-radius: 8px; border: 1px solid var(--line); font-size: 10px; font-weight: 700; }
 .g-days7 small { font-size: 8px; color: var(--muted); font-weight: 500; }
@@ -1599,6 +1641,48 @@ html, body { overscroll-behavior-y: none; }
 .rl-chip.more { color: var(--muted); }
 .roulette-sub { margin: -16px 0 18px; text-align: center; font-size: 14px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; min-height: 1em; }
 .roulette-sub:empty { display: none; }
+/* v72 吃飯抽籤 */
+.lunch-btn { gap: 8px; }
+.lunch-btn svg { width: 19px; height: 19px; }
+.lunch-sheet h2 { text-align: center; }
+.lunch-wheel-box { position: relative; width: min(260px, 72vw, 46vh); aspect-ratio: 1; margin: 8px auto 0; }
+.lunch-wheel { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 6px 24px rgba(0, 0, 0, .12), 0 0 0 5px var(--modal-bg), 0 0 0 6.5px var(--line); }
+.lunch-wheel svg { width: 100%; height: 100%; display: block; will-change: transform; }
+.lw-s { stroke: var(--modal-bg); stroke-width: 1.5; }
+.lw-s.s0 { fill: var(--accent); } .lw-s.s1 { fill: rgba(var(--accent-rgb), .42); } .lw-s.s2 { fill: rgba(var(--accent-rgb), .7); } .lw-s.s3 { fill: rgba(var(--accent-rgb), .22); }
+.lw-s.off { fill: var(--surface); }
+.lw-t { fill: var(--on-accent); font-family: 'Noto Sans TC', sans-serif; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+.lw-t.lt { fill: var(--text); }
+.lw-t.off { fill: var(--faint); font-weight: 500; }
+.lunch-pin { position: absolute; left: 50%; top: -10px; width: 0; height: 0; margin-left: -11px; border: 11px solid transparent; border-top: 18px solid var(--text); border-bottom: 0; filter: drop-shadow(0 2px 2px rgba(0,0,0,.2)); }
+.lunch-go { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px; border-radius: 50%; border: 3px solid var(--modal-bg);
+    background: var(--text); color: var(--modal-bg); font: 700 16px 'Noto Sans TC', sans-serif; box-shadow: 0 3px 10px rgba(0, 0, 0, .2); }
+.lunch-go:active { transform: scale(.94); }
+.lunch-go:disabled { opacity: .9; }
+.lunch-result { text-align: center; font-size: 18px; margin: 14px 0 4px; min-height: 30px; font-family: 'Noto Sans TC', sans-serif; color: var(--muted); }
+.lunch-result b { font-size: 26px; color: var(--accent-text); }
+.lunch-skip { display: flex; align-items: center; gap: 8px; margin: 0 auto 14px; border: none; background: none; color: var(--muted); font: 13px 'Noto Sans TC', sans-serif; padding: 6px; }
+.lunch-skip i { width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid var(--faint); position: relative; flex: none; }
+.lunch-skip.on i { background: var(--accent); border-color: var(--accent); }
+.lunch-skip.on i::after { content: ''; position: absolute; left: 5px; top: 1.5px; width: 4px; height: 9px; border: solid var(--on-accent); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.lunch-edit { border-top: 1px solid var(--line); padding-top: 14px; margin-bottom: 8px; }
+.lunch-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.lunch-chip { display: inline-flex; align-items: center; gap: 2px; height: 32px; padding: 0 4px 0 12px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); font: 14px 'Noto Sans TC', sans-serif; }
+.lunch-chip button { width: 26px; height: 26px; border: none; background: none; color: var(--muted); font-size: 17px; border-radius: 50%; }
+.lunch-add { display: flex; gap: 8px; }
+.lunch-add .field { margin: 0; flex: 1; min-width: 0; }
+/* 手機橫放（很矮）：轉盤放左邊，標題、結果和按鈕放右邊，上下左右都置中，不用捲動 */
+@media (orientation: landscape) and (max-height: 500px) {
+    .lunch-sheet { max-width: 600px; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 1fr auto auto 1fr; column-gap: 24px; }
+    .lunch-sheet .lunch-wheel-box { grid-column: 1; grid-row: 1 / 5; align-self: center; width: min(240px, 70vh); margin: 4px 0; }
+    .lunch-sheet h2 { grid-column: 2; grid-row: 2; margin-bottom: 0; text-align: center; }
+    .lunch-sheet .lunch-side { grid-column: 2; grid-row: 3; text-align: center; }
+    .lunch-sheet .lunch-result { margin: 8px 0 0; }
+    .lunch-sheet .lunch-skip { margin: 0 auto 8px; }
+    .lunch-sheet .sheet-btns { justify-content: center; }
+    .lunch-sheet .sheet-btns .spacer { display: none; }
+    .lunch-sheet .lunch-chips { justify-content: center; }
+}
 /* 網站導覽：學測範圍、背景示意 */
 .g-syl-sum { display: flex; align-items: center; gap: 10px; padding: 4px 2px 8px; }
 .g-syl-ring { width: 42px; height: 42px; border-radius: 21px; border: 4px solid var(--surface-2); border-top-color: var(--accent); border-right-color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; flex-shrink: 0; }
@@ -1617,6 +1701,7 @@ html, body { overscroll-behavior-y: none; }
 .g-syl-unit em.off { background: var(--faint); }
 .g-bgs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 6px; }
 .g-bgs .th { aspect-ratio: 3 / 4; border-radius: 6px; border: 1px solid var(--line); position: relative; overflow: hidden; }
+.g-bgs .th.t-photo::before { font-size: 14px; }
 .g-acct-row .sw i { width: 10px; height: 10px; border-radius: 5px; }
 
 /* --- 倒數頁：點目標直接改 --- */

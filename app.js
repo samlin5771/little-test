@@ -61,7 +61,7 @@ const AI_ON = false;
 if (AI_ON) document.documentElement.classList.add('ai-on');
 // v70：讀書地圖先拿掉了（還沒達到想要的效果）。程式碼在 v69 的版本裡，之後要做可以從那裡拿回來
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v70';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v72';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -77,7 +77,7 @@ const LS = {
     install: 'study_install_seen', tour: 'study_tour_seen', chatSeen: 'study_chat_seen', photoCount: 'study_photo_count',
     countdowns: 'study_countdowns', home: 'study_home', progView: 'study_prog_view', sylOpen: 'study_syl_open',
     lastActive: 'study_last_active', cloud: 'study_cloud_cache',
-    tt: 'study_timetable', calView: 'study_cal_view', heat: 'study_heat_range', seenVer: 'study_seen_ver', push: 'study_push', pushId: 'study_push_id', notif: 'study_notif', pokes: 'study_pokes', hol: 'study_holidays', guestNew: 'study_guest_sessions'   // v60 課表、行事曆／課表切換、熱力圖範圍
+    tt: 'study_timetable', calView: 'study_cal_view', heat: 'study_heat_range', seenVer: 'study_seen_ver', push: 'study_push', pushId: 'study_push_id', notif: 'study_notif', pokes: 'study_pokes', hol: 'study_holidays', guestNew: 'study_guest_sessions', bgPhoto: 'study_bg_photo', lunch: 'study_lunch'   // v60 課表、行事曆／課表切換、熱力圖範圍
 };   // 這台裝置存的所有設定都在這裡（改名字會讓舊資料讀不到，不要改）
 // 沒有頭像時的預設圖（顏色跟著主題色）
 function defaultAvatar() {
@@ -532,7 +532,163 @@ try { localStorage.removeItem('study_font'); } catch (e) {}   // v40 的字體�
  * 呼吸光、極光、晨霧、方格紙、極簡只用 CSS；星空、雨夜、花瓣用一張 canvas 畫
  * 專注計時、聊天室、切到背景、系統「減少動態效果」時都會停下來，省電也不卡
  * ===================================================== */
-const BG_NAME = { glow: '呼吸光', stars: '星空', aurora: '極光', mist: '晨霧', rain: '雨夜', petal: '花瓣', grid: '方格紙', plain: '極簡' };
+const BG_NAME = { glow: '呼吸光', stars: '星空', aurora: '極光', mist: '晨霧', rain: '雨夜', petal: '花瓣', grid: '方格紙', plain: '極簡', sky: '天空', photo: '照片' };   // v72 sky：跟著現在的時間變（清晨、白天、夕陽、夜晚）   // v72 photo：自己的照片（只存在這台）
+/* =====================================================
+ * v72 照片背景：自己的照片當背景
+ *   這台裝置：照片存在 IndexedDB；設定 { pid 照片代號, blur 模糊 px, veil 淡化 0–1, x, y 對齊位置 %, up 已上傳 } 存在 localStorage
+ *   登入時跟著帳號：照片存在 Firestore 的 bgPhotos/{uid}（壓縮到 700KB 以內，只有自己讀得到），
+ *   設定（不含照片）放在 prefs.bgPhoto。別台看到 pid 不一樣時才下載一次照片，平常不會多讀
+ *   選了別的背景就完全不會讀照片，網站開啟速度不受影響
+ * ===================================================== */
+const bgPhoto = (() => {
+    const DB = 'study_bg_photo', ST = 'img';
+    const norm = (x) => ({ pid: String(x?.pid || ''), blur: Math.min(30, Math.max(0, Math.round(+x?.blur || 0))), veil: Math.min(.9, Math.max(.2, +x?.veil || .55)),
+        x: Math.min(100, Math.max(0, +(x?.x ?? 50))), y: Math.min(100, Math.max(0, +(x?.y ?? 50))) });
+    let set = null, cloudMeta;   // cloudMeta：最後看到的雲端 prefs.bgPhoto（undefined＝還沒看到）
+    try { const v = JSON.parse(localStorage.getItem(LS.bgPhoto) || 'null'); if (v && v.on) set = { ...norm(v), up: !!v.up }; } catch (e) {}
+    let url = null, loading = null;
+    function db() {
+        return new Promise((ok, no) => {
+            if (!window.indexedDB) return no(new Error('no idb'));
+            const r = indexedDB.open(DB, 1);
+            r.onupgradeneeded = () => r.result.createObjectStore(ST);
+            r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error);
+        });
+    }
+    async function tx(mode, fn) {
+        const d = await db();
+        return new Promise((ok, no) => { const t = d.transaction(ST, mode), req = fn(t.objectStore(ST)); t.oncomplete = () => { ok(req?.result); d.close(); }; t.onerror = () => no(t.error); });
+    }
+    function load() {
+        if (url) return Promise.resolve(url);
+        if (!loading) loading = tx('readonly', o => o.get('bg')).then(b => { url = b ? URL.createObjectURL(b) : null; return url; }).catch(() => null);
+        return loading;
+    }
+    // 套到一張 img 上（背景圖層、調整視窗的預覽）
+    function style(im, x, scale = 1) {
+        im.style.objectPosition = `${x.x}% ${x.y}%`;
+        im.style.filter = x.blur ? `blur(${(x.blur * scale).toFixed(1)}px)` : 'none';
+        im.style.transform = x.blur ? `scale(${1 + Math.min(.12, x.blur * scale / 160)})` : 'none';   // 放大一點點，模糊的邊緣不會露白
+    }
+    async function paint(im) {
+        if (!set) return;
+        style(im, set);
+        const veil = im.parentNode?.querySelector('.b-veil'); if (veil) veil.style.opacity = set.veil;
+        const u = await load();
+        if (u) im.src = u;
+    }
+    async function thumb() {
+        const th = $('bgPhotoTh'); if (!th) return;
+        const u = set ? await load() : null;
+        th.style.backgroundImage = u ? `url(${u})` : '';
+        th.classList.toggle('has', !!u);
+    }
+    const keep = () => lsSet(LS.bgPhoto, { on: 1, ...set });
+    async function putBlob(blob) {
+        await tx('readwrite', o => o.put(blob, 'bg'));
+        if (url) URL.revokeObjectURL(url); url = URL.createObjectURL(blob); loading = Promise.resolve(url);
+    }
+    const meta = () => set ? { pid: set.pid, blur: set.blur, veil: set.veil, x: Math.round(set.x), y: Math.round(set.y) } : null;
+    const blobToData = (b) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(b); });
+    // 上傳到帳號（沒登入、沒網路就先不傳，之後登入或下次同步時再補）
+    async function push() {
+        if (!set || set.up || !currentUser || !fb || !cloudReady) return;
+        try {
+            const blob = await tx('readonly', o => o.get('bg'));
+            if (!blob) return;
+            const img = await blobToData(blob);
+            if (img.length > 900000) return;   // 太大傳不上去（正常不會發生：選照片時已經壓縮過）
+            await fb.fs.setDoc(fb.fs.doc(fb.db, 'bgPhotos', currentUser.uid), { img, pid: set.pid, at: Date.now() });
+            set.up = true; keep(); savePrefs();
+        } catch (e) { console.warn('背景照片上傳失敗：', e); }
+    }
+    async function save(blob, x) {
+        if (blob) await putBlob(blob);
+        set = { ...norm({ ...x, pid: blob ? Date.now().toString(36) : set?.pid }), up: blob ? false : !!set?.up };
+        keep(); thumb();
+        if (blob) push(); else savePrefs();
+    }
+    async function remove() {
+        try { await tx('readwrite', o => o.delete('bg')); } catch (e) {}
+        if (url) URL.revokeObjectURL(url); url = null; loading = null;
+        const wasUp = set?.up; set = null;
+        localStorage.removeItem(LS.bgPhoto); thumb();
+        if (wasUp && currentUser && fb) fb.fs.deleteDoc(fb.fs.doc(fb.db, 'bgPhotos', currentUser.uid)).catch(() => {});
+    }
+    // 雲端的設定來了：照片換了就下載一次；別台移除了就跟著移除；這台的還沒傳上去就補傳
+    async function fromCloud(m, onChange) {
+        cloudMeta = m && typeof m === 'object' ? m : null;
+        if (!cloudMeta) {
+            if (set?.up) { await remove(); onChange(); }
+            else if (set) push();
+            return;
+        }
+        const c = norm(cloudMeta);
+        if (set && c.pid === set.pid) {
+            if (['blur', 'veil', 'x', 'y'].some(k => Math.abs(c[k] - set[k]) > .5)) { set = { ...c, up: true }; keep(); onChange(); }
+            else if (!set.up) { set.up = true; keep(); }
+            return;
+        }
+        if (set && !set.up) { push(); return; }   // 這台剛換了新照片、還沒傳上去：以這台為準
+        try {
+            const d = await fb.fs.getDoc(fb.fs.doc(fb.db, 'bgPhotos', currentUser.uid));
+            const x = d.exists() ? d.data() : null;
+            if (!x || x.pid !== c.pid || typeof x.img !== 'string') return;   // 照片還在上傳中，下次再拿
+            await putBlob(await (await fetch(x.img)).blob());
+            set = { ...c, up: true }; keep(); thumb(); onChange();
+        } catch (e) { console.warn('背景照片下載失敗：', e); }
+    }
+    // 存進 prefs 的設定：這台的還沒上傳成功時，先保留雲端原本的（不然別台會以為照片被移除了）
+    const prefsMeta = () => set?.up ? meta() : (cloudMeta === undefined ? (set ? undefined : null) : cloudMeta);
+    function localOnly() { if (set) { set.up = false; keep(); } cloudMeta = undefined; }   // 刪除帳號後：照片留在這台，當成還沒上傳
+    return { get has() { return !!set; }, get set() { return set; }, norm, load, style, paint, thumb, save, remove, fromCloud, prefsMeta, push, localOnly };
+})();
+
+/* =====================================================
+ * v72 會變的天空：背景跟著現在的時間（台灣時間）變：清晨、白天、夕陽、夜晚
+ *   淺色模式是淡淡的天色、深色模式是深的天色（文字都看得清楚）；5 分鐘更新一次，不會一直重畫
+ * ===================================================== */
+const skyBg = (() => {
+    // [時（小時）, 上, 中, 下（地平線）, 星星亮度]
+    const LIGHT = [[0, '#C8D0E8', '#DADDEC', '#ECEBF0', 0], [5, '#C8D0E8', '#DADDEC', '#ECEBF0', 0], [6, '#E9D2D6', '#F4DDD2', '#FBEBDA', 0],
+        [7.5, '#CFE3F4', '#E6EFF5', '#F7F5EF', 0], [12, '#BCDBF4', '#DEEDF7', '#F6F6F2', 0], [16.5, '#CBE0F1', '#E9EDEF', '#F8F3EA', 0],
+        [17.8, '#E8C6C0', '#F5D6C2', '#FBE6CF', 0], [19, '#D2C6E0', '#E2D6E4', '#EFE8EC', 0], [20, '#C8D0E8', '#DADDEC', '#ECEBF0', 0], [24, '#C8D0E8', '#DADDEC', '#ECEBF0', 0]];
+    const DARK = [[0, '#05081A', '#080C20', '#0B0E1C', 1], [4.8, '#05081A', '#080C20', '#0B0E1C', 1], [6, '#121733', '#2A2242', '#4E2E3A', .3],
+        [7.5, '#0C192E', '#13253A', '#1D2C38', 0], [12, '#0A1A32', '#11263F', '#183044', 0], [16.5, '#0D1A30', '#16243A', '#232A38', 0],
+        [17.8, '#121632', '#32213A', '#5C3330', .1], [19, '#090D24', '#151630', '#22182A', .6], [20, '#05081A', '#080C20', '#0B0E1C', 1], [24, '#05081A', '#080C20', '#0B0E1C', 1]];
+    const hex = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const mix = (a, b, t) => { const x = hex(a), y = hex(b); return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',')})`; };
+    let iv = 0, obs = null;
+    function hourNow() {   // 用台灣時間（在國外也一樣是台灣的天色）
+        const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date());
+        return +p.find(x => x.type === 'hour').value + +p.find(x => x.type === 'minute').value / 60;
+    }
+    function paint(h = hourNow()) {
+        const sky = document.querySelector('.b-tsky'); if (!sky) return;
+        const dark = document.documentElement.getAttribute('data-theme') === 'dark', K = dark ? DARK : LIGHT;
+        let i = 0; while (i < K.length - 2 && K[i + 1][0] <= h) i++;
+        const [h0, ...a] = K[i], [h1, ...b] = K[i + 1], t = Math.min(1, Math.max(0, (h - h0) / (h1 - h0 || 1)));
+        sky.style.background = `linear-gradient(180deg, ${mix(a[0], b[0], t)} 0%, ${mix(a[1], b[1], t)} 55%, ${mix(a[2], b[2], t)} 100%)`;
+        document.querySelector('.b-tstars').style.opacity = (a[3] + (b[3] - a[3]) * t).toFixed(2);
+        // 太陽 6:00–18:30 從左邊升起、右邊落下；其他時間是月亮
+        const orb = document.querySelector('.b-orb'), day = h >= 6 && h < 18.5;
+        const f = day ? (h - 6) / 12.5 : ((h >= 18.5 ? h - 18.5 : h + 5.5) / 11.5);
+        orb.className = 'b-orb ' + (day ? 'sun' : 'moon');
+        orb.style.left = `${8 + f * 84}%`;
+        orb.style.top = `${30 - Math.sin(f * Math.PI) * 22}%`;
+        orb.style.opacity = day ? Math.min(1, Math.sin(f * Math.PI) * 2.2).toFixed(2) : (dark ? .75 : .5);
+    }
+    function start() {
+        stop(); paint();
+        iv = setInterval(() => { if (!document.hidden) paint(); }, 5 * 60000);
+        obs = new MutationObserver(() => paint()); obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+        document.addEventListener('visibilitychange', onVis);
+    }
+    function onVis() { if (!document.hidden) paint(); }
+    function stop() { clearInterval(iv); iv = 0; if (obs) obs.disconnect(); obs = null; document.removeEventListener('visibilitychange', onVis); }
+    return { start, stop, paint };
+})();
+
 const bgFx = (() => {
     const layer = $('bgLayer');
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -654,7 +810,9 @@ const bgFx = (() => {
         if (k === 'aurora') { add('b-au a1'); add('b-au a2'); add('b-au a3'); }
         if (k === 'mist') { add('b-mist m1'); add('b-mist m2'); add('b-mist m3'); }
         if (k === 'grid') add('b-grid');
+        if (k === 'photo') { const im = document.createElement('img'); im.className = 'b-photo'; im.alt = ''; layer.appendChild(im); add('b-veil'); bgPhoto.paint(im); }
         if (k === 'stars') add('b-sky');
+        if (k === 'sky') { add('b-tsky'); add('b-tstars'); add('b-orb'); skyBg.start(); } else skyBg.stop();
         if (k === 'rain') {
             add('b-rain-sky');
             // 窗外模糊的燈：主題色、暖黃、冷藍
@@ -687,7 +845,9 @@ const bgFx = (() => {
     return { set, update, get kind() { return kind; }, refresh() { readColors(); dropLayer = null; if (cv) draw(0); } };
 })();
 function applyBg(k) {
+    if (k === 'photo' && !bgPhoto.has) k = 'glow';   // 這台沒有照片（例如別台選的）就先用呼吸光，設定不會被改掉
     bgFx.set(k);
+    if ($('bgPhotoActs')) $('bgPhotoActs').hidden = bgFx.kind !== 'photo';
     document.querySelectorAll('.bg-opt').forEach(b => { const on = b.dataset.bg === bgFx.kind; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on); });
     if ($('bgName')) $('bgName').textContent = BG_NAME[bgFx.kind];
 }
@@ -695,9 +855,115 @@ applyBg(localStorage.getItem(LS.bg) || 'glow');
 $('bgGrid').addEventListener('click', (e) => {
     const b = e.target.closest('.bg-opt');
     if (!b) return;
+    if (b.dataset.bg === 'photo' && !bgPhoto.has) { $('bgPhotoFile').click(); return; }   // 還沒有照片：先選一張
     applyBg(b.dataset.bg); lsSet(LS.bg, b.dataset.bg); savePrefs();
 });
 $('bgRow').addEventListener('click', () => setFold('bgRow', 'bgFold', !$('bgFold').classList.contains('open')));
+// ---- v72 照片背景：選照片 → 調整（模糊、淡化、位置）→ 套用 ----
+bgPhoto.thumb();
+let bgpDraft = null;   // { blob（新選的照片才有）, url, blur, veil, x, y }
+function bgpRender() {
+    const d = bgpDraft, im = $('bgpImg');
+    if (im.src !== d.url) im.src = d.url;
+    // 預覽比整個畫面小，模糊也要跟著等比例變小，看起來才一樣
+    bgPhoto.style(im, d, $('bgpPrev').clientWidth / Math.max(320, innerWidth));
+    $('bgpVeil').style.opacity = d.veil;
+    $('bgpBlur').value = d.blur; $('bgpVeilR').value = Math.round(d.veil * 100);
+}
+async function openBgPhoto(blob) {
+    const cur = bgPhoto.set;
+    let url = blob ? URL.createObjectURL(blob) : await bgPhoto.load();
+    if (!url) { $('bgPhotoFile').click(); return; }
+    bgpDraft = { blob, url, ...(cur && !blob ? cur : { blur: 12, veil: blob ? await bgpAutoVeil(url) : .55, x: 50, y: 50 }) };
+    $('bgpRemove').hidden = !bgPhoto.has;
+    $('bgpNote').textContent = (currentUser ? '照片會跟著你的帳號，換手機、電腦也看得到（只有你自己看得到）。' : '照片先存在這台裝置；登入後會跟著帳號，換裝置也看得到。') + '文字和卡片會自動保持看得清楚。';
+    // 預覽的形狀跟這台的螢幕一樣（手機直的、電腦橫的），看起來才準
+    const ar = innerWidth / innerHeight, maxW = Math.min(372, innerWidth - 80), maxH = Math.min(380, innerHeight * .4);
+    let pw = maxH * ar, ph = maxH; if (pw > maxW) { pw = maxW; ph = pw / ar; }
+    $('bgpPrev').style.width = Math.round(pw) + 'px'; $('bgpPrev').style.height = Math.round(ph) + 'px';
+    openModal('bgPhotoModal');
+    requestAnimationFrame(bgpRender);
+}
+// 照片很亮又是淺色模式（或很暗又是深色模式）時淡化少一點；反過來就多一點，文字才看得清楚
+function bgpAutoVeil(url) {
+    return new Promise(ok => {
+        const im = new Image();
+        im.onload = () => {
+            try {
+                const c = document.createElement('canvas'); c.width = c.height = 24;
+                const x = c.getContext('2d'); x.drawImage(im, 0, 0, 24, 24);
+                const d = x.getImageData(0, 0, 24, 24).data; let l = 0;
+                for (let i = 0; i < d.length; i += 4) l += (.299 * d[i] + .587 * d[i + 1] + .114 * d[i + 2]) / 255;
+                l /= d.length / 4;
+                const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+                ok(dark ? (l > .55 ? .7 : .5) : (l < .45 ? .72 : .55));
+            } catch (e) { ok(.6); }
+        };
+        im.onerror = () => ok(.6); im.src = url;
+    });
+}
+// 手機照片很大：縮到最長邊 1600px、存成 JPEG，控制在 600KB 以內（要能跟著帳號存到雲端）
+function bgpShrink(file) {
+    return new Promise((ok, no) => {
+        const u = URL.createObjectURL(file), im = new Image();
+        im.onload = async () => {
+            URL.revokeObjectURL(u);
+            let max = 1600, q = .82;
+            for (let i = 0; i < 6; i++) {
+                const k = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+                const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+                c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+                const b = await new Promise(r => c.toBlob(r, 'image/jpeg', q));
+                if (b && (b.size <= 600000 || i === 5)) return b.size <= 660000 ? ok(b) : no(new Error('too-big'));
+                max = Math.round(max * .85); q = Math.max(.6, q - .06);
+            }
+        };
+        im.onerror = () => { URL.revokeObjectURL(u); no(new Error('decode')); };
+        im.src = u;
+    });
+}
+$('bgPhotoFile').addEventListener('change', async (e) => {
+    const f = e.target.files?.[0]; e.target.value = '';
+    if (!f) return;
+    try { openBgPhoto(await bgpShrink(f)); } catch (err) { toast('這張照片讀不出來，換一張試試'); }
+});
+$('bgPhotoEdit').addEventListener('click', () => openBgPhoto(null));
+$('bgPhotoChange').addEventListener('click', () => $('bgPhotoFile').click());
+$('bgpBlur').addEventListener('input', (e) => { bgpDraft.blur = +e.target.value; bgpRender(); });
+$('bgpVeilR').addEventListener('input', (e) => { bgpDraft.veil = +e.target.value / 100; bgpRender(); });
+// 拖曳預覽移動照片（改對齊位置）
+(() => {
+    let st = null;
+    const box = $('bgpPrev');
+    box.addEventListener('pointerdown', (e) => { st = { px: e.clientX, py: e.clientY, x: bgpDraft.x, y: bgpDraft.y }; box.setPointerCapture(e.pointerId); box.classList.add('drag'); });
+    box.addEventListener('pointermove', (e) => {
+        if (!st) return;
+        const r = box.getBoundingClientRect();
+        bgpDraft.x = Math.min(100, Math.max(0, st.x - (e.clientX - st.px) / r.width * 100));
+        bgpDraft.y = Math.min(100, Math.max(0, st.y - (e.clientY - st.py) / r.height * 100));
+        bgpRender();
+    });
+    const end = () => { st = null; box.classList.remove('drag'); };
+    box.addEventListener('pointerup', end); box.addEventListener('pointercancel', end);
+})();
+$('bgpSave').addEventListener('click', async () => {
+    const d = bgpDraft;
+    try { await bgPhoto.save(d.blob || null, d); }
+    catch (e) { toast('存不下這張照片（可能是無痕模式），換一張或換個瀏覽器試試'); return; }
+    closeModal('bgPhotoModal');
+    bgFx.set('glow');   // 換新照片時重新畫一次
+    applyBg('photo'); lsSet(LS.bg, 'photo'); savePrefs();
+    toast('已換成你的照片');
+});
+$('bgpRemove').addEventListener('click', async () => {
+    await bgPhoto.remove();
+    closeModal('bgPhotoModal');
+    if ((localStorage.getItem(LS.bg) || 'glow') === 'photo') { applyBg('glow'); lsSet(LS.bg, 'glow'); savePrefs(); }
+    toast('已移除照片');
+});
+$('bgPhotoModal').addEventListener('transitionend', () => {
+    if (!$('bgPhotoModal').classList.contains('open') && bgpDraft?.blob && bgpDraft.url) { URL.revokeObjectURL(bgpDraft.url); bgpDraft = null; }
+});
 // 主題色和背景跟著帳號同步（深淺色每台裝置各自決定）
 let prefsTimer = 0;
 let mapKeep = null;
@@ -707,7 +973,7 @@ function savePrefs() {
     clearTimeout(prefsTimer);
     prefsTimer = setTimeout(() => {
         fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), {
-            prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow', notify: localStorage.getItem(LS.notify) || 'banner', home: homePref, tt, notif,
+            prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow', notify: localStorage.getItem(LS.notify) || 'banner', home: homePref, tt, notif, lunch, ...(bgPhoto.prefsMeta() !== undefined ? { bgPhoto: bgPhoto.prefsMeta() } : {}),
                 room: { name: roomPref.name || '', color: AV_COLORS.includes(roomPref.color) ? roomPref.color : '', hidden: !!roomPref.hidden },
                 ...(mapKeep ? { map: mapKeep } : {}) }
         }, { mergeFields: ['prefs'] }).catch(e => console.warn('設定同步失敗：', e));
@@ -719,6 +985,8 @@ function applyCloudPrefs(p) {
         applyAccent(p.accent); lsSet(LS.accent, p.accent); bgFx.refresh();
     }
     if (BG_NAME[p.bg] && p.bg !== (localStorage.getItem(LS.bg) || 'glow')) { applyBg(p.bg); lsSet(LS.bg, p.bg); }
+    // v72 照片背景跟著帳號：照片換了才下載
+    bgPhoto.fromCloud(p.bgPhoto, () => { if ((localStorage.getItem(LS.bg) || 'glow') === 'photo') { bgFx.set('glow'); applyBg('photo'); } });
     if (NOTIFY_NAME[p.notify] && p.notify !== notifyStyle) { applyNotify(p.notify); }
     // v60 課表也跟著帳號；雲端還沒有、這台有的話，把這台的送上去
     if (p.tt && typeof p.tt === 'object') {
@@ -737,6 +1005,10 @@ function applyCloudPrefs(p) {
             roomPref = { ...roomPref, name: nm, color: col, hidden: !!p.room.hidden }; saveRoomPref();
             publishProfile(); renderRoom(); renderHomeRoom();
         }
+    }
+    if (p.lunch && typeof p.lunch === 'object') {   // v72 吃飯抽籤的選項
+        const x = normLunch(p.lunch);
+        if (JSON.stringify(x) !== JSON.stringify(lunch)) { lunch = x; lsSet(LS.lunch, lunch); }
     }
     if (p.map && typeof p.map === 'object') mapKeep = p.map;
     if (p.home) {   // 首頁排法也跟著帳號
@@ -1174,6 +1446,93 @@ function spin() {
 }
 $('rouletteBtn').addEventListener('click', () => { openModal('rouletteModal'); spin(); });
 $('spinAgainBtn').addEventListener('click', spin);
+
+/* --- v72 吃飯抽籤（轉盤）：選項可以自己改；可以跳過最近 2 天吃過的
+ *   存在 LS.lunch，也跟著帳號（prefs.lunch）：{ opts: [...], skip: bool, hist: [{ n, d }] } --- */
+const LUNCH_DEF = ['便當', '自助餐', '麵', '水餃', '炒飯', '滷味', '早午餐', '超商'];
+const LUNCH_MAX = 12;
+function normLunch(x) {
+    const opts = [...new Set((Array.isArray(x?.opts) ? x.opts : LUNCH_DEF).map(t => String(t || '').trim().slice(0, 10)).filter(Boolean))].slice(0, LUNCH_MAX);
+    const hist = (Array.isArray(x?.hist) ? x.hist : []).filter(h => h && typeof h.n === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(h.d)).slice(-10);
+    return { opts: opts.length >= 2 ? opts : LUNCH_DEF.slice(), skip: x?.skip !== false, hist };
+}
+let lunch = normLunch(lsGet(LS.lunch, null));
+let lunchRot = 0, lunchPick = null, lunchBusy = false;
+function saveLunch() { lsSet(LS.lunch, lunch); savePrefs(); }
+const lunchRecent = () => { const lim = ymd(new Date(Date.now() - 2 * 86400000)); return new Set(lunch.hist.filter(h => h.d >= lim).map(h => h.n)); };
+function renderLunchWheel() {
+    const o = lunch.opts, n = o.length, R = 120, recent = lunch.skip ? lunchRecent() : new Set();
+    const pt = (a, r) => [R + r * Math.sin(a), R - r * Math.cos(a)];
+    let g = '';
+    o.forEach((t, i) => {
+        const a0 = i / n * 2 * Math.PI, a1 = (i + 1) / n * 2 * Math.PI, am = (a0 + a1) / 2;
+        const [x0, y0] = pt(a0, R), [x1, y1] = pt(a1, R);
+        const off = recent.has(t) && recent.size < n;
+        g += `<path d="M${R} ${R}L${x0.toFixed(2)} ${y0.toFixed(2)}A${R} ${R} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}Z" class="lw-s s${i % 4}${off ? ' off' : ''}"/>`;
+        // 中文字沿著半徑一個字一個字直排（轉到上面指針那格時，字是正的、由上往下讀）
+        const ch = [...t].length > 6 ? [...[...t].slice(0, 5), '…'] : [...t];
+        const fs = ch.length > 4 ? 12 : 14, step = fs * 1.08, mid = R * .6, deg = am * 180 / Math.PI;
+        ch.forEach((c, j) => {
+            const [cx, cy] = pt(am, mid + ((ch.length - 1) / 2 - j) * step);
+            g += `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" transform="rotate(${deg.toFixed(1)} ${cx.toFixed(1)} ${cy.toFixed(1)})" class="lw-t${off ? ' off' : ''}${i % 4 === 1 || i % 4 === 3 ? ' lt' : ''}" font-size="${fs}">${esc(c)}</text>`;
+        });
+    });
+    $('lunchWheel').innerHTML = `<svg viewBox="0 0 240 240" style="transform:rotate(${lunchRot}deg)">${g}</svg>`;
+    $('lunchSkip').classList.toggle('on', lunch.skip); $('lunchSkip').setAttribute('aria-pressed', lunch.skip);
+    $('lunchChips').innerHTML = o.map((t, i) => `<span class="lunch-chip">${esc(t)}<button data-ldel="${i}" aria-label="刪掉${esc(t)}">×</button></span>`).join('');
+    $('lunchAdd').disabled = o.length >= LUNCH_MAX;
+}
+function lunchSpin() {
+    if (lunchBusy) return;
+    const o = lunch.opts, recent = lunch.skip ? lunchRecent() : new Set();
+    let pool = o.map((t, i) => i).filter(i => !recent.has(o[i]));
+    if (!pool.length) pool = o.map((t, i) => i);
+    const w = pool[Math.floor(Math.random() * pool.length)], n = o.length;
+    // 轉到選中的那格停在上面的指針下（格子裡隨機偏一點，看起來比較自然）
+    const target = 360 - ((w + .2 + Math.random() * .6) / n * 360);
+    const cur = ((lunchRot % 360) + 360) % 360;
+    lunchRot += (reduceMotion() ? 360 : 360 * 5) + ((target - cur + 360) % 360);
+    lunchBusy = true; lunchPick = null;
+    $('lunchOk').disabled = true; $('lunchResult').innerHTML = '&nbsp;'; $('lunchGo').disabled = true;
+    const svg = $('lunchWheel').firstChild;
+    svg.style.transition = `transform ${reduceMotion() ? .6 : 3.6}s cubic-bezier(.12,.7,.16,1)`;
+    svg.style.transform = `rotate(${lunchRot}deg)`;
+    setTimeout(() => {
+        lunchBusy = false; lunchPick = o[w];
+        $('lunchResult').innerHTML = `就吃 <b>${esc(lunchPick)}</b>！`;
+        $('lunchOk').disabled = false; $('lunchGo').disabled = false; $('lunchGo').textContent = '再轉';
+        device.vibrate(30);
+    }, reduceMotion() ? 650 : 3700);
+}
+const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+function openLunch() {
+    lunchPick = null; $('lunchResult').innerHTML = '&nbsp;'; $('lunchOk').disabled = true; $('lunchGo').textContent = '轉';
+    $('lunchEdit').hidden = true; $('lunchEditBtn').textContent = '編輯選項';
+    renderLunchWheel(); openModal('lunchModal');
+}
+$('lunchBtn').addEventListener('click', openLunch);
+$('lunchGo').addEventListener('click', lunchSpin);
+$('lunchSkip').addEventListener('click', () => { lunch.skip = !lunch.skip; saveLunch(); renderLunchWheel(); });
+$('lunchEditBtn').addEventListener('click', () => { const h = !$('lunchEdit').hidden; $('lunchEdit').hidden = h; $('lunchEditBtn').textContent = h ? '編輯選項' : '收起'; });
+$('lunchChips').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ldel]'); if (!b || lunchBusy) return;
+    if (lunch.opts.length <= 2) { toast('至少要留 2 個選項'); return; }
+    lunch.opts.splice(+b.dataset.ldel, 1); saveLunch(); renderLunchWheel();
+});
+function lunchAddOpt() {
+    const t = $('lunchInput').value.trim().slice(0, 10);
+    if (!t || lunchBusy) return;
+    if (lunch.opts.includes(t)) { toast('已經有這個選項了'); return; }
+    if (lunch.opts.length >= LUNCH_MAX) { toast(`最多 ${LUNCH_MAX} 個選項`); return; }
+    lunch.opts.push(t); $('lunchInput').value = ''; saveLunch(); renderLunchWheel();
+}
+$('lunchAdd').addEventListener('click', lunchAddOpt);
+$('lunchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); lunchAddOpt(); } });
+$('lunchOk').addEventListener('click', () => {
+    if (!lunchPick) return;
+    lunch.hist.push({ n: lunchPick, d: todayStr() }); lunch.hist = lunch.hist.slice(-10); saveLunch();
+    closeModal('lunchModal'); toast(`好，今天吃${lunchPick}！`);
+});
 
 /* =====================================================
  * 2. 每週進度
@@ -3095,6 +3454,8 @@ function buildPalette(q) {
     if (match('學測範圍', '範圍', '單元', '重點複習', 'syllabus')) items.push({ group: '前往', label: '學測範圍', run: () => showTab('tab-syllabus') });
     if (match('課表', '上課', '節次', 'timetable')) items.push({ group: '前往', label: '課表', run: () => { calView = 'tt'; lsSet(LS.calView, calView); showTab('tab-calendar'); applyCalView(); } });
     if (match('房間', '讀書房間', '朋友', 'room')) items.push({ group: '前往', label: '讀書房間', run: () => { roomView = null; showTab('tab-room'); } });
+    if (match('吃什麼', '吃飯', '午餐', '晚餐', '抽籤', 'lunch')) items.push({ group: '工具', label: '今天吃什麼？（吃飯抽籤）', run: openLunch });
+    if (match('照片', '背景', '桌布', 'photo')) items.push({ group: '設定', label: '用自己的照片當背景', run: () => bgPhoto.has ? openBgPhoto(null) : $('bgPhotoFile').click() });
     if (match('統計', 'stats')) items.push({ group: '前往', label: '讀書統計', run: () => { statOffset = 0; statSel = null; renderStats(); showTab('tab-stats'); } });
     if (match('深色', '淺色', '主題', 'theme', 'dark', 'light')) items.push({ group: '設定', label: '切換深淺色', key: 'T', run: () => $('themeBtn').click() });
     if (match('主題色', '顏色', '背景', '外觀', '帳號', '登入', 'account')) items.push({ group: '設定', label: '個人設定（主題色、背景、外觀）', run: () => openModal('accountModal') });
@@ -5564,7 +5925,7 @@ document.addEventListener('keydown', (e) => {
 }, true);
 // 第一次打開：手機瀏覽器先教「加到主畫面」（一定要按我知道了），接著簡易導覽；其他情況只顯示簡易導覽
 // v60：用過舊版的人，更新後第一次打開會看到「這次新增了什麼」（第一次用的人看簡易導覽就好，不會連跳兩個視窗）
-const WHATS_NEW = 'v70';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
+const WHATS_NEW = 'v72';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
 setTimeout(() => {
     if (document.querySelector('.modal.open') || document.body.classList.contains('guide-open')) return;
     const needInstall = !localStorage.getItem(LS.install) && !isStandalone() && isMobile();
@@ -5574,7 +5935,7 @@ setTimeout(() => {
     else if (needTour) openTour();
     else if (localStorage.getItem(LS.seenVer) !== WHATS_NEW) { lsSet(LS.seenVer, WHATS_NEW); openModal('whatsNewModal'); }
 }, 1200);
-$('wnTry').addEventListener('click', () => { closeModal('whatsNewModal'); focusMin = false; showTab('tab-timer'); });
+$('wnTry').addEventListener('click', () => { closeModal('whatsNewModal'); openModal('accountModal'); setTimeout(() => { setFold('bgRow', 'bgFold', true); setTimeout(() => $('bgRow').scrollIntoView({ block: 'start', behavior: 'smooth' }), 250); }, 250); });
 
 /* =====================================================
  * 帳號畫面
@@ -6491,6 +6852,7 @@ const HOME_MODS = [
     { k: 'list', name: '今天的清單', sub: '進度表和今天的待辦', icon: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>' },
     { k: 'review', name: '重點複習', sub: '有標重點時才會出現', icon: '<path d="M6 3h12v18l-6-4-6 4z"/>' },
     { k: 'roulette', name: '現在要讀什麼？', icon: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="15" cy="9" r="1"/><circle cx="9" cy="15" r="1"/>' },
+    { k: 'lunch', name: '今天吃什麼？', sub: '吃飯抽籤，選項可以自己改', icon: '<path d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0z"/><path d="M8 20.5h8"/><path d="M14 8.5l5-5"/><path d="M11 8.5l5.5-5.5"/>' },
     { k: 'upcoming', name: '接下來的行程', sub: '最近的考試、行程和倒數', off: true, icon: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>' },
     { k: 'room', name: '讀書房間', sub: '朋友現在在讀什麼', off: true, icon: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.5.2 4 1.9 4.5 4.9"/>' }
 ];
@@ -6944,7 +7306,7 @@ $('loginBtn').addEventListener('click', async () => {
 /* --- v55：刪除帳號與所有資料 --- */
 const DEL_PENDING = 'study_del_pending';
 const LOCAL_DATA_KEYS = () => [LS.todos, LS.weekly, LS.events, LS.sessions, LS.syllabus, LS.countdowns, LS.timer, LS.tpref, LS.room,
-    LS.chatSeen, LS.photoCount, LS.home, LS.cloud, LS.aiPref, LS.aiCount, LS.exam, LS.progView, LS.sylOpen, LS.minTip, SESS_JOURNAL, LS.tt, LS.calView, LS.heat, LS.push, LS.pushId];
+    LS.chatSeen, LS.photoCount, LS.home, LS.cloud, LS.aiPref, LS.aiCount, LS.exam, LS.progView, LS.sylOpen, LS.minTip, SESS_JOURNAL, LS.tt, LS.calView, LS.heat, LS.push, LS.pushId, LS.lunch];
 function openDelSheet(note) {
     if (!currentUser) return;
     $('delInput').value = '';
@@ -7009,6 +7371,7 @@ async function deleteAccount() {
         delSay('正在刪除雲端資料…');
         await pushRemove();
         await fs.deleteDoc(fs.doc(db, 'profiles', me)).catch(() => {});
+        await fs.deleteDoc(fs.doc(db, 'bgPhotos', me)).catch(() => {}); bgPhoto.localOnly();   // v72 背景照片
         await fs.deleteDoc(fs.doc(db, 'users', me));
         // 4. 這台裝置上的讀書資料（主題色、深淺色等外觀設定保留）
         LOCAL_DATA_KEYS().forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
