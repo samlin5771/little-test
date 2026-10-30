@@ -3210,3 +3210,56 @@ button, .btn, [role="tab"], .tab-btn, .chip, .seg, .seg *, .acct-row, .bg-opt, .
 html[data-bg="photo"] .go-btn { background: linear-gradient(rgba(var(--accent-rgb), .3), rgba(var(--accent-rgb), .3)), rgba(var(--card-rgb), .6); border-color: rgba(var(--accent-rgb), .6);
     -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4); box-shadow: 0 6px 18px rgba(0, 0, 0, .08); }
 html[data-bg="photo"] .go-btn.room { background: linear-gradient(color-mix(in srgb, var(--mark-green) 26%, transparent), color-mix(in srgb, var(--mark-green) 26%, transparent)), rgba(var(--card-rgb), .6); border-color: color-mix(in srgb, var(--mark-green) 60%, transparent); }
+
+
+/* =====================================================
+ * v74
+ * ===================================================== */
+/* 毛玻璃：分段選單、倒數上面的考試、月曆、課表。背景比較花（照片、天空、花瓣…）時底色更不透明，字和框線才看得清楚 */
+.seg, #tab-countdown .chip { background: rgba(var(--card-rgb), .42); -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4); border-color: rgba(255, 255, 255, .7); }
+html[data-theme="dark"] .seg, html[data-theme="dark"] #tab-countdown .chip { border-color: rgba(255, 255, 255, .1); }
+#tab-countdown .chip.active { background: linear-gradient(var(--accent-soft), var(--accent-soft)), rgba(var(--card-rgb), .42); border-color: var(--accent); }
+html:not([data-bg="glow"]):not([data-bg="plain"]):not([data-bg="grid"]):not([data-bg="stars"]) .seg,
+html:not([data-bg="glow"]):not([data-bg="plain"]):not([data-bg="grid"]):not([data-bg="stars"]) #tab-countdown .chip:not(.active) { background: rgba(var(--card-rgb), .62); }
+html:not([data-bg="glow"]):not([data-bg="plain"]):not([data-bg="grid"]):not([data-bg="stars"]) .cal-panel,
+html:not([data-bg="glow"]):not([data-bg="plain"]):not([data-bg="grid"]):not([data-bg="stars"]) .tt {
+    padding: 4px 6px 8px; border-radius: 18px; background: rgba(var(--card-rgb), .62); border: 1px solid rgba(255, 255, 255, .7);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4); backdrop-filter: blur(20px) saturate(1.4);
+}
+html[data-theme="dark"]:not([data-bg="glow"]):not([data-bg="plain"]):not([data-bg="grid"]):not([data-bg="stars"]) .cal-panel,
+html[data-theme="dark"]:not([data-bg="glow"]):not([data-bg="plain"]):not([data-bg="grid"]):not([data-bg="stars"]) .tt { border-color: rgba(255, 255, 255, .1); }
+/* 手機月曆：多天行程的橫條放在小圓點下面，不會疊在一起 */
+@media (max-width: 767px) {
+    .cal-cell { padding-bottom: 10px; }
+    .cal-bar { bottom: 2px; height: 3px; }
+}
+
+/* 訪客 */
+.acct-guest { margin-top: 8px; min-height: 46px; border-radius: 23px; }
+.acct-guest[hidden] { display: none; }
+
+/* 意見回饋 */
+.fb-sheet h2 { margin-bottom: 4px; }
+.fb-sub { margin: 0 0 14px; color: var(--muted); font: 13.5px/1.6 'Noto Sans TC', sans-serif; }
+.fb-kind { margin-bottom: 12px; }
+.fb-text { margin-bottom: 4px; min-height: 120px; }
+.fb-count { text-align: right; color: var(--faint); font: 500 12px Manrope, sans-serif; margin-bottom: 10px; }
+.fb-contact[hidden] { display: none; }
+.fb-note { margin: 0 0 4px; color: var(--faint); font: 12px/1.6 'Noto Sans TC', sans-serif; }
+.fb-mine { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.fb-mine[hidden] { display: none; }
+.fb-mine h3 { margin: 0 0 10px; font: 700 12.5px 'Noto Sans TC', sans-serif; color: var(--muted); letter-spacing: .06em; }
+.fb-item { padding: 10px 0; border-bottom: 1px solid var(--line); font-family: 'Noto Sans TC', sans-serif; }
+.fb-item:last-child { border-bottom: none; }
+.fb-top { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.fb-tag { padding: 2px 8px; border-radius: 9px; background: var(--surface-2); color: var(--text); font-weight: 600; }
+.fb-tag.k-bug { background: color-mix(in srgb, var(--exam) 16%, transparent); color: var(--exam-text); }
+.fb-tag.k-idea { background: var(--accent-soft); color: var(--accent-text); }
+.fb-st { margin-left: auto; color: var(--faint); }
+.fb-st.ok { color: var(--mark-green); font-weight: 700; }
+.fb-item p { margin: 6px 0 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.fb-reply { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.fb-reply b { display: block; font-size: 12px; color: var(--accent-text); margin-bottom: 2px; }
+/* v75 新名字 Stride：英文用 Manrope */
+#tourTitle, .guide-hero h1 { font-family: Manrope, 'Noto Sans TC', sans-serif; font-weight: 800; letter-spacing: 0; }
+#splash span { font-family: Manrope, 'Noto Sans TC', sans-serif; font-weight: 800; }

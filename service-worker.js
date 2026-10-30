@@ -1,6 +1,6 @@
 // 快取版本號：以後更新 index.html、style.css、app.js 任何一個時，把這個數字改一下（例如 v11, v12...）
 // 才能讓使用者的手機抓到新版本並清掉舊快取
-const CACHE_NAME = 'study-countdown-v73';
+const CACHE_NAME = 'study-countdown-v75';
 
 // 開啟時要預先快取的本機檔案
 const PRECACHE_URLS = [
@@ -76,14 +76,14 @@ self.addEventListener('push', (event) => {
   let p = {};
   try { p = event.data ? event.data.json() : {}; } catch (e) { p = {}; }
   const d = (p && p.data) || p || {};
-  const title = d.title || '學測倒數';
+  const title = d.title || 'Stride';
   const opt = {
     body: d.body || '',
     tag: d.tag || undefined,
     renotify: !!d.tag,
     icon: 'icon-192.png',
     badge: 'favicon-32.png',
-    data: { room: d.room || null, tab: d.tab || null }
+    data: { room: d.room || null, tab: d.tab || null, go: d.go || null, admin: d.admin || null }
   };
   event.waitUntil(self.registration.showNotification(title, opt));
 });
@@ -92,12 +92,12 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const data = event.notification.data || {};
-  const room = data.room, tab = data.tab;
+  const room = data.room, tab = data.tab, go = data.go, adm = data.admin;
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       const c = list.find((x) => 'focus' in x);
-      if (c) { c.postMessage(room ? { openRoom: room } : tab ? { openTab: tab } : {}); return c.focus(); }
-      return self.clients.openWindow(room ? './?chat=' + encodeURIComponent(room) : tab ? './?tab=' + encodeURIComponent(tab) : './');
+      if (c) { c.postMessage(room ? { openRoom: room } : tab ? { openTab: tab } : go ? { openGo: go } : adm ? { openAdmin: adm } : {}); return c.focus(); }
+      return self.clients.openWindow(room ? './?chat=' + encodeURIComponent(room) : tab ? './?tab=' + encodeURIComponent(tab) : go ? './?go=' + encodeURIComponent(go) : adm ? './?admin=' + encodeURIComponent(adm) : './');
     })
   );
 });

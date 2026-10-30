@@ -1,5 +1,5 @@
 /* =====================================================
- * 學測倒數 & 讀書計畫 — 程式
+ * Stride：學測倒數 & 讀書計畫 — 程式
  *
  * 目錄（用編輯器搜尋這些標題就能跳過去）
  *   設定區            ← 考試日期、科目、Firebase 設定都在這裡
@@ -61,7 +61,7 @@ const AI_ON = false;
 if (AI_ON) document.documentElement.classList.add('ai-on');
 // v70：讀書地圖先拿掉了（還沒達到想要的效果）。程式碼在 v69 的版本裡，之後要做可以從那裡拿回來
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v73';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v75';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -3725,7 +3725,7 @@ async function drawShareCard(ds) {
     ctx.strokeStyle = 'rgba(242,240,233,0.2)'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
     ctx.strokeStyle = accent; ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, Math.PI); ctx.stroke();
     ctx.fillStyle = 'rgba(242,240,233,0.85)'; ctx.font = `700 34px ${zh}`;
-    spacedText(ctx, '學測倒數', cx + 52, cy + 12, 10);
+    ctx.font = `800 34px Manrope, ${zh}`; spacedText(ctx, 'STRIDE', cx + 52, cy + 12, 8);
 
     return new Promise(res => c.toBlob(b => res(b), 'image/png'));
 }
@@ -3753,7 +3753,7 @@ function showShareBlob(blob, filename, title) {
 $('shareNativeBtn').addEventListener('click', async () => {
     if (!shareBlob) return;
     const file = new File([shareBlob], 'study-card.png', { type: 'image/png' });
-    try { await navigator.share({ files: [file], title: '學測倒數 · 讀書卡片' }); }
+    try { await navigator.share({ files: [file], title: 'Stride · 讀書卡片' }); }
     catch (e) { if (e.name !== 'AbortError') toast('無法分享，請改用「儲存圖片」'); }
 });
 
@@ -4722,6 +4722,8 @@ function systemNotify(title, body, code) {
 navigator.serviceWorker?.addEventListener('message', (e) => {
     if (e.data?.openRoom) { roomView = e.data.openRoom; showTab('tab-room'); openChat(e.data.openRoom); }
     else if (e.data?.openTab && document.getElementById(e.data.openTab)) showTab(e.data.openTab);   // v61 每日提醒：點了打開計時
+    else if (e.data?.openGo === 'feedback') openFeedback();   // v74 開發者回覆了你的意見
+    else if (e.data?.openAdmin) openAdminScreen(e.data.openAdmin);   // v74 管理者：點檢舉／回饋通知直接打開那一頁
 });
 
 /* =====================================================
@@ -5138,7 +5140,7 @@ $('imgSave').addEventListener('click', (e) => { e.stopPropagation(); const u = $
  *   管理畫面的程式放在 admin.js，只有管理者打開時才會下載；資料都經過伺服器確認身分
  *   公告：meta/announce（大家都讀得到，只有伺服器能改），{ id, text, kind: info|warn|fix, from, to }
  * ===================================================== */
-let isAdmin = false, adminPending = 0, adminMod = null;
+let isAdmin = false, adminPending = 0, adminFb = 0, adminMod = null;
 async function callFn(name, data) {
     const fm = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-functions.js`);
     const r = await fm.httpsCallable(fm.getFunctions(fb.app, 'asia-east1'), name)(data || {});
@@ -5150,12 +5152,12 @@ async function checkAdmin(user) {
         isAdmin = d.exists() && currentUser?.uid === user.uid;
     } catch (e) { isAdmin = false; }   // 一般帳號讀不到（沒有權限）＝不是管理者
     renderAdminRow();
-    if (isAdmin) callFn('admin', { fn: 'adminOverview', op: 'count' }).then(r => { adminPending = r?.pendingReports || 0; renderAdminRow(); }).catch(() => {});
+    if (isAdmin) callFn('admin', { fn: 'adminOverview', op: 'count' }).then(r => { adminPending = r?.pendingReports || 0; adminFb = r?.pendingFeedback || 0; renderAdminRow(); }).catch(() => {});
 }
 function renderAdminRow() {
     const row = $('adminRow'); if (!row) return;
     row.hidden = !isAdmin;
-    $('adminValue').innerHTML = adminPending ? `<span class="adm-badge">${adminPending}</span> 則檢舉待處理` : '使用狀況、檢舉、公告';
+    $('adminValue').innerHTML = adminPending ? `<span class="adm-badge">${adminPending}</span> 則檢舉待處理` : adminFb ? `<span class="adm-badge">${adminFb}</span> 則回饋還沒看` : '使用狀況、檢舉、回饋、公告';
 }
 async function openAdminScreen(start) {
     if (!isAdmin) return;
@@ -5166,6 +5168,66 @@ async function openAdminScreen(start) {
     syncScrollLock();
 }
 $('adminRow').addEventListener('click', () => openAdminScreen());
+
+/* --- v74 意見回饋：feedback/{自動編號}，只有管理者看得到；登入的人看得到自己送過的和開發者的回覆 --- */
+let fbKind = 'idea';
+const FB_DAY = 'study_fb_day';
+const FB_KIND_NAME = { bug: '問題回報', idea: '功能建議', other: '其他' };
+function fbDevice() {
+    const ua = navigator.userAgent || '';
+    const os = /iPad/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'iPad' : /iPhone/.test(ua) ? 'iPhone' : /Android/.test(ua) ? 'Android' : /Mac/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : 'other';
+    const br = /Edg\//.test(ua) ? 'Edge' : /CriOS|Chrome\//.test(ua) ? 'Chrome' : /FxiOS|Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'browser';
+    return `${os} · ${br} · ${Math.round(innerWidth)}×${Math.round(innerHeight)}${isStandalone() ? ' · 主畫面' : ''}`;
+}
+function fbRender() {
+    document.querySelectorAll('[data-fbk]').forEach(b => { const on = b.dataset.fbk === fbKind; b.classList.toggle('active', on); b.setAttribute('aria-checked', on); });
+    $('fbText').placeholder = { bug: '例如：在 iPad 上打開課表時，格子會被切掉', idea: '例如：希望可以把讀書紀錄匯出成表格', other: '想說什麼都可以' }[fbKind];
+    $('fbN').textContent = $('fbText').value.length;
+    $('fbSend').disabled = $('fbText').value.trim().length < 2;
+    $('fbContact').hidden = !!currentUser && !currentUser.isAnonymous;
+}
+async function fbLoadMine() {
+    const box = $('fbMine');
+    if (!currentUser || !fb) { box.hidden = true; return; }
+    try {
+        const snap = await fb.fs.getDocs(fb.fs.query(fb.fs.collection(fb.db, 'feedback'), fb.fs.where('uid', '==', currentUser.uid), fb.fs.limit(30)));
+        const list = snap.docs.map(d => d.data()).sort((a, b) => b.at - a.at).slice(0, 10);
+        box.hidden = !list.length;
+        const day = (t) => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
+        box.innerHTML = list.length ? `<h3>我送出的</h3>${list.map(f => `<div class="fb-item"><div class="fb-top"><span class="fb-tag k-${esc(f.kind)}">${FB_KIND_NAME[f.kind] || '其他'}</span><span>${day(f.at)}</span>${f.reply ? '<span class="fb-st ok">已回覆</span>' : f.status === 'done' ? '<span class="fb-st">已看過</span>' : '<span class="fb-st">還沒看</span>'}</div><p>${esc(f.text)}</p>${f.reply ? `<div class="fb-reply"><b>開發者回覆</b>${esc(f.reply)}</div>` : ''}</div>`).join('')}` : '';
+    } catch (e) { box.hidden = true; }
+}
+function openFeedback() {
+    closeModal('accountModal');
+    fbRender();
+    openModal('fbModal');
+    fbLoadMine();
+}
+$('fbRow').addEventListener('click', openFeedback);
+document.querySelectorAll('[data-fbk]').forEach(b => b.addEventListener('click', () => { fbKind = b.dataset.fbk; fbRender(); }));
+$('fbText').addEventListener('input', fbRender);
+$('fbSend').addEventListener('click', async () => {
+    const text = $('fbText').value.trim();
+    if (text.length < 2) return;
+    if (!fb || navigator.onLine === false) { toast('送出意見需要網路，請連上網路後再試'); return; }
+    const today = new Date().toISOString().slice(0, 10), day = lsGet(FB_DAY, {});
+    if (day.d === today && day.n >= 5) { toast('今天已經送出很多則了，明天再來吧！'); return; }
+    const b = $('fbSend'); b.disabled = true; b.textContent = '送出中…';
+    try {
+        await fb.fs.addDoc(fb.fs.collection(fb.db, 'feedback'), {
+            uid: currentUser?.uid || '', name: String(currentUser && !currentUser.isAnonymous ? (myName() || currentUser.displayName || '') : '').slice(0, 20),
+            kind: fbKind, text: text.slice(0, 1000), contact: $('fbContact').hidden ? '' : $('fbContact').value.trim().slice(0, 100),
+            ver: APP_VERSION, mode: isStandalone() ? 'app' : 'web', dev: fbDevice().slice(0, 80), at: Date.now()
+        });
+        lsSet(FB_DAY, { d: today, n: (day.d === today ? day.n : 0) + 1 });
+        $('fbText').value = ''; $('fbContact').value = '';
+        toast(currentUser && !currentUser.isAnonymous ? '謝謝你！開發者回覆的話會通知你' : '謝謝你！已經送給開發者了');
+        closeModal('fbModal');
+    } catch (err) {
+        toast('沒有送出去，請再試一次'); reportErr(err, 'feedback');
+    }
+    b.textContent = '送出'; fbRender();
+});
 document.addEventListener('keydown', (e) => { if (adminMod) adminMod.onKey(e); }, true);
 
 // ---- 公告：大家打開網站時最上面的一條；按 × 之後這則就不再出現 ----
@@ -5343,6 +5405,7 @@ $('pokePop').addEventListener('click', async (e) => {
         return;
     }
     if (!e.target.closest('[data-pk="go"]') || !pokeFor || !fb || !currentUser) return;
+    if (currentUser.isAnonymous) { toast('訪客不能叫朋友讀書，用 Google 登入後就可以'); return; }
     const to = pokeFor, room = roomView;
     pokeLast[to] = Date.now(); lsSet(LS.pokes, pokeLast);
     renderPoke();
@@ -5713,6 +5776,7 @@ $('repSend').addEventListener('click', async () => {
 let muteChk = { at: 0, until: 0 };
 async function mutedNow() {
     if (!currentUser || !fb) return false;
+    if (currentUser.isAnonymous) { toast('訪客不能傳訊息，用 Google 登入後就可以聊天（紀錄會保留）'); return true; }
     if (Date.now() - muteChk.at > 5 * 60000) {
         try { const d = await fb.fs.getDoc(fb.fs.doc(fb.db, 'mutes', currentUser.uid)); muteChk = { at: Date.now(), until: d.exists() ? +d.data().until || 0 : 0 }; }
         catch (e) { muteChk = { at: Date.now(), until: 0 }; }
@@ -6260,7 +6324,7 @@ document.addEventListener('keydown', (e) => {
 }, true);
 // 第一次打開：手機瀏覽器先教「加到主畫面」（一定要按我知道了），接著簡易導覽；其他情況只顯示簡易導覽
 // v60：用過舊版的人，更新後第一次打開會看到「這次新增了什麼」（第一次用的人看簡易導覽就好，不會連跳兩個視窗）
-const WHATS_NEW = 'v73';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
+const WHATS_NEW = 'v74';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
 setTimeout(() => {
     if (document.querySelector('.modal.open') || document.body.classList.contains('guide-open')) return;
     const needInstall = !localStorage.getItem(LS.install) && !isStandalone() && isMobile();
@@ -6270,7 +6334,7 @@ setTimeout(() => {
     else if (needTour) openTour();
     else if (localStorage.getItem(LS.seenVer) !== WHATS_NEW) { lsSet(LS.seenVer, WHATS_NEW); openModal('whatsNewModal'); }
 }, 1200);
-$('wnTry').addEventListener('click', () => { closeModal('whatsNewModal'); openTheme('bg'); });
+$('wnTry').addEventListener('click', () => { closeModal('whatsNewModal'); openFeedback(); });
 
 /* =====================================================
  * 帳號畫面
@@ -6280,19 +6344,23 @@ function renderAccount(statusText) {
     const u = currentUser;
     $('avatarImg').src = u?.photoURL || defaultAvatar();
     $('accountAvatar').src = u?.photoURL || defaultAvatar();
-    $('accountName').textContent = u ? (u.displayName || '已登入') : '未登入';
-    $('accountEmail').textContent = u ? (u.email || '') : '';
-    const status = statusText || (u ? '雲端同步已開啟' : (fb ? '資料只存在這台裝置' : '離線中，資料只存在這台裝置'));
+    const guest = !!u?.isAnonymous;
+    $('accountName').textContent = guest ? '訪客' : u ? (u.displayName || '已登入') : '未登入';
+    $('accountEmail').textContent = guest ? '登入 Google 後，現在的紀錄都會保留' : u ? (u.email || '') : '';
+    const status = statusText || (guest ? '雲端同步已開啟（訪客）' : u ? '雲端同步已開啟' : (fb ? '資料只存在這台裝置' : '離線中，資料只存在這台裝置'));
     $('accountStatus').textContent = status;
     $('syncDot').className = 'sync-dot ' + (u && !statusText ? 'ok' : /失敗|離線/.test(status) ? 'bad' : u ? 'wait' : '');
-    $('accountHint').style.display = u ? 'none' : '';
+    $('accountHint').style.display = u && !guest ? 'none' : '';
+    $('accountHint').textContent = guest ? '訪客可以同步、加入讀書房間，但不能在聊天室傳訊息。換手機前記得先登入 Google，不然訪客的資料會找不回來。' : '登入 Google 帳號後，資料會自動同步到雲端。也可以先用訪客身分，之後再登入，紀錄會一起帶過去。';
+    $('guestBtn').hidden = !!u || !fb;
     $('accentName').textContent = ACCENT_NAME[localStorage.getItem(LS.accent) || 'amber'] || '琥珀';
     renderThemeValue();
     $('installState').textContent = isStandalone() ? '已加入 ✓' : '教學';
-    $('loginBtn').textContent = u ? '登出' : '使用 Google 登入';
+    $('loginBtn').textContent = guest ? '用 Google 登入（保留紀錄）' : u ? '登出' : '使用 Google 登入';
     $('delAcctBtn').hidden = !u;
-    $('loginBtn').classList.toggle('btn-accent', !u);
-    $('loginBtn').classList.toggle('btn-logout', !!u);
+    $('delAcctBtn').textContent = guest ? '結束訪客身分並刪除資料' : '刪除帳號與資料';
+    $('loginBtn').classList.toggle('btn-accent', !u || guest);
+    $('loginBtn').classList.toggle('btn-logout', !!u && !guest);
 }
 $('accountBtn').addEventListener('click', () => { $('installState').textContent = isStandalone() ? '已加入 ✓' : '教學'; closeFolds(); openModal('accountModal'); warmLogin(); });
 $('guideRow').addEventListener('click', () => { closeModal('accountModal'); openGuide(); });
@@ -6877,7 +6945,7 @@ function ttDecode(code) {
 async function shareTT() {
     if (!ttHasData()) { toast('課表還是空的，先填幾格再分享'); return; }
     const url = `${location.origin}${location.pathname}?tt=${ttEncode()}`;
-    const text = '這是我的課表，點連結就能匯入到「學測倒數」';
+    const text = '這是我的課表，點連結就能匯入到「Stride」';
     try {
         if (navigator.share) { await navigator.share({ title: '課表', text, url }); return; }
     } catch (e) { if (e.name === 'AbortError') return; }
@@ -7170,7 +7238,7 @@ async function drawHeatCard() {
     ctx.strokeStyle = 'rgba(242,240,233,0.2)'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
     ctx.strokeStyle = accent; ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, Math.PI); ctx.stroke();
     ctx.fillStyle = 'rgba(242,240,233,0.85)'; ctx.font = `700 34px ${zh}`;
-    spacedText(ctx, '學測倒數', cx + 52, cy + 12, 10);
+    ctx.font = `800 34px Manrope, ${zh}`; spacedText(ctx, 'STRIDE', cx + 52, cy + 12, 8);
     return new Promise(res => c.toBlob(b => res(b), 'image/png'));
 }
 async function openHeatShare() {
@@ -7404,6 +7472,13 @@ if (removedDupes) saveLocal();
 applyHome();
 applyCalView();   // v60：上次停在課表就打開課表
 // v61：點每日提醒打開網站時網址會帶 ?tab=…，直接切到那一頁
+(function openGoFromUrl() {   // v74 點通知打開網站：?go=feedback、?admin=reports
+    const g = location.search.match(/[?&]go=(feedback)\b/), a = location.search.match(/[?&]admin=([a-z]+)/);
+    if (!g && !a) return;
+    try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+    if (g) setTimeout(openFeedback, 800);
+    if (a) { const go = (n) => isAdmin ? openAdminScreen(a[1]) : n > 0 && setTimeout(() => go(n - 1), 700); setTimeout(() => go(12), 800); }
+})();
 (function openTabFromUrl() {
     const m = location.search.match(/[?&]tab=(tab-[a-z]+)/);
     if (!m) return;
@@ -7506,7 +7581,14 @@ async function initFirebase() {
         // 只有剛用「整頁跳轉」登入回來時才需要讀結果（平常打開不用多載一個登入用的網頁框）
         let redirected = false;
         try { redirected = sessionStorage.getItem('study_redirect') === '1'; sessionStorage.removeItem('study_redirect'); } catch (e) {}
-        if (redirected) { loginWarm = true; authM.getRedirectResult(auth).catch(err => { console.warn('跳轉登入結果：', err); toast('登入沒有完成，請再試一次'); }); }
+        if (redirected) {
+            loginWarm = true;
+            authM.getRedirectResult(auth).then(r => { if (r && r.operationType === 'link') toast('已登入 Google，訪客的紀錄都保留了'); }).catch(err => {
+                // 訪客用整頁跳轉登入 Google，但這個 Google 帳號已經有資料：合併
+                if (['auth/credential-already-in-use', 'auth/email-already-in-use'].includes(err?.code)) { const go = () => currentUser ? upgradeGuest(err) : setTimeout(go, 300); go(); return; }
+                console.warn('跳轉登入結果：', err); toast('登入沒有完成，請再試一次');
+            });
+        }
         authM.onAuthStateChanged(auth, onAuthChanged);
     } catch (e) {
         console.warn('Firebase 載入失敗（可能離線），只使用本機儲存：', e);
@@ -7583,6 +7665,12 @@ function onAuthChanged(user) {
                 next = normalize({});
             }
             earlySessions.length = 0;   // 已經補進這次的資料了；之後換帳號或重新登入不會再補一次
+            // v74 訪客登入已經有資料的 Google 帳號：訪客的紀錄合併進來（同一筆兩邊都有的，用訪客這邊剛改的）
+            if (guestCarry && guestCarry.uid !== user.uid) {
+                next = mergeState(normalize({}), guestCarry.state, next);
+                guestCarry = null; cloudDirty = true;
+                setTimeout(() => toast('已把訪客的紀錄合併到這個帳號'), 600);
+            }
         } else {
             next = cloudDirty ? mergeState(cloudBase, state, cloud) : cloneState(cloud);   // 別台改了：這台還沒送出的修改保留
         }
@@ -7606,10 +7694,54 @@ function onAuthChanged(user) {
     });
 }
 
+/* --- v74 訪客：不用 Google 先用（Firebase 匿名登入），之後登入 Google 時把紀錄帶過去 ---
+ * 這個 Google 帳號還沒用過：直接把訪客帳號「升級」成 Google 帳號（同一個帳號，資料原封不動）
+ * 這個 Google 帳號已經有資料：把訪客的紀錄合併進去，訪客帳號刪掉 */
+let guestCarry = null;   // { uid, state }：要合併到正式帳號的訪客資料
+$('guestBtn').addEventListener('click', async () => {
+    if (!fb || currentUser) return;
+    const b = $('guestBtn'); b.disabled = true; b.textContent = '準備中…';
+    try { await fb.authM.signInAnonymously(fb.auth); closeModal('accountModal'); toast('已用訪客身分開始，之後登入 Google 紀錄會一起帶過去'); }
+    catch (err) { toast(err?.code === 'auth/operation-not-allowed' ? '訪客登入還沒開放' : '沒有成功，請檢查網路後再試'); if (err?.code !== 'auth/network-request-failed') reportErr(err, 'guest'); }
+    b.disabled = false; b.textContent = '先用訪客身分開始';
+});
+async function guestToExisting(cred) {
+    const { authM, auth, fs, db } = fb, anon = currentUser;
+    if (!cred || !anon) { toast('沒有成功，請再試一次'); return; }
+    if (!confirm('這個 Google 帳號之前用過，已經有資料了。\n要把訪客的紀錄合併進這個帳號嗎？（訪客加入的讀書房間要重新加入）')) return;
+    if (cloudDirty) await flushCloud();
+    guestCarry = { uid: anon.uid, state: cloneState(state) };
+    try { await fs.deleteDoc(fs.doc(db, 'users', anon.uid)); } catch (e) {}
+    try { await pushRemove(); } catch (e) {}
+    await authM.signInWithCredential(auth, cred);
+    anon.delete().catch(() => {});   // 訪客帳號用不到了
+    closeModal('accountModal');
+}
+async function upgradeGuest(redirectErr) {
+    const { authM, provider } = fb;
+    const done = async () => {
+        await currentUser.reload().catch(() => {});
+        renderAccount(); loadRoomProfile(currentUser); closeModal('accountModal');
+        toast('已登入 Google，訪客的紀錄都保留了');
+    };
+    const fail = async (err) => {
+        if (['auth/credential-already-in-use', 'auth/email-already-in-use'].includes(err?.code)) return guestToExisting(authM.GoogleAuthProvider.credentialFromError(err));
+        if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'].includes(err?.code)) {
+            try { sessionStorage.setItem('study_redirect', '1'); } catch (e) {}
+            return authM.linkWithRedirect(currentUser, provider);
+        }
+        if (err?.code !== 'auth/popup-closed-by-user') { toast('登入沒有完成，請再試一次'); reportErr(err, 'upgradeGuest'); }
+    };
+    if (redirectErr) return fail(redirectErr);
+    try { await authM.linkWithPopup(currentUser, provider); await done(); }
+    catch (err) { await fail(err); }
+}
+
 let loginBusy = false;
 $('loginBtn').addEventListener('click', async () => {
     if (!fb) { toast('目前無法連線，請連上網路後再試'); return; }
     const { auth, provider, authM } = fb;
+    if (currentUser?.isAnonymous) { upgradeGuest(); return; }
     if (currentUser) {
         if (confirm('確定要登出嗎？')) {
             if (cloudDirty) await flushCloud();   // 還沒送上雲端的修改先送出去
@@ -7671,7 +7803,7 @@ async function deleteAccount() {
     const btn = $('delGo');
     // Google 規定：刪除帳號前要「剛登入過」。太久以前登入的話，先請他再登入一次
     const last = Date.parse(user.metadata?.lastSignInTime || '') || 0;
-    if (!last || Date.now() - last > 4 * 60000) {
+    if (!user.isAnonymous && (!last || Date.now() - last > 4 * 60000)) {
         delSay('請在跳出的視窗再登入一次，確認是本人…');
         try { await authM.reauthenticateWithPopup(user, provider); }
         catch (err) {

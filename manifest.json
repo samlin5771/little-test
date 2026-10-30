@@ -1,7 +1,7 @@
 {
   "id": "./index.html",
-  "name": "學測倒數 & 讀書計畫",
-  "short_name": "學測倒數",
+  "name": "Stride：學測倒數 & 讀書計畫",
+  "short_name": "Stride",
   "description": "倒數計時、每週進度、讀書計時與統計、行事曆與待辦事項",
   "start_url": "./index.html",
   "scope": "./",

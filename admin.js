@@ -1,7 +1,7 @@
 /* =====================================================
  * v73 管理者畫面（只有管理者帳號打得開；一般人不會下載這個檔案，網站速度不受影響）
  *   資料都透過伺服器（Cloud Functions）拿：伺服器會先確認是管理者，才會回傳
- *   分頁：總覽、檢舉、公告、房間、錯誤
+ *   分頁：總覽、檢舉、回饋（v74）、公告、房間、錯誤
  * ===================================================== */
 const ICON = {
     back: '<path d="M15 6l-6 6 6 6"/>',
@@ -22,16 +22,20 @@ const ICON = {
     photo: '<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',
     close: '<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
     book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/>',
-    shield: '<path d="M12 3l7.5 3v5.5c0 4.5-3.2 8.2-7.5 9.5-4.3-1.3-7.5-5-7.5-9.5V6z"/>'
+    shield: '<path d="M12 3l7.5 3v5.5c0 4.5-3.2 8.2-7.5 9.5-4.3-1.3-7.5-5-7.5-9.5V6z"/>',
+    fb: '<path d="M4 5h16v11H9l-5 4z"/><path d="M8.5 9.5h7M8.5 12.5h4"/>',
+    reply: '<path d="M9 7L4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 6 6v1"/>'
 };
 const svg = (k, w = 1.8) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
-const TABS = [['home', '總覽'], ['reports', '檢舉'], ['ann', '公告'], ['rooms', '房間'], ['errors', '錯誤'], ['log', '紀錄']];
+const TABS = [['home', '總覽'], ['reports', '檢舉'], ['feedback', '回饋'], ['ann', '公告'], ['rooms', '房間'], ['errors', '錯誤'], ['log', '紀錄']];
+const FB_K = { bug: ['問題回報', 'r'], idea: ['功能建議', 'ok'], other: ['其他', 'g'] };
 const REASON_C = { '騷擾或霸凌': 'r', '色情或不雅內容': 'r', '仇恨或歧視': 'r', '暴力或威脅': 'r', '詐騙或廣告': 'y', '其他不當內容': 'g' };
 const ANN_KIND = { info: ['一般', '新功能、提醒'], warn: ['重要', '一定要看到的事'], fix: ['維修', '暫停服務、更新'] };
 
 let C = null;              // 主程式給的工具：$、esc、toast、call（呼叫伺服器）
-let tab = 'home', repView = 'open', errView = 'open', logView = 'log', roomQ = '', liveT = 0;
-let D = { home: null, reports: null, ann: null, rooms: null, errors: null, log: null };
+let tab = 'home', repView = 'open', errView = 'open', logView = 'log', fbView = 'open', roomQ = '', liveT = 0, fbReplying = '';
+let D = { home: null, reports: null, feedback: null, ann: null, rooms: null, errors: null, log: null };
+const fbDraft = {};
 let loading = {};
 
 function css() {
@@ -90,6 +94,15 @@ function css() {
 .adm-who .warn { color: var(--exam-text); font-weight: 600; }
 .adm-quote { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--modal-bg); border: 1px solid var(--line); font-size: 14.5px; line-height: 1.6; word-break: break-word; }
 .adm-quote.ph { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.adm-tabs b.g { background: var(--accent); color: var(--on-accent, #1a1408); }
+.adm-fb .adm-quote { white-space: pre-wrap; margin-bottom: 6px; }
+.adm-fb-meta { display: block; margin: 0 2px 10px; color: var(--faint); font: 12px/1.6 'Noto Sans TC', sans-serif; word-break: break-word; }
+.adm-fb-meta a { color: var(--accent-text); }
+.adm-fb-reply { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); font: 14px/1.6 'Noto Sans TC', sans-serif; white-space: pre-wrap; word-break: break-word; }
+.adm-fb-reply b { display: block; font-size: 12px; color: var(--accent-text); margin-bottom: 2px; }
+.adm-fb-reply small { display: block; margin-top: 4px; color: var(--muted); font-size: 11.5px; }
+.adm-fb-form { padding: 0; }
+.adm-fb-form textarea { width: 100%; min-height: 90px; resize: vertical; }
 .adm-quote.ph svg { width: 18px; height: 18px; }
 .adm-acts { display: flex; gap: 8px; flex-wrap: wrap; }
 .adm-acts .btn { min-height: 36px; padding: 0 14px; font-size: 13.5px; gap: 6px; display: inline-flex; align-items: center; }
@@ -202,14 +215,14 @@ const av = (u) => `<span class="adm-av" style="background:${u.color || AV[(u.nam
 function renderTabs() {
     const n = D.home?.pendingReports || 0;
     document.getElementById('admTabs').innerHTML = TABS.map(([k, t]) =>
-        `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" data-atab="${k}">${t}${k === 'reports' && n ? `<b>${n}</b>` : ''}</button>`).join('');
+        `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" data-atab="${k}">${t}${k === 'reports' && n ? `<b>${n}</b>` : ''}${k === 'feedback' && D.home?.pendingFeedback ? `<b class="g">${D.home.pendingFeedback}</b>` : ''}</button>`).join('');
 }
 function render() {
     renderTabs();
     const m = document.getElementById('admMain');
     const d = D[tab];
     if (!d) { m.innerHTML = '<div class="adm-sec"><div class="adm-skel"></div></div><div class="adm-sec"><div class="adm-skel"></div></div>'; return; }
-    m.innerHTML = ({ home: vHome, reports: vReports, ann: vAnn, rooms: vRooms, errors: vErrors, log: vLog })[tab](d);
+    m.innerHTML = ({ home: vHome, reports: vReports, feedback: vFeedback, ann: vAnn, rooms: vRooms, errors: vErrors, log: vLog })[tab](d);
 }
 
 function vHome(d) {
@@ -219,7 +232,7 @@ function vHome(d) {
         <div class="adm-live"><span class="dot"></span><div class="tx"><b id="admOnline">${d.online ? d.online.total : '—'}<small>人在線上</small></b><span>網站或 App 現在開著的人</span></div>
             <div class="side">登入 <b>${d.online ? d.online.users : '—'}</b>　未登入 <b>${d.online ? d.online.guests : '—'}</b><br>正在讀書 <b>${d.studying ?? '—'}</b> 人</div></div></section>
         <section class="adm-sec"><h3>使用狀況<small>${md(d.at)} 更新</small></h3><div class="adm-stats">
-            ${st('user', d.users, '', '帳號總數', d.newUsers7 ? ` · <em>本週 +${d.newUsers7}</em>` : '')}
+            ${st('user', d.users, '', '帳號總數', (d.newUsers7 ? ` · <em>本週 +${d.newUsers7}</em>` : '') + (d.guestAccounts ? ` · 另有訪客 ${d.guestAccounts}` : ''))}
             ${st('users', d.active1, '人', '今天有在用')}
             ${st('users', d.active7, '人', '這 7 天有在用')}
             ${st('room', d.rooms, '間', '讀書房間')}
@@ -232,6 +245,7 @@ function vHome(d) {
         </div></section>
         <section class="adm-sec"><h3>要處理的事</h3><div class="adm-card">
             <button class="adm-link" data-atab="reports"><span class="ic ${d.pendingReports ? 'hot' : ''}">${svg('flag')}</span><span class="tx">檢舉${d.pendingReports ? ` <b style="color:var(--exam-text)">${d.pendingReports} 則待處理</b>` : '：沒有待處理的'}<small>${d.pendingReports ? '最新：' + C.esc(d.lastReport || '') : '有人檢舉時會推播通知你'}</small></span>${svg('chev', 2)}</button>
+            <button class="adm-link" data-atab="feedback"><span class="ic">${svg('fb')}</span><span class="tx">意見回饋${d.pendingFeedback ? ` <b style="color:var(--accent-text)">${d.pendingFeedback} 則還沒看</b>` : '：都看過了'}<small>大家在個人設定「意見回饋」寫給你的</small></span>${svg('chev', 2)}</button>
             <button class="adm-link" data-atab="ann"><span class="ic">${svg('mega')}</span><span class="tx">公告<small>${d.announce ? '顯示中：' + C.esc(d.announce.text) : '目前沒有公告'}</small></span>${svg('chev', 2)}</button>
             <button class="adm-link" data-atab="errors"><span class="ic ${d.errorsToday > 20 ? 'hot' : ''}">${svg('bug')}</span><span class="tx">錯誤紀錄<small>今天 ${d.errorsToday} 筆${d.topError ? ' · 最多的是 ' + C.esc(d.topError) : ''}</small></span>${svg('chev', 2)}</button>
         </div></section>
@@ -256,6 +270,26 @@ function vReports(d) {
             </div>` : `<div class="adm-done"><span class="adm-tag ${r.status === 'ignored' ? 'g' : 'ok'}">${DONE[r.status]}</span>　${md(r.doneAt)}</div>`}
         </div>`).join('')}</div>
         <p class="adm-foot">為了保護檢舉的人，這裡不會顯示是誰檢舉的。同一則訊息被 3 個人檢舉時，會先自動隱藏，等你處理。</p>`;
+}
+
+function vFeedback(d) {
+    const open = d.list.filter(f => f.status === 'open').length;
+    const list = d.list.filter(f => fbView === 'all' || (fbView === 'open' ? f.status === 'open' : f.status === 'done'));
+    const seg = `<div class="adm-seg" role="group"><button class="${fbView === 'open' ? 'on' : ''}" data-fv="open">還沒看（${open}）</button><button class="${fbView === 'done' ? 'on' : ''}" data-fv="done">處理好的</button></div>`;
+    if (!list.length) return seg + `<div class="adm-card"><div class="adm-empty">${fbView === 'open' ? svg('check', 2) + '都看過了' : '還沒有處理好的回饋'}</div></div>`;
+    const MODE = { web: '網站', app: '主畫面', ios: 'iPhone App', android: 'Android App' };
+    return seg + `<div class="adm-card">${list.map(f => `<div class="adm-rep adm-fb">
+            <div class="adm-rep-top"><span class="adm-tag ${FB_K[f.kind][1]}">${FB_K[f.kind][0]}</span><span>${f.name ? C.esc(f.name) : f.login ? '已登入的人' : '沒登入的人'}</span><span class="t">${ago(f.at)}</span></div>
+            <div class="adm-quote">${C.esc(f.text)}</div>
+            <small class="adm-fb-meta">${MODE[f.mode] || C.esc(f.mode)} ${C.esc(f.ver)} · ${C.esc(f.dev)}${f.contact ? ` · 聯絡：<a href="mailto:${C.esc(f.contact)}">${C.esc(f.contact)}</a>` : ''}</small>
+            ${f.reply ? `<div class="adm-fb-reply"><b>你的回覆</b>${C.esc(f.reply)}<small>${md(f.replyAt)}</small></div>` : ''}
+            ${fbReplying === f.id ? `<div class="adm-form adm-fb-form"><textarea class="adm-in" id="admFbReply" maxlength="500" placeholder="回覆會推播給他，也會出現在他的「意見回饋」裡">${C.esc(fbDraft[f.id] || '')}</textarea>
+                <div class="adm-acts"><button class="btn" data-fb="cancel" data-id="${f.id}">取消</button><button class="btn btn-accent" data-fb="send" data-id="${f.id}">${svg('reply')}送出回覆</button></div></div>`
+            : `<div class="adm-acts">${f.login ? `<button class="btn" data-fb="reply" data-id="${f.id}">${svg('reply')}${f.reply ? '再回覆一次' : '回覆'}</button>` : ''}
+                ${f.status === 'open' ? `<button class="btn" data-fb="done" data-id="${f.id}">${svg('check')}看過了</button>` : `<button class="btn" data-fb="open" data-id="${f.id}">移回還沒看</button>`}
+                <button class="btn danger" data-fb="delete" data-id="${f.id}">${svg('trash')}刪除</button></div>`}
+        </div>`).join('')}</div>
+        <p class="adm-foot">有登入的人可以直接回覆，他會收到通知；沒登入的人只能看他有沒有留 Email。處理好的回饋 180 天後會自動清掉。</p>`;
 }
 
 let annDraft = { text: '', kind: 'info', dur: 24, go: '', label: '' };
@@ -315,7 +349,7 @@ function vErrors(d) {
 }
 
 const LOG_TXT = { deleted: ['trash', 'r', '刪除了 {name} 的訊息'], muted: ['mute', 'r', '刪除 {name} 的訊息並禁言 7 天'], ignored: ['check', '', '看過 {name} 被檢舉的訊息：沒問題'],
-    unmute: ['mute', '', '解除了 {name} 的禁言'], roomClose: ['close', 'r', '關閉了房間「{name}」'], annSet: ['mega', '', '發布公告'], annOff: ['mega', '', '收起公告'], errFix: ['bug', '', '把一個錯誤標記成已修好'] };
+    unmute: ['mute', '', '解除了 {name} 的禁言'], fbReply: ['fb', '', '回覆了 {name} 的意見'], fbDone: ['fb', '', '看過一則意見回饋'], fbOpen: ['fb', '', '把一則意見回饋移回還沒看'], fbDelete: ['trash', 'r', '刪除了一則意見回饋'], roomClose: ['close', 'r', '關閉了房間「{name}」'], annSet: ['mega', '', '發布公告'], annOff: ['mega', '', '收起公告'], errFix: ['bug', '', '把一個錯誤標記成已修好'] };
 function vLog(d) {
     const seg = `<div class="adm-seg" role="group"><button class="${logView === 'log' ? 'on' : ''}" data-lv="log">處理紀錄</button><button class="${logView === 'mute' ? 'on' : ''}" data-lv="mute">禁言中（${d.mutes.length}）</button></div>`;
     if (logView === 'mute') {
@@ -334,7 +368,7 @@ async function load(k, force) {
     if (loading[k] || (D[k] && !force)) return;
     loading[k] = true;
     try {
-        const name = { home: 'adminOverview', reports: 'adminReports', ann: 'adminAnnounce', rooms: 'adminRooms', errors: 'adminErrors', log: 'adminLog' }[k];
+        const name = { home: 'adminOverview', reports: 'adminReports', feedback: 'adminFeedback', ann: 'adminAnnounce', rooms: 'adminRooms', errors: 'adminErrors', log: 'adminLog' }[k];
         D[k] = await C.call(name, { op: 'get' });
     } catch (e) {
         C.toast(e?.code === 'functions/permission-denied' ? '這個帳號不是管理者' : `讀取失敗（${String(e?.code || '').replace('functions/', '')} ${String(e?.message || '').slice(0, 60)}）`);
@@ -373,6 +407,24 @@ async function onClick(e) {
     if (a.adm === 'refresh') { b.classList.add('spin'); await Promise.all([load('home', true), tab !== 'home' && load(tab, true)]); b.classList.remove('spin'); return C.toast('已更新'); }
     if (a.atab) return TABS.some(t => t[0] === a.atab) && go(a.atab);
     if (a.rv) { repView = a.rv; return render(); }
+    if (a.fv) { fbView = a.fv; return render(); }
+    if (a.fb) {
+        const f = D.feedback.list.find(x => x.id === a.id); if (!f) return;
+        if (a.fb === 'reply') { fbReplying = f.id; render(); const t = document.getElementById('admFbReply'); t && t.focus(); return; }
+        if (a.fb === 'cancel') { fbReplying = ''; return render(); }
+        if (a.fb === 'delete' && !(await ask('刪除這則回饋？', '刪掉後就看不到了，沒辦法復原。', '刪除'))) return;
+        const reply = a.fb === 'send' ? String(fbDraft[f.id] || '').trim() : '';
+        if (a.fb === 'send' && !reply) return C.toast('先寫回覆的內容');
+        try {
+            const r = await C.call('adminFeedback', { op: 'act', id: f.id, act: a.fb === 'send' ? 'reply' : a.fb, reply });
+            if (a.fb === 'delete') D.feedback.list = D.feedback.list.filter(x => x !== f);
+            else if (a.fb === 'send') { Object.assign(f, { reply, replyAt: Date.now(), status: 'done', doneAt: Date.now() }); fbReplying = ''; delete fbDraft[f.id]; }
+            else Object.assign(f, { status: a.fb === 'done' ? 'done' : 'open' });
+            D.home && (D.home.pendingFeedback = D.feedback.list.filter(x => x.status === 'open').length);
+            render(); C.toast({ delete: '已刪除', send: r && r.pushed ? '已回覆，他會收到通知' : '已回覆（他目前沒有開通知，下次打開會看到）', done: '已標記看過', open: '已移回還沒看' }[a.fb]);
+        } catch (err) { C.toast('沒有成功，請再試一次'); }
+        return;
+    }
     if (a.ev) { errView = a.ev; return render(); }
     if (a.rep) {
         const r = D.reports.list.find(x => x.id === a.id);
@@ -432,6 +484,7 @@ function onInput(e) {
         const send = document.querySelector('[data-ann="send"]'); if (send) send.disabled = !annDraft.text.trim();
     }
     if (e.target.id === 'admAnnBtn') { annDraft.label = e.target.value; document.getElementById('admAnnPrev').innerHTML = annBar(annDraft); }
+    if (e.target.id === 'admFbReply') fbDraft[fbReplying] = e.target.value;
     if (e.target.id === 'admRoomQ') {
         roomQ = e.target.value; const pos = e.target.selectionStart;
         render(); const i = document.getElementById('admRoomQ'); i.focus(); i.setSelectionRange(pos, pos);

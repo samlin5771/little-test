@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
-    <title>學測倒數 & 讀書計畫</title>
+    <title>Stride｜學測倒數 & 讀書計畫</title>
 
     <!-- ===== PWA 設定 ===== -->
     <link rel="manifest" href="manifest.json">
@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="學測倒數">
+    <meta name="apple-mobile-web-app-title" content="Stride">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
     <!-- iPhone 從主畫面打開時的啟動畫面（黑底，不再閃白） -->
@@ -29,10 +29,10 @@
     <link rel="apple-touch-startup-image" media="screen and (device-width: 360px) and (device-height: 780px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1080x2340.png">
 
     <!-- 分享連結預覽（LINE、IG、Messenger、Discord） -->
-    <meta name="description" content="倒數學測和模考、安排每週進度、記錄讀書時間，手機電腦同步。">
+    <meta name="description" content="倒數學測和模考、安排每週進度、記錄讀書時間，和朋友一起讀書。">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="學測倒數 & 讀書計畫">
-    <meta property="og:description" content="倒數學測和模考、安排每週進度、記錄讀書時間，手機電腦同步。">
+    <meta property="og:title" content="Stride｜學測倒數 & 讀書計畫">
+    <meta property="og:description" content="倒數學測和模考、安排每週進度、記錄讀書時間，和朋友一起讀書。">
     <meta property="og:url" content="https://samlin5771.github.io/little-test/">
     <meta property="og:image" content="https://samlin5771.github.io/little-test/og-image.png">
     <meta property="og:image:width" content="1200">
@@ -75,7 +75,7 @@
     <!-- App 開啟畫面（只在加到主畫面的 App 出現） -->
     <div id="splash" aria-hidden="true">
         <svg viewBox="0 0 150 150" width="76" height="76"><circle cx="75" cy="75" r="56" fill="none" stroke="rgba(242,240,233,0.12)" stroke-width="12"/><circle cx="75" cy="75" r="56" fill="none" style="stroke:var(--accent)" stroke-width="12" stroke-linecap="round" stroke-dasharray="351.9" stroke-dashoffset="88" transform="rotate(-90 75 75)"/><circle cx="75" cy="75" r="9" style="fill:var(--accent)"/></svg>
-        <span>學測倒數</span>
+        <span>STRIDE</span>
     </div>
 
     <!-- 頂部列 -->
@@ -253,8 +253,10 @@
                     </button>
                 </div>
             </div>
+            <div class="cal-panel">
             <div class="cal-weekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span class="we">六</span><span class="we">日</span></div>
             <div class="cal-grid" id="calGrid"></div>
+            </div>
             <div class="legend">
                 <span><i></i>行程</span>
                 <span><i class="imp-ring"></i>重要</span>
@@ -553,6 +555,10 @@
                     <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/><path d="M9 8h7M9 12h5"/></svg></span>
                     <span class="acct-label">網站導覽</span><span class="grow"></span><span class="acct-value">功能介紹與小技巧</span><svg class="acct-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
                 </button>
+                <button class="acct-row" id="fbRow">
+                    <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8.5 9.5h7M8.5 12.5h4"/></svg></span>
+                    <span class="acct-label">意見回饋</span><span class="grow"></span><span class="acct-value" id="fbValue">問題、建議</span><svg class="acct-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+                </button>
             </div>
             <div class="acct-group">
                 <button class="acct-row" id="installRow">
@@ -565,6 +571,7 @@
                 </a>
             </div>
             <button class="btn btn-wide acct-login" id="loginBtn">使用 Google 登入</button>
+            <button class="btn btn-wide acct-guest" id="guestBtn" type="button" hidden>先用訪客身分開始</button>
             <button class="acct-del" id="delAcctBtn" type="button" hidden>刪除帳號與資料</button>
             <p class="acct-ver" id="appVersion"></p>
         </div>
@@ -632,6 +639,23 @@
     </div>
 
     <!-- v55：刪除帳號 -->
+    <!-- v74 意見回饋：寫給開發者，管理頁看得到；登入的話回覆會出現在這裡並推播 -->
+    <div class="modal" id="fbModal" role="dialog" aria-modal="true" aria-labelledby="fbTitle">
+        <div class="sheet fb-sheet">
+            <h2 id="fbTitle">意見回饋</h2>
+            <p class="fb-sub">遇到問題、想要什麼功能，都可以直接告訴開發者。</p>
+            <div class="seg fb-kind" role="radiogroup" aria-label="類型">
+                <button data-fbk="bug" role="radio">問題回報</button><button data-fbk="idea" role="radio">功能建議</button><button data-fbk="other" role="radio">其他</button>
+            </div>
+            <textarea class="field fb-text" id="fbText" maxlength="1000" rows="5" placeholder="例如：在 iPad 上打開課表時，格子會被切掉"></textarea>
+            <div class="fb-count"><span id="fbN">0</span> / 1000</div>
+            <input class="field fb-contact" id="fbContact" maxlength="100" placeholder="Email（想收到回覆再填）" autocomplete="email" inputmode="email">
+            <p class="fb-note" id="fbNote">會一起送出網站版本和裝置類型（例如 iPhone、Chrome），方便找出問題；不會送出你的讀書資料。</p>
+            <div class="sheet-btns"><button class="btn" data-close>取消</button><span class="spacer"></span><button class="btn btn-accent" id="fbSend" disabled>送出</button></div>
+            <div class="fb-mine" id="fbMine" hidden></div>
+        </div>
+    </div>
+
     <div class="modal" id="delModal" role="dialog" aria-modal="true" aria-labelledby="delTitle">
         <div class="sheet del-sheet">
             <span class="del-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></span>
@@ -905,17 +929,16 @@
         <div class="sheet tour-card wn-card">
             <p class="tour-kicker">版本更新</p>
             <h2 id="wnTitle">這次新增了什麼</h2>
-            <p class="tour-sub">背景可以用自己的照片，天空會跟著天氣變，聊天室也更安全了</p>
+            <p class="tour-sub">可以直接跟開發者說話，不登入也能先用，背景再花也看得清楚</p>
             <ul class="tour-list">
-                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.4"/></svg></span><div><b>用自己的照片當背景</b><span>選一張喜歡的照片，可以調模糊和淡化，字一樣看得清楚；登入的話換裝置也看得到</span></div></li>
-                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17a4 4 0 1 1 1-7.9A5 5 0 0 1 18 10a3.5 3.5 0 0 1-1 7z"/><path d="M9 20l-1 2M13 20l-1 2M17 20l-1 2"/></svg></span><div><b>會變的天空</b><span>新背景：跟著時間變成清晨、白天、夕陽和星空，下雨時會下雨，月亮照真實月相</span></div></li>
-                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0z"/><path d="M8 20.5h8"/><path d="M14 8.5l5-5"/><path d="M11 8.5l5.5-5.5"/></svg></span><div><b>今天吃什麼？</b><span>首頁的吃飯轉盤，選項可以自己改，還能跳過最近吃過的</span></div></li>
-                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4h11l-1.5 4L16 12H5"/></svg></span><div><b>聊天室可以檢舉和封鎖</b><span>長按別人的訊息就能檢舉或封鎖，不舒服的訊息不用忍</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8.5 9.5h7M8.5 12.5h4"/></svg></span><div><b>意見回饋</b><span>遇到問題或想要新功能，在個人設定寫給開發者；登入的話，回覆會通知你</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.5 4-6.5 8-6.5s7 2 8 6.5"/></svg></span><div><b>訪客身分</b><span>不想用 Google 也能先用，紀錄一樣存到雲端；之後登入，紀錄會一起帶過去</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><div><b>毛玻璃月曆和課表</b><span>換了照片、天空背景，月曆的數字和課表也看得清楚</span></div></li>
             </ul>
-            <p class="tour-note">背景在右上角<b>頭像 → 背景</b>裡換。</p>
+            <p class="tour-note">意見回饋在右上角<b>頭像 → 意見回饋</b>。</p>
             <div class="sheet-btns">
                 <button class="btn" data-close>知道了</button>
-                <button class="btn btn-accent" id="wnTry" style="flex:1">去換背景</button>
+                <button class="btn btn-accent" id="wnTry" style="flex:1">寫意見回饋</button>
             </div>
         </div>
     </div>
@@ -923,8 +946,8 @@
     <div class="modal" id="tourModal" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
         <div class="sheet tour-card">
             <p class="tour-kicker">歡迎使用</p>
-            <h2 id="tourTitle">學測倒數 &amp; 讀書計畫</h2>
-            <p class="tour-sub">一個地方搞定倒數、計畫、計時和讀書夥伴</p>
+            <h2 id="tourTitle">Stride</h2>
+            <p class="tour-sub">學測倒數 &amp; 讀書計畫：一個地方搞定倒數、計畫、計時和讀書夥伴</p>
             <ul class="tour-list"><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg></span><div><b>倒數計時</b><span>學測、模考倒數，今天讀了多久一眼看到</span></div></li><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg></span><div><b>每週進度＋學測範圍</b><span>排每週進度、勾學測單元<span class="ai-only">，AI 幫你排下週</span></span></div></li><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 9 9h-9z"/></svg></span><div><b>讀書計時與統計</b><span>番茄鐘專注，自動記錄、畫成圖表</span></div></li><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.5.2 4 1.9 4.5 4.9"/></svg></span><div><b>讀書房間與聊天室</b><span>和朋友一起讀，看大家在讀什麼</span></div></li><li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><div><b>行事曆、課表與待辦</b><span>考試、行程、課表和待辦事項都在這裡</span></div></li></ul>
             <p class="tour-note">完整的圖文介紹在右上角<b>頭像 → 網站導覽</b>，隨時可以再看</p>
             <div class="sheet-btns">
@@ -955,7 +978,7 @@
         <div class="guide-body" id="guideBody">
             <div class="guide-hero">
                 <p class="tour-kicker">完整介紹</p>
-                <h1>學測倒數 &amp; 讀書計畫</h1>
+                <h1>Stride</h1>
                 <p>從倒數、排計畫、專注計時到和朋友一起讀書，這裡一次看懂每個功能怎麼用。</p>
             </div>
             <nav class="guide-toc" aria-label="導覽目錄"><a href="#g-cd">倒數</a><a href="#g-wk">每週進度</a><a href="#g-syl">學測範圍</a><a href="#g-tm">計時</a><a href="#g-st">統計</a><a href="#g-rm">讀書房間</a><a href="#g-ch">聊天室</a><a href="#g-cal">行事曆・待辦</a><a href="#g-tt">課表</a><a href="#g-me">個人設定</a><a href="#g-nf">通知</a><a href="#g-key">電腦快捷鍵</a></nav>
@@ -1095,7 +1118,7 @@
   <div class="g-todo"><span class="swipe ok">✓ 完成</span><span class="item">交數學作業<em class="g-td-date">明天</em></span></div>
   <div class="g-todo"><span class="item">背英文單字</span><span class="swipe del">刪除</span></div>
 </div></figure>
-                <ul class="g-points"><li>行事曆左右滑換月份；點日期再按 ＋ 新增行程，可以選<b>單日或連續多天</b>；標成<b>重要</b>的日期會被圈起來。</li><li>考試日會用紅色標出；下面列出即將到來的行程和剩幾天。</li><li><b>週末和國定假日</b>的日期是紅字，假日底下會寫名稱（例如國慶日、春節、補假）；週末要補班的日子會標<b>補班</b>。假日照人事行政總處公告的行事曆，每年自動更新。</li><li>最上面可以切換<b>行事曆／課表</b>，課表的用法在下一段。</li><li>待辦清單：輸入後按新增；<b>往右滑完成、往左滑刪除</b>，不小心刪掉可以按「復原」。</li><li>新增待辦時可以按輸入框旁的<b>日曆圖示選日期</b>（不選也可以）。有日期的待辦會排在前面，同時出現在<b>行事曆</b>那天（綠色小點），當天和逾期的也會列在倒數頁的<b>「今天」</b>，在哪裡打勾都可以。</li><li>選了日期之後，下面還可以<b>加上時間</b>（例如 22:00 交作業）。有時間的待辦可以<b>提前提醒</b>你，要提前多久在通知設定裡改。</li></ul>
+                <ul class="g-points"><li>行事曆左右滑換月份；點日期再按 ＋ 新增行程，可以選<b>單日或連續多天</b>；標成<b>重要</b>的日期會被圈起來。</li><li>考試日會用紅色標出；下面列出即將到來的行程和剩幾天。</li><li><b>週末和國定假日</b>的日期是紅字，假日底下會寫名稱（例如國慶日、春節、補假）；週末要補班的日子會標<b>補班</b>。假日照人事行政總處公告的行事曆，每年自動更新。</li><li>最上面可以切換<b>行事曆／課表</b>，課表的用法在下一段。換了照片、天空這類背景時，月曆和課表會墊一層毛玻璃，數字和框線一樣看得清楚。</li><li>待辦清單：輸入後按新增；<b>往右滑完成、往左滑刪除</b>，不小心刪掉可以按「復原」。</li><li>新增待辦時可以按輸入框旁的<b>日曆圖示選日期</b>（不選也可以）。有日期的待辦會排在前面，同時出現在<b>行事曆</b>那天（綠色小點），當天和逾期的也會列在倒數頁的<b>「今天」</b>，在哪裡打勾都可以。</li><li>選了日期之後，下面還可以<b>加上時間</b>（例如 22:00 交作業）。有時間的待辦可以<b>提前提醒</b>你，要提前多久在通知設定裡改。</li></ul>
                 
             </section>
 
@@ -1127,7 +1150,7 @@
   <div class="g-acct-row">網站導覽<span>›</span></div>
   <div class="g-acct-row">新增到主畫面<span>›</span></div>
 </div></figure>
-                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。手機和電腦<b>同時使用</b>、或是沒網路時改的東西，連上網路後會一筆一筆合併，不會互相蓋掉。</li><li><b>沒有網路</b>時畫面下方會出現「離線中」的小提示，照樣可以計時、改進度；連上網路後會顯示「同步中」，同步好就自己收起來。</li><li>個人設定裡的<b>隱私權政策</b>，寫清楚收集了哪些資料、誰看得到、怎麼刪除。</li><li>不想用了可以按個人設定最下面的<b>刪除帳號與資料</b>：雲端資料、聊天訊息和照片都會永久刪除，並離開所有房間（要輸入「刪除」確認，Google 可能會請你再登入一次）。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 10 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡、天空、照片，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>天空</b>：跟著現在的時間變，清晨、白天、夕陽、晚上的星星和月亮；淺色是淡淡的天色、深色是夜空般的深色。月亮會照<b>真實的月相</b>（今天是上弦月還是滿月）。打開<b>跟著天氣變</b>的話，下雨時天空變灰、有雨滴，打雷會偶爾閃一下，陰天、起霧也會變灰；天氣看你選的<b>縣市</b>，也可以按「用目前位置」（只取大概的位置）。</li><li><b>照片</b>：選一張自己的照片當背景，可以調<b>模糊</b>、<b>淡化</b>，拖曳預覽移動位置；文字和卡片會自動保持看得清楚。選了以後背景下面會多「調整照片」「換一張」。登入的話照片會跟著帳號，換裝置也看得到（只有自己看得到）。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>通知</b>：個人設定裡只有一列「通知」，點進去是完整的通知設定頁（下一段有詳細說明）。</li><li><b>公告</b>：有重要的事（例如維修、新功能）時，畫面最上面會出現一條公告，有的會帶一個按鈕可以直接去看；按 × 關掉後這則就不會再出現。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
+                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。手機和電腦<b>同時使用</b>、或是沒網路時改的東西，連上網路後會一筆一筆合併，不會互相蓋掉。</li><li><b>沒有網路</b>時畫面下方會出現「離線中」的小提示，照樣可以計時、改進度；連上網路後會顯示「同步中」，同步好就自己收起來。</li><li>個人設定裡的<b>隱私權政策</b>，寫清楚收集了哪些資料、誰看得到、怎麼刪除。</li><li>不想用了可以按個人設定最下面的<b>刪除帳號與資料</b>：雲端資料、聊天訊息和照片都會永久刪除，並離開所有房間（要輸入「刪除」確認，Google 可能會請你再登入一次）。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 10 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡、天空、照片，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>天空</b>：跟著現在的時間變，清晨、白天、夕陽、晚上的星星和月亮；淺色是淡淡的天色、深色是夜空般的深色。月亮會照<b>真實的月相</b>（今天是上弦月還是滿月）。打開<b>跟著天氣變</b>的話，下雨時天空變灰、有雨滴，打雷會偶爾閃一下，陰天、起霧也會變灰；天氣看你選的<b>縣市</b>，也可以按「用目前位置」（只取大概的位置）。</li><li><b>照片</b>：選一張自己的照片當背景，可以調<b>模糊</b>、<b>淡化</b>，拖曳預覽移動位置；文字和卡片會自動保持看得清楚。選了以後背景下面會多「調整照片」「換一張」。登入的話照片會跟著帳號，換裝置也看得到（只有自己看得到）。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>通知</b>：個人設定裡只有一列「通知」，點進去是完整的通知設定頁（下一段有詳細說明）。</li><li><b>訪客身分</b>：不想用 Google 登入的話，可以按<b>先用訪客身分開始</b>，紀錄一樣會存到雲端。之後按「用 Google 登入（保留紀錄）」，紀錄會一起帶過去；如果那個 Google 帳號之前用過，會把兩邊的紀錄合併。訪客可以加入讀書房間、看聊天室，但要登入才能傳訊息、叫朋友讀書。</li><li><b>意見回饋</b>：遇到問題或想要新功能，在個人設定按<b>意見回饋</b>寫給開發者；登入的話，開發者回覆時會通知你，回覆也會出現在同一個地方。</li><li><b>公告</b>：有重要的事（例如維修、新功能）時，畫面最上面會出現一條公告，有的會帶一個按鈕可以直接去看；按 × 關掉後這則就不會再出現。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
                 
             </section>
 
@@ -1170,15 +1193,15 @@
     <div class="modal" id="installModal" data-locked role="dialog" aria-modal="true" aria-labelledby="installTitle">
         <div class="sheet install-card">
             <div class="install-head"><svg viewBox="0 0 150 150" width="56" height="56" aria-hidden="true" class="install-icon"><circle cx="75" cy="75" r="50" fill="none" stroke="rgba(242,240,233,.14)" stroke-width="12"/><circle cx="75" cy="75" r="50" fill="none" style="stroke:var(--accent)" stroke-width="12" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="80" transform="rotate(-90 75 75)"/><circle cx="75" cy="75" r="9" style="fill:var(--accent)"/></svg>
-                <h2 id="installTitle">把學測倒數加到主畫面</h2>
+                <h2 id="installTitle">把 Stride 加到主畫面</h2>
                 <p>像 App 一樣全螢幕開啟、打開更快</p>
             </div>
             <div class="seg two" role="tablist" aria-label="手機類型">
                 <button role="tab" data-os="ios">iPhone · iPad</button>
                 <button role="tab" data-os="android">Android</button>
             </div>
-            <ol class="install-steps" id="installIOS"><li><span class="st-n num">1</span><div><b>點「分享」按鈕</b><span>Safari 在畫面最下面；iPhone 的 Chrome 在網址列右邊</span></div><span class="st-ic"><svg viewBox="0 0 24 24" fill="none" stroke="#3B9BFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8"/></svg></span></li><li><span class="st-n num">2</span><div><b>往下滑，選「加入主畫面」</b><span>找不到的話，點最下面的「編輯動作」把它加進來</span></div><span class="st-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg></span></li><li><span class="st-n num">3</span><div><b>按右上角「新增」</b><span>桌面會出現學測倒數的圖示，之後從圖示打開</span></div><span class="st-ic"><span class="mini-app"></span></span></li></ol>
-            <ol class="install-steps" id="installAndroid" hidden><li><span class="st-n num">1</span><div><b>點右上角「⋮」選單</b><span>用 Chrome 開啟這個網頁</span></div><span class="st-ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></span></li><li><span class="st-n num">2</span><div><b>選「加到主畫面」或「安裝應用程式」</b><span>有些手機會直接跳出「安裝」提示，按它也可以</span></div><span class="st-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg></span></li><li><span class="st-n num">3</span><div><b>按「安裝」</b><span>桌面會出現學測倒數的圖示，之後從圖示打開</span></div><span class="st-ic"><span class="mini-app"></span></span></li></ol>
+            <ol class="install-steps" id="installIOS"><li><span class="st-n num">1</span><div><b>點「分享」按鈕</b><span>Safari 在畫面最下面；iPhone 的 Chrome 在網址列右邊</span></div><span class="st-ic"><svg viewBox="0 0 24 24" fill="none" stroke="#3B9BFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8"/></svg></span></li><li><span class="st-n num">2</span><div><b>往下滑，選「加入主畫面」</b><span>找不到的話，點最下面的「編輯動作」把它加進來</span></div><span class="st-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg></span></li><li><span class="st-n num">3</span><div><b>按右上角「新增」</b><span>桌面會出現 Stride 的圖示，之後從圖示打開</span></div><span class="st-ic"><span class="mini-app"></span></span></li></ol>
+            <ol class="install-steps" id="installAndroid" hidden><li><span class="st-n num">1</span><div><b>點右上角「⋮」選單</b><span>用 Chrome 開啟這個網頁</span></div><span class="st-ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></span></li><li><span class="st-n num">2</span><div><b>選「加到主畫面」或「安裝應用程式」</b><span>有些手機會直接跳出「安裝」提示，按它也可以</span></div><span class="st-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg></span></li><li><span class="st-n num">3</span><div><b>按「安裝」</b><span>桌面會出現 Stride 的圖示，之後從圖示打開</span></div><span class="st-ic"><span class="mini-app"></span></span></li></ol>
             <button class="btn btn-accent btn-wide" data-install-done>我知道了</button>
         </div>
     </div>
