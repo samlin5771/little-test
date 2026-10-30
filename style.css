@@ -3263,3 +3263,15 @@ html[data-theme="dark"]:not([data-bg="glow"]):not([data-bg="plain"]):not([data-b
 /* v75 新名字 Stride：英文用 Manrope */
 #tourTitle, .guide-hero h1 { font-family: Manrope, 'Noto Sans TC', sans-serif; font-weight: 800; letter-spacing: 0; }
 #splash span { font-family: Manrope, 'Noto Sans TC', sans-serif; font-weight: 800; }
+/* v75：換頁動畫只用位移，不再淡入（淡入時毛玻璃會先不透明、動畫結束才變模糊，看起來很卡）；
+   照片、天空這類背景整頁有很多毛玻璃，換頁就不做動畫，直接固定顯示 */
+@keyframes pageIn { from { transform: translateY(12px); } to { transform: none; } }
+html:not([data-bg="glow"]):not([data-bg="plain"]):not([data-bg="grid"]):not([data-bg="stars"]) .tab.active,
+html:not([data-bg="glow"]):not([data-bg="plain"]):not([data-bg="grid"]):not([data-bg="stars"]) .home-mod,
+html:not([data-bg="glow"]):not([data-bg="plain"]):not([data-bg="grid"]):not([data-bg="stars"]) .hero.swap { animation: none; }
+/* 待辦的輸入框和選日期按鈕也是毛玻璃 */
+#tab-todo .text-input, #tab-todo .todo-date-btn { background: rgba(var(--card-rgb), .42); -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4); border-color: rgba(255, 255, 255, .7); }
+html[data-theme="dark"] #tab-todo .text-input, html[data-theme="dark"] #tab-todo .todo-date-btn { border-color: rgba(255, 255, 255, .1); }
+html:not([data-bg="glow"]):not([data-bg="plain"]):not([data-bg="grid"]):not([data-bg="stars"]) #tab-todo .text-input,
+html:not([data-bg="glow"]):not([data-bg="plain"]):not([data-bg="grid"]):not([data-bg="stars"]) #tab-todo .todo-date-btn { background: rgba(var(--card-rgb), .62); }
+#tab-todo .text-input:focus { border-color: var(--accent); }

@@ -371,7 +371,9 @@ async function load(k, force) {
         const name = { home: 'adminOverview', reports: 'adminReports', feedback: 'adminFeedback', ann: 'adminAnnounce', rooms: 'adminRooms', errors: 'adminErrors', log: 'adminLog' }[k];
         D[k] = await C.call(name, { op: 'get' });
     } catch (e) {
-        C.toast(e?.code === 'functions/permission-denied' ? '這個帳號不是管理者' : `讀取失敗（${String(e?.code || '').replace('functions/', '')} ${String(e?.message || '').slice(0, 60)}）`);
+        // 伺服器還是舊版（不認得這個功能）：提醒要先部署
+        if (e?.code === 'functions/invalid-argument' && /unknown/.test(String(e?.message || ''))) C.toast('伺服器還沒更新：請先部署新版的推播伺服器（firebase deploy --only functions）');
+        else C.toast(e?.code === 'functions/permission-denied' ? '這個帳號不是管理者' : `讀取失敗（${String(e?.code || '').replace('functions/', '')} ${String(e?.message || '').slice(0, 60)}）`);
     }
     loading[k] = false;
     if (tab === k || k === 'home') render();
