@@ -158,6 +158,7 @@ function css() {
 .adm-log .tx { flex: 1; min-width: 0; font-size: 14px; line-height: 1.55; }
 .adm-log .tx small { display: block; font-size: 12px; color: var(--muted); }
 .adm-log .tx q { color: var(--muted); }
+.adm-warn { color: var(--exam-text) !important; word-break: break-word; }
 .adm-foot { margin: 6px 4px 0; font: 12px 'Noto Sans TC', sans-serif; color: var(--faint); line-height: 1.6; }
 .adm-skel { height: 90px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); animation: admPulse 1.2s ease-in-out infinite alternate; }
 @keyframes admPulse { from { opacity: .5; } to { opacity: 1; } }
@@ -211,17 +212,17 @@ function render() {
 
 function vHome(d) {
     const max = Math.max(1, ...d.dau.map(x => x.n));
-    const st = (ic, n, unit, label, extra = '') => `<div class="adm-stat"><span class="ic">${svg(ic)}</span><b>${n.toLocaleString()}${unit ? `<small>${unit}</small>` : ''}</b><span>${label}${extra}</span></div>`;
+    const st = (ic, n, unit, label, extra = '') => `<div class="adm-stat"><span class="ic">${svg(ic)}</span><b>${n == null ? '—' : n.toLocaleString()}${unit && n != null ? `<small>${unit}</small>` : ''}</b><span>${label}${n == null ? '' : extra}</span></div>`;
     return `<section class="adm-sec"><h3>現在<small>每 30 秒自動更新</small></h3>
-        <div class="adm-live"><span class="dot"></span><div class="tx"><b id="admOnline">${d.online.total}<small>人在線上</small></b><span>網站或 App 現在開著的人</span></div>
-            <div class="side">登入 <b>${d.online.users}</b>　未登入 <b>${d.online.guests}</b><br>正在讀書 <b>${d.studying}</b> 人</div></div></section>
+        <div class="adm-live"><span class="dot"></span><div class="tx"><b id="admOnline">${d.online ? d.online.total : '—'}<small>人在線上</small></b><span>網站或 App 現在開著的人</span></div>
+            <div class="side">登入 <b>${d.online ? d.online.users : '—'}</b>　未登入 <b>${d.online ? d.online.guests : '—'}</b><br>正在讀書 <b>${d.studying ?? '—'}</b> 人</div></div></section>
         <section class="adm-sec"><h3>使用狀況<small>${md(d.at)} 更新</small></h3><div class="adm-stats">
             ${st('user', d.users, '', '帳號總數', d.newUsers7 ? ` · <em>本週 +${d.newUsers7}</em>` : '')}
             ${st('users', d.active1, '人', '今天有在用')}
             ${st('users', d.active7, '人', '這 7 天有在用')}
             ${st('room', d.rooms, '間', '讀書房間')}
             ${st('chat', d.msgsToday, '則', '今天的聊天訊息')}
-            ${st('clock', Math.round(d.studyMinToday / 60), '小時', '房間成員今天一共讀了')}
+            ${st('clock', d.studyMinToday == null ? null : Math.round(d.studyMinToday / 60), '小時', '房間成員今天一共讀了')}
         </div></section>
         <section class="adm-sec"><h3>這 7 天每天有幾個人在用</h3><div class="adm-chart">
             <div class="adm-bars">${d.dau.map((x, i) => `<div class="adm-bar ${i === d.dau.length - 1 ? 'today' : ''}">${x.n}<i style="height:${Math.round(x.n / max * 82)}%"></i></div>`).join('')}</div>
@@ -232,6 +233,7 @@ function vHome(d) {
             <button class="adm-link" data-tab="ann"><span class="ic">${svg('mega')}</span><span class="tx">公告<small>${d.announce ? '顯示中：' + C.esc(d.announce.text) : '目前沒有公告'}</small></span>${svg('chev', 2)}</button>
             <button class="adm-link" data-tab="errors"><span class="ic ${d.errorsToday > 20 ? 'hot' : ''}">${svg('bug')}</span><span class="tx">錯誤紀錄<small>今天 ${d.errorsToday} 筆${d.topError ? ' · 最多的是 ' + C.esc(d.topError) : ''}</small></span>${svg('chev', 2)}</button>
         </div></section>
+        ${d.problems && d.problems.length ? `<p class="adm-foot adm-warn">有些資料讀不到（顯示「—」）：${d.problems.map(x => C.esc(x.part + '：' + x.msg)).join('；')}</p>` : ''}
         <p class="adm-foot">「在線上」是網站或 App 現在開在畫面上的人（3 分鐘內）；「有在用」是那天有打開並登入的帳號。這裡只有數字，看不到任何人的讀書資料。</p>`;
 }
 
@@ -333,7 +335,7 @@ async function load(k, force) {
         const name = { home: 'adminOverview', reports: 'adminReports', ann: 'adminAnnounce', rooms: 'adminRooms', errors: 'adminErrors', log: 'adminLog' }[k];
         D[k] = await C.call(name, { op: 'get' });
     } catch (e) {
-        C.toast(e?.code === 'functions/permission-denied' ? '這個帳號不是管理者' : '讀取失敗，請稍後再試');
+        C.toast(e?.code === 'functions/permission-denied' ? '這個帳號不是管理者' : `讀取失敗（${String(e?.code || '').replace('functions/', '')} ${String(e?.message || '').slice(0, 60)}）`);
     }
     loading[k] = false;
     if (tab === k || k === 'home') render();
