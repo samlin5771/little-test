@@ -7555,7 +7555,7 @@ function onAuthChanged(user) {
         const cloud = snap.exists() ? normalize(snap.data()) : normalize({});
         const dupes = removedDupes;
         if (snap.exists()) { applyCloudPrefs(snap.data().prefs); applyBlocked(snap.data().blocked); }
-        if (first && !snap.metadata.fromCache) markSeenToday();
+        if (!snap.metadata.fromCache) markSeenToday();   // 一天只會真的寫一次（第一次讀常常是本機快取，所以不能只看第一次）
         let next;
         if (first) {
             first = false;

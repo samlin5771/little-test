@@ -138,6 +138,8 @@ function css() {
 .adm-err .adm-acts { margin: 10px 0 0 50px; }
 .adm-live { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 20px; border: 1px solid rgba(16, 185, 129, .35); background: var(--mark-green-bg); margin-bottom: 10px; font-family: 'Noto Sans TC', sans-serif; }
 .adm-live .dot { width: 12px; height: 12px; border-radius: 6px; background: var(--mark-green); flex-shrink: 0; box-shadow: 0 0 0 0 rgba(16, 185, 129, .6); animation: admLive 1.8s ease-out infinite; }
+@media (max-width: 380px) { .adm-live { flex-wrap: wrap; } .adm-live .side { width: 100%; text-align: left; padding-left: 26px; } }
+.adm-live b { white-space: nowrap; }
 @keyframes admLive { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, .55); } 100% { box-shadow: 0 0 0 12px rgba(16, 185, 129, 0); } }
 @media (prefers-reduced-motion: reduce) { .adm-live .dot { animation: none; } }
 .adm-live .tx { flex: 1; min-width: 0; }
@@ -200,7 +202,7 @@ const av = (u) => `<span class="adm-av" style="background:${u.color || AV[(u.nam
 function renderTabs() {
     const n = D.home?.pendingReports || 0;
     document.getElementById('admTabs').innerHTML = TABS.map(([k, t]) =>
-        `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}${k === 'reports' && n ? `<b>${n}</b>` : ''}</button>`).join('');
+        `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" data-atab="${k}">${t}${k === 'reports' && n ? `<b>${n}</b>` : ''}</button>`).join('');
 }
 function render() {
     renderTabs();
@@ -229,9 +231,9 @@ function vHome(d) {
             <div class="adm-xs">${d.dau.map((x, i) => `<span>${i === d.dau.length - 1 ? '今天' : x.d}</span>`).join('')}</div>
         </div></section>
         <section class="adm-sec"><h3>要處理的事</h3><div class="adm-card">
-            <button class="adm-link" data-tab="reports"><span class="ic ${d.pendingReports ? 'hot' : ''}">${svg('flag')}</span><span class="tx">檢舉${d.pendingReports ? ` <b style="color:var(--exam-text)">${d.pendingReports} 則待處理</b>` : '：沒有待處理的'}<small>${d.pendingReports ? '最新：' + C.esc(d.lastReport || '') : '有人檢舉時會推播通知你'}</small></span>${svg('chev', 2)}</button>
-            <button class="adm-link" data-tab="ann"><span class="ic">${svg('mega')}</span><span class="tx">公告<small>${d.announce ? '顯示中：' + C.esc(d.announce.text) : '目前沒有公告'}</small></span>${svg('chev', 2)}</button>
-            <button class="adm-link" data-tab="errors"><span class="ic ${d.errorsToday > 20 ? 'hot' : ''}">${svg('bug')}</span><span class="tx">錯誤紀錄<small>今天 ${d.errorsToday} 筆${d.topError ? ' · 最多的是 ' + C.esc(d.topError) : ''}</small></span>${svg('chev', 2)}</button>
+            <button class="adm-link" data-atab="reports"><span class="ic ${d.pendingReports ? 'hot' : ''}">${svg('flag')}</span><span class="tx">檢舉${d.pendingReports ? ` <b style="color:var(--exam-text)">${d.pendingReports} 則待處理</b>` : '：沒有待處理的'}<small>${d.pendingReports ? '最新：' + C.esc(d.lastReport || '') : '有人檢舉時會推播通知你'}</small></span>${svg('chev', 2)}</button>
+            <button class="adm-link" data-atab="ann"><span class="ic">${svg('mega')}</span><span class="tx">公告<small>${d.announce ? '顯示中：' + C.esc(d.announce.text) : '目前沒有公告'}</small></span>${svg('chev', 2)}</button>
+            <button class="adm-link" data-atab="errors"><span class="ic ${d.errorsToday > 20 ? 'hot' : ''}">${svg('bug')}</span><span class="tx">錯誤紀錄<small>今天 ${d.errorsToday} 筆${d.topError ? ' · 最多的是 ' + C.esc(d.topError) : ''}</small></span>${svg('chev', 2)}</button>
         </div></section>
         ${d.problems && d.problems.length ? `<p class="adm-foot adm-warn">有些資料讀不到（顯示「—」）：${d.problems.map(x => C.esc(x.part + '：' + x.msg)).join('；')}</p>` : ''}
         <p class="adm-foot">「在線上」是網站或 App 現在開在畫面上的人（3 分鐘內）；「有在用」是那天有打開並登入的帳號。這裡只有數字，看不到任何人的讀書資料。</p>`;
@@ -348,6 +350,7 @@ function live() {   // 總覽開著時，每 30 秒更新一次線上人數
     }, 30000);
 }
 function go(t) {
+    if (!TABS.some(x => x[0] === t)) return;
     tab = t; render(); live();
     document.getElementById('admBody').scrollTop = 0;
     load(t); if (t !== 'home') load('home');
@@ -363,11 +366,12 @@ function ask(title, text, okLabel) {
 }
 
 async function onClick(e) {
-    const b = e.target.closest('button,[data-tab]'); if (!b) return;
+    // 只看管理畫面裡的按鈕（網站的 <body> 也有 data-tab，以前點到空白處會被當成換分頁，跑去讀一個不存在的分頁）
+    const b = e.target.closest('button'); if (!b || !e.currentTarget.contains(b)) return;
     const a = b.dataset;
     if (a.adm === 'back') return close();
     if (a.adm === 'refresh') { b.classList.add('spin'); await Promise.all([load('home', true), tab !== 'home' && load(tab, true)]); b.classList.remove('spin'); return C.toast('已更新'); }
-    if (a.tab) return go(a.tab);
+    if (a.atab) return TABS.some(t => t[0] === a.atab) && go(a.atab);
     if (a.rv) { repView = a.rv; return render(); }
     if (a.ev) { errView = a.ev; return render(); }
     if (a.rep) {
