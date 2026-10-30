@@ -61,7 +61,7 @@ const AI_ON = false;
 if (AI_ON) document.documentElement.classList.add('ai-on');
 // v70：讀書地圖先拿掉了（還沒達到想要的效果）。程式碼在 v69 的版本裡，之後要做可以從那裡拿回來
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v72';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v73';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -77,7 +77,7 @@ const LS = {
     install: 'study_install_seen', tour: 'study_tour_seen', chatSeen: 'study_chat_seen', photoCount: 'study_photo_count',
     countdowns: 'study_countdowns', home: 'study_home', progView: 'study_prog_view', sylOpen: 'study_syl_open',
     lastActive: 'study_last_active', cloud: 'study_cloud_cache',
-    tt: 'study_timetable', calView: 'study_cal_view', heat: 'study_heat_range', seenVer: 'study_seen_ver', push: 'study_push', pushId: 'study_push_id', notif: 'study_notif', pokes: 'study_pokes', hol: 'study_holidays', guestNew: 'study_guest_sessions', bgPhoto: 'study_bg_photo', lunch: 'study_lunch'   // v60 課表、行事曆／課表切換、熱力圖範圍
+    tt: 'study_timetable', calView: 'study_cal_view', heat: 'study_heat_range', seenVer: 'study_seen_ver', push: 'study_push', pushId: 'study_push_id', notif: 'study_notif', pokes: 'study_pokes', hol: 'study_holidays', guestNew: 'study_guest_sessions', bgPhoto: 'study_bg_photo', lunch: 'study_lunch', sky: 'study_sky'   // v60 課表、行事曆／課表切換、熱力圖範圍
 };   // 這台裝置存的所有設定都在這裡（改名字會讓舊資料讀不到，不要改）
 // 沒有頭像時的預設圖（顏色跟著主題色）
 function defaultAvatar() {
@@ -496,8 +496,31 @@ function setFold(row, fold, open) {
     $(fold).inert = !open;
     $(row).setAttribute('aria-expanded', open);
 }
-function closeFolds() { setFold('accentRow', 'accentFold', false); setFold('bgRow', 'bgFold', false); }
-$('accentRow').addEventListener('click', () => setFold('accentRow', 'accentFold', !$('accentFold').classList.contains('open')));
+function closeFolds() {}   // v73 主題色、背景搬到「外觀與主題」整頁，個人設定裡不再展開
+// v73 外觀與主題：整頁設定（深淺色、主題色、背景）；sec＝打開後直接捲到哪一段（'bg' 背景）
+function openTheme(sec) {
+    closeModal('accountModal');
+    $('themeScreen').classList.add('open');
+    document.body.classList.add('guide-open');
+    renderModeSeg(); renderSkyRow();
+    $('thBody').scrollTop = 0;
+    if (sec === 'bg') requestAnimationFrame(() => $('thBg').scrollIntoView({ block: 'start' }));
+    syncScrollLock();
+}
+function closeTheme() {
+    $('themeScreen').classList.remove('open');
+    document.body.classList.remove('guide-open');
+    syncScrollLock();
+}
+function renderThemeValue() {
+    if (!$('themeValue')) return;
+    $('themeValue').textContent = BG_NAME[localStorage.getItem(LS.bg) || 'glow'] || '呼吸光';   // 背景名稱＋旁邊的主題色圓點
+}
+$('themeRow').addEventListener('click', () => openTheme());
+$('thBack').addEventListener('click', closeTheme);
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('themeScreen').classList.contains('open') && !document.querySelector('.modal.open')) { e.stopImmediatePropagation(); closeTheme(); }
+}, true);
 
 $('themeBtn').addEventListener('click', () => {
     const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -546,7 +569,7 @@ const bgPhoto = (() => {
         x: Math.min(100, Math.max(0, +(x?.x ?? 50))), y: Math.min(100, Math.max(0, +(x?.y ?? 50))) });
     let set = null, cloudMeta;   // cloudMeta：最後看到的雲端 prefs.bgPhoto（undefined＝還沒看到）
     try { const v = JSON.parse(localStorage.getItem(LS.bgPhoto) || 'null'); if (v && v.on) set = { ...norm(v), up: !!v.up }; } catch (e) {}
-    let url = null, loading = null;
+    let url = null, loading = null, warned = false;
     function db() {
         return new Promise((ok, no) => {
             if (!window.indexedDB) return no(new Error('no idb'));
@@ -592,15 +615,20 @@ const bgPhoto = (() => {
     const blobToData = (b) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(b); });
     // 上傳到帳號（沒登入、沒網路就先不傳，之後登入或下次同步時再補）
     async function push() {
-        if (!set || set.up || !currentUser || !fb || !cloudReady) return;
+        if (!set || set.up || !currentUser || !fb) return;
         try {
             const blob = await tx('readonly', o => o.get('bg'));
             if (!blob) return;
             const img = await blobToData(blob);
             if (img.length > 900000) return;   // 太大傳不上去（正常不會發生：選照片時已經壓縮過）
             await fb.fs.setDoc(fb.fs.doc(fb.db, 'bgPhotos', currentUser.uid), { img, pid: set.pid, at: Date.now() });
-            set.up = true; keep(); savePrefs();
-        } catch (e) { console.warn('背景照片上傳失敗：', e); }
+            set.up = true; keep();
+            const sp = () => cloudReady ? savePrefs() : setTimeout(sp, 2000); sp();   // 剛登入、雲端資料還沒讀好時，等一下再存設定
+        } catch (e) {
+            console.warn('背景照片上傳失敗：', e);
+            // 雲端還不能存照片（例如 Firestore 規則還沒加）：照片先留在這台，提醒一次
+            if (e?.code === 'permission-denied' && !warned) { warned = true; toast('照片先存在這台裝置，暫時還沒辦法同步到其他裝置'); }
+        }
     }
     async function save(blob, x) {
         if (blob) await putBlob(blob);
@@ -647,7 +675,21 @@ const bgPhoto = (() => {
 /* =====================================================
  * v72 會變的天空：背景跟著現在的時間（台灣時間）變：清晨、白天、夕陽、夜晚
  *   淺色模式是淡淡的天色、深色模式是深的天色（文字都看得清楚）；5 分鐘更新一次，不會一直重畫
+ * v73 天氣連動：下雨變灰、有雨滴，打雷偶爾閃一下，陰天、起霧變灰；月亮照真實的月相（不用網路，自己算）
+ *   天氣：選「天空」背景又打開天氣連動時才查（Open-Meteo，免費、不用金鑰），30 分鐘最多一次，存在這台
+ *   位置：預設用自己選的縣市（不用給位置權限）；也可以用目前位置（四捨五入到約 10 公里）
  * ===================================================== */
+const SKY_CITIES = [['基隆市', 25.128, 121.741], ['臺北市', 25.033, 121.565], ['新北市', 25.012, 121.465], ['桃園市', 24.994, 121.301], ['新竹市', 24.804, 120.971],
+    ['新竹縣', 24.839, 121.018], ['苗栗縣', 24.560, 120.821], ['臺中市', 24.148, 120.674], ['彰化縣', 24.081, 120.538], ['南投縣', 23.916, 120.687], ['雲林縣', 23.711, 120.541],
+    ['嘉義市', 23.480, 120.449], ['嘉義縣', 23.459, 120.333], ['臺南市', 22.999, 120.227], ['高雄市', 22.627, 120.301], ['屏東縣', 22.669, 120.488], ['宜蘭縣', 24.757, 121.753],
+    ['花蓮縣', 23.987, 121.601], ['臺東縣', 22.756, 121.144], ['澎湖縣', 23.571, 119.579], ['金門縣', 24.437, 118.317], ['連江縣', 26.160, 119.951]];
+const SKY_WX = 'study_sky_wx';
+function normSkyPref(x) {
+    const city = SKY_CITIES.some(c => c[0] === x?.city) ? x.city : '臺北市';
+    const gps = x?.gps && Number.isFinite(+x.gps.lat) && Number.isFinite(+x.gps.lon) ? { lat: Math.round(+x.gps.lat * 10) / 10, lon: Math.round(+x.gps.lon * 10) / 10 } : null;
+    return { wx: x?.wx !== false, city, gps: x?.useGps && gps ? gps : null, useGps: !!(x?.useGps && gps) };
+}
+let skyPref = normSkyPref(lsGet(LS.sky, null));
 const skyBg = (() => {
     // [時（小時）, 上, 中, 下（地平線）, 星星亮度]
     const LIGHT = [[0, '#C8D0E8', '#DADDEC', '#ECEBF0', 0], [5, '#C8D0E8', '#DADDEC', '#ECEBF0', 0], [6, '#E9D2D6', '#F4DDD2', '#FBEBDA', 0],
@@ -656,37 +698,83 @@ const skyBg = (() => {
     const DARK = [[0, '#05081A', '#080C20', '#0B0E1C', 1], [4.8, '#05081A', '#080C20', '#0B0E1C', 1], [6, '#121733', '#2A2242', '#4E2E3A', .3],
         [7.5, '#0C192E', '#13253A', '#1D2C38', 0], [12, '#0A1A32', '#11263F', '#183044', 0], [16.5, '#0D1A30', '#16243A', '#232A38', 0],
         [17.8, '#121632', '#32213A', '#5C3330', .1], [19, '#090D24', '#151630', '#22182A', .6], [20, '#05081A', '#080C20', '#0B0E1C', 1], [24, '#05081A', '#080C20', '#0B0E1C', 1]];
+    const GREY = { light: ['#C3C9D2', '#D3D7DD', '#E3E4E6'], dark: ['#14171D', '#1A1D24', '#20232A'] };
     const hex = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
-    const mix = (a, b, t) => { const x = hex(a), y = hex(b); return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',')})`; };
-    let iv = 0, obs = null;
+    const toHex = (a) => '#' + a.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+    const mixH = (a, b, t) => { const x = hex(a), y = hex(b); return toHex(x.map((v, i) => v + (y[i] - v) * t)); };
+    let iv = 0, obs = null, wx = null, flashT = 0;
+    try { wx = JSON.parse(localStorage.getItem(SKY_WX) || 'null'); } catch (e) {}
     function hourNow() {   // 用台灣時間（在國外也一樣是台灣的天色）
         const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date());
         return +p.find(x => x.type === 'hour').value + +p.find(x => x.type === 'minute').value / 60;
     }
-    function paint(h = hourNow()) {
+    // 月相：0＝新月、0.5＝滿月（從 2000/1/6 的新月開始算，一個循環 29.53 天）
+    const moonPhase = (t = Date.now()) => { const p = ((t - Date.UTC(2000, 0, 6, 18, 14)) / 86400000 / 29.530588853) % 1; return p < 0 ? p + 1 : p; };
+    function moonSvg(p) {
+        const r = 50, c = Math.cos(2 * Math.PI * p), rx = (Math.abs(c) * r).toFixed(2), waxing = p < .5;
+        const lit = p > .03 && p < .97 ? `<path d="M${r} 0A${r} ${r} 0 0 ${waxing ? 1 : 0} ${r} ${2 * r}A${rx} ${r} 0 0 ${waxing ? (c > 0 ? 0 : 1) : (c > 0 ? 1 : 0)} ${r} 0Z" fill="var(--moon-lit)"/>` : '';
+        return `<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="50" fill="var(--moon-dark)"/>${lit}</svg>`;
+    }
+    // 天氣代碼（WMO）→ 這個背景要怎麼變
+    const wxKind = (code) => code == null ? 'clear' : code >= 95 ? 'storm' : (code >= 51 && code <= 67) || (code >= 80 && code <= 82) ? 'rain' : code === 45 || code === 48 ? 'fog' : code >= 71 && code <= 86 ? 'cloud' : code >= 3 ? 'cloud' : code === 2 ? 'part' : 'clear';
+    const wxNow = () => skyPref.wx && wx && Date.now() - wx.at < 3 * 3600000 ? wxKind(wx.code) : 'clear';
+    function paint(h = hourNow(), kindOverride) {
         const sky = document.querySelector('.b-tsky'); if (!sky) return;
         const dark = document.documentElement.getAttribute('data-theme') === 'dark', K = dark ? DARK : LIGHT;
+        const kind = kindOverride || wxNow();
+        const g = { clear: 0, part: .15, cloud: .45, fog: .55, rain: .62, storm: .72 }[kind] || 0;
         let i = 0; while (i < K.length - 2 && K[i + 1][0] <= h) i++;
         const [h0, ...a] = K[i], [h1, ...b] = K[i + 1], t = Math.min(1, Math.max(0, (h - h0) / (h1 - h0 || 1)));
-        sky.style.background = `linear-gradient(180deg, ${mix(a[0], b[0], t)} 0%, ${mix(a[1], b[1], t)} 55%, ${mix(a[2], b[2], t)} 100%)`;
-        document.querySelector('.b-tstars').style.opacity = (a[3] + (b[3] - a[3]) * t).toFixed(2);
-        // 太陽 6:00–18:30 從左邊升起、右邊落下；其他時間是月亮
+        const G = GREY[dark ? 'dark' : 'light'];
+        const col = (k) => mixH(mixH(a[k], b[k], t), G[k], g);
+        sky.style.background = `linear-gradient(180deg, ${col(0)} 0%, ${col(1)} 55%, ${col(2)} 100%)`;
+        document.querySelector('.b-tstars').style.opacity = ((a[3] + (b[3] - a[3]) * t) * (1 - Math.min(1, g * 1.6))).toFixed(2);
+        // 太陽 6:00–18:30 從左邊升起、右邊落下；其他時間是月亮（照真實月相）；雲多的時候變淡
         const orb = document.querySelector('.b-orb'), day = h >= 6 && h < 18.5;
         const f = day ? (h - 6) / 12.5 : ((h >= 18.5 ? h - 18.5 : h + 5.5) / 11.5);
         orb.className = 'b-orb ' + (day ? 'sun' : 'moon');
+        if (!day) { const p = moonPhase(); if (orb.dataset.p !== p.toFixed(3)) { orb.innerHTML = moonSvg(p); orb.dataset.p = p.toFixed(3); } }
+        else if (orb.innerHTML) { orb.innerHTML = ''; orb.dataset.p = ''; }
         orb.style.left = `${8 + f * 84}%`;
         orb.style.top = `${30 - Math.sin(f * Math.PI) * 22}%`;
-        orb.style.opacity = day ? Math.min(1, Math.sin(f * Math.PI) * 2.2).toFixed(2) : (dark ? .75 : .5);
+        const vis = 1 - Math.min(.95, g * 1.35);
+        orb.style.opacity = ((day ? Math.min(1, Math.sin(f * Math.PI) * 2.2) : (dark ? .85 : .6)) * vis).toFixed(2);
+        const w = document.querySelector('.b-wx');
+        if (w) w.className = 'b-wx wx-' + kind;
+        clearTimeout(flashT);
+        if (kind === 'storm' && !matchMedia('(prefers-reduced-motion: reduce)').matches) flash();
     }
+    function flash() {   // 打雷：每 8～20 秒閃一下（專注、聊天室、背景停住時不閃）
+        flashT = setTimeout(() => {
+            const w = document.querySelector('.b-wx.wx-storm');
+            if (!w) return;
+            if (!document.documentElement.classList.contains('bg-still')) { w.classList.remove('flash'); void w.offsetWidth; w.classList.add('flash'); }
+            flash();
+        }, 8000 + Math.random() * 12000);
+    }
+    async function fetchWx(force) {
+        if (!skyPref.wx || (!force && wx && wx.key === wxKey() && Date.now() - wx.at < 30 * 60000)) return;
+        const c = skyPref.useGps && skyPref.gps ? [skyPref.gps.lat, skyPref.gps.lon] : (SKY_CITIES.find(x => x[0] === skyPref.city) || SKY_CITIES[1]).slice(1);
+        try {
+            const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c[0]}&longitude=${c[1]}&current=weather_code,cloud_cover&timezone=Asia%2FTaipei`);
+            const j = await r.json();
+            if (!j.current) return;
+            wx = { at: Date.now(), key: wxKey(), code: +j.current.weather_code, cloud: +j.current.cloud_cover };
+            lsSet(SKY_WX, wx);
+            paint(); renderSkyRow();
+        } catch (e) { /* 沒網路：只照時間變 */ }
+    }
+    const wxKey = () => skyPref.useGps && skyPref.gps ? `${skyPref.gps.lat},${skyPref.gps.lon}` : skyPref.city;
     function start() {
-        stop(); paint();
-        iv = setInterval(() => { if (!document.hidden) paint(); }, 5 * 60000);
+        stop(); paint(); fetchWx();
+        iv = setInterval(() => { if (!document.hidden) { paint(); fetchWx(); } }, 5 * 60000);
         obs = new MutationObserver(() => paint()); obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
         document.addEventListener('visibilitychange', onVis);
     }
-    function onVis() { if (!document.hidden) paint(); }
-    function stop() { clearInterval(iv); iv = 0; if (obs) obs.disconnect(); obs = null; document.removeEventListener('visibilitychange', onVis); }
-    return { start, stop, paint };
+    function onVis() { if (!document.hidden) { paint(); fetchWx(); } }
+    function stop() { clearInterval(iv); iv = 0; clearTimeout(flashT); if (obs) obs.disconnect(); obs = null; document.removeEventListener('visibilitychange', onVis); }
+    const WX_NAME = { clear: '晴天', part: '晴時多雲', cloud: '多雲', fog: '起霧', rain: '下雨', storm: '雷雨' };
+    return { start, stop, paint, fetchWx, moonPhase, moonSvg, wxKind, get wxName() { return skyPref.wx && wx && Date.now() - wx.at < 3 * 3600000 ? WX_NAME[wxKind(wx.code)] : ''; }, setWx(x) { wx = x; } };
 })();
 
 const bgFx = (() => {
@@ -812,7 +900,7 @@ const bgFx = (() => {
         if (k === 'grid') add('b-grid');
         if (k === 'photo') { const im = document.createElement('img'); im.className = 'b-photo'; im.alt = ''; layer.appendChild(im); add('b-veil'); bgPhoto.paint(im); }
         if (k === 'stars') add('b-sky');
-        if (k === 'sky') { add('b-tsky'); add('b-tstars'); add('b-orb'); skyBg.start(); } else skyBg.stop();
+        if (k === 'sky') { add('b-tsky'); add('b-tstars'); add('b-orb'); add('b-wx'); skyBg.start(); } else skyBg.stop();
         if (k === 'rain') {
             add('b-rain-sky');
             // 窗外模糊的燈：主題色、暖黃、冷藍
@@ -845,11 +933,13 @@ const bgFx = (() => {
     return { set, update, get kind() { return kind; }, refresh() { readColors(); dropLayer = null; if (cv) draw(0); } };
 })();
 function applyBg(k) {
-    if (k === 'photo' && !bgPhoto.has) k = 'glow';   // 這台沒有照片（例如別台選的）就先用呼吸光，設定不會被改掉
+    if (k === 'photo' && !bgPhoto.has) k = bgFx.kind && bgFx.kind !== 'photo' ? bgFx.kind : 'glow';   // 這台還沒有照片（別台選的、還在下載）：先維持原本的背景，照片到了再換；設定不會被改掉
     bgFx.set(k);
     if ($('bgPhotoActs')) $('bgPhotoActs').hidden = bgFx.kind !== 'photo';
+    if ($('bgSkyActs')) { $('bgSkyActs').hidden = bgFx.kind !== 'sky'; renderSkyRow(); }
     document.querySelectorAll('.bg-opt').forEach(b => { const on = b.dataset.bg === bgFx.kind; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on); });
-    if ($('bgName')) $('bgName').textContent = BG_NAME[bgFx.kind];
+    if ($('bgName')) $('bgName').textContent = BG_NAME[localStorage.getItem(LS.bg) === 'photo' && !bgPhoto.has ? bgFx.kind : (localStorage.getItem(LS.bg) || bgFx.kind)] || BG_NAME[bgFx.kind];
+    if (typeof renderThemeValue === 'function') try { renderThemeValue(); } catch (e) {}
 }
 applyBg(localStorage.getItem(LS.bg) || 'glow');
 $('bgGrid').addEventListener('click', (e) => {
@@ -858,7 +948,36 @@ $('bgGrid').addEventListener('click', (e) => {
     if (b.dataset.bg === 'photo' && !bgPhoto.has) { $('bgPhotoFile').click(); return; }   // 還沒有照片：先選一張
     applyBg(b.dataset.bg); lsSet(LS.bg, b.dataset.bg); savePrefs();
 });
-$('bgRow').addEventListener('click', () => setFold('bgRow', 'bgFold', !$('bgFold').classList.contains('open')));
+
+// ---- v73 天空背景的天氣設定 ----
+function renderSkyRow() {
+    if (!$('skyCity')) return;
+    if (!$('skyCity').options.length) $('skyCity').innerHTML = SKY_CITIES.map(c => `<option value="${c[0]}">${c[0]}</option>`).join('') + '<option value="gps" hidden>目前位置</option>';
+    $('skyWx').checked = skyPref.wx;
+    $('skyLoc').hidden = !skyPref.wx;
+    $('skyCity').value = skyPref.useGps ? 'gps' : skyPref.city;
+    $('skyCity').querySelector('[value="gps"]').hidden = !skyPref.useGps;
+    $('skyGps').textContent = skyPref.useGps ? '改回選縣市' : '用目前位置';
+    const now = skyBg.wxName;
+    $('skyWxNow').textContent = skyPref.wx ? `${skyPref.useGps ? '目前位置' : skyPref.city}${now ? '・現在' + now : ''}` : '下雨時變灰、有雨滴；打雷會閃';
+}
+function saveSkyPref(x) {
+    skyPref = normSkyPref({ ...skyPref, ...x });
+    lsSet(LS.sky, skyPref); savePrefs();
+    renderSkyRow(); skyBg.paint(); skyBg.fetchWx(true);
+}
+$('skyWx').addEventListener('change', (e) => saveSkyPref({ wx: e.target.checked }));
+$('skyCity').addEventListener('change', (e) => { if (e.target.value !== 'gps') saveSkyPref({ city: e.target.value, useGps: false }); });
+$('skyGps').addEventListener('click', () => {
+    if (skyPref.useGps) { saveSkyPref({ useGps: false }); return; }
+    if (!navigator.geolocation) { toast('這個瀏覽器沒辦法取得位置，請選縣市'); return; }
+    $('skyGps').textContent = '取得位置中…';
+    // 只要大概的位置（四捨五入到約 10 公里），只存在這台和你的帳號，用來查天氣
+    navigator.geolocation.getCurrentPosition(
+        (p) => saveSkyPref({ useGps: true, gps: { lat: p.coords.latitude, lon: p.coords.longitude } }),
+        () => { renderSkyRow(); toast('沒有取得位置，先用選的縣市'); },
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 3600000 });
+});
 // ---- v72 照片背景：選照片 → 調整（模糊、淡化、位置）→ 套用 ----
 bgPhoto.thumb();
 let bgpDraft = null;   // { blob（新選的照片才有）, url, blur, veil, x, y }
@@ -973,7 +1092,7 @@ function savePrefs() {
     clearTimeout(prefsTimer);
     prefsTimer = setTimeout(() => {
         fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), {
-            prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow', notify: localStorage.getItem(LS.notify) || 'banner', home: homePref, tt, notif, lunch, ...(bgPhoto.prefsMeta() !== undefined ? { bgPhoto: bgPhoto.prefsMeta() } : {}),
+            prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow', notify: localStorage.getItem(LS.notify) || 'banner', home: homePref, tt, notif, lunch, sky: skyPref, ...(bgPhoto.prefsMeta() !== undefined ? { bgPhoto: bgPhoto.prefsMeta() } : {}),
                 room: { name: roomPref.name || '', color: AV_COLORS.includes(roomPref.color) ? roomPref.color : '', hidden: !!roomPref.hidden },
                 ...(mapKeep ? { map: mapKeep } : {}) }
         }, { mergeFields: ['prefs'] }).catch(e => console.warn('設定同步失敗：', e));
@@ -1005,6 +1124,10 @@ function applyCloudPrefs(p) {
             roomPref = { ...roomPref, name: nm, color: col, hidden: !!p.room.hidden }; saveRoomPref();
             publishProfile(); renderRoom(); renderHomeRoom();
         }
+    }
+    if (p.sky && typeof p.sky === 'object') {   // v73 天空背景的天氣設定
+        const x = normSkyPref(p.sky);
+        if (JSON.stringify(x) !== JSON.stringify(skyPref)) { skyPref = x; lsSet(LS.sky, skyPref); renderSkyRow(); skyBg.paint(); skyBg.fetchWx(true); }
     }
     if (p.lunch && typeof p.lunch === 'object') {   // v72 吃飯抽籤的選項
         const x = normLunch(p.lunch);
@@ -3458,7 +3581,8 @@ function buildPalette(q) {
     if (match('照片', '背景', '桌布', 'photo')) items.push({ group: '設定', label: '用自己的照片當背景', run: () => bgPhoto.has ? openBgPhoto(null) : $('bgPhotoFile').click() });
     if (match('統計', 'stats')) items.push({ group: '前往', label: '讀書統計', run: () => { statOffset = 0; statSel = null; renderStats(); showTab('tab-stats'); } });
     if (match('深色', '淺色', '主題', 'theme', 'dark', 'light')) items.push({ group: '設定', label: '切換深淺色', key: 'T', run: () => $('themeBtn').click() });
-    if (match('主題色', '顏色', '背景', '外觀', '帳號', '登入', 'account')) items.push({ group: '設定', label: '個人設定（主題色、背景、外觀）', run: () => openModal('accountModal') });
+    if (match('主題色', '顏色', '背景', '外觀', '深色', '天空', 'theme')) items.push({ group: '設定', label: '外觀與主題（深淺色、主題色、背景）', run: () => openTheme() });
+    if (match('帳號', '登入', '個人設定', 'account')) items.push({ group: '設定', label: '個人設定', run: () => openModal('accountModal') });
     if (match('快捷鍵', 'shortcut', 'keys')) items.push({ group: '設定', label: '鍵盤快捷鍵', key: '?', run: () => openModal('keysModal') });
     return items;
 }
@@ -4547,7 +4671,7 @@ function chatStopAll() {
 }
 function unreadOf(code) {
     const seen = chatSeen[code] || 0, me = currentUser?.uid;
-    return (chats[code]?.msgs || []).filter(m => m.at > seen && m.uid !== me && !m.recalled).length;
+    return (chats[code]?.msgs || []).filter(m => m.at > seen && m.uid !== me && !m.recalled && !m.hidden && !isBlocked(m.uid)).length;
 }
 const totalUnread = () => myRooms.reduce((a, r) => a + unreadOf(r.id), 0);
 const chatVisible = (code) => chatRoom && (!code || code === chatRoom) && document.visibilityState === 'visible';
@@ -4557,7 +4681,7 @@ function onChatUpdate(code, fresh) {
     if (chatRoom === code) { renderChatList(false); markChatSeen(); }
     if (document.body.dataset.tab === 'tab-room') renderRoom();
     updateChatBadges();
-    const m = fresh[fresh.length - 1];
+    const m = fresh.filter(x => !isBlocked(x.uid) && !x.hidden).pop();   // 封鎖的人、被隱藏的訊息不提醒
     if (!m || chatVisible(code)) return;
     const room = myRooms.find(x => x.id === code);
     const body = m.img ? '傳了一張照片' : m.text;
@@ -5006,6 +5130,89 @@ function closeNotif() {
     syncScrollLock();
 }
 $('notifRow').addEventListener('click', openNotif);
+$('imgSave').addEventListener('click', (e) => { e.stopPropagation(); const u = $('imgView').getAttribute('src'); if (u) savePhoto(u, +$('imgView').dataset.at || 0); });
+
+/* =====================================================
+ * v73 管理者畫面＋公告
+ *   管理者：Firestore 的 admins/{uid} 有這份文件的帳號（在 Firebase 主控台手動加，只有自己讀得到）
+ *   管理畫面的程式放在 admin.js，只有管理者打開時才會下載；資料都經過伺服器確認身分
+ *   公告：meta/announce（大家都讀得到，只有伺服器能改），{ id, text, kind: info|warn|fix, from, to }
+ * ===================================================== */
+let isAdmin = false, adminPending = 0, adminMod = null;
+async function callFn(name, data) {
+    const fm = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-functions.js`);
+    const r = await fm.httpsCallable(fm.getFunctions(fb.app, 'asia-east1'), name)(data || {});
+    return r.data;
+}
+async function checkAdmin(user) {
+    try {
+        const d = await fb.fs.getDoc(fb.fs.doc(fb.db, 'admins', user.uid));
+        isAdmin = d.exists() && currentUser?.uid === user.uid;
+    } catch (e) { isAdmin = false; }   // 一般帳號讀不到（沒有權限）＝不是管理者
+    renderAdminRow();
+    if (isAdmin) callFn('admin', { fn: 'adminOverview', op: 'count' }).then(r => { adminPending = r?.pendingReports || 0; renderAdminRow(); }).catch(() => {});
+}
+function renderAdminRow() {
+    const row = $('adminRow'); if (!row) return;
+    row.hidden = !isAdmin;
+    $('adminValue').innerHTML = adminPending ? `<span class="adm-badge">${adminPending}</span> 則檢舉待處理` : '使用狀況、檢舉、公告';
+}
+async function openAdminScreen(start) {
+    if (!isAdmin) return;
+    closeModal('accountModal');
+    try { adminMod = adminMod || await import('./admin.js'); }
+    catch (e) { toast('管理畫面載入失敗，請檢查網路'); return; }
+    adminMod.openAdmin({ esc, toast, call: (fn, d) => callFn('admin', { fn, ...d }), goals: Object.fromEntries(Object.entries(ANN_GO).map(([k, v]) => [k, v[0]])), onClose: () => { syncScrollLock(); loadAnnounce(true); } }, start);
+    syncScrollLock();
+}
+$('adminRow').addEventListener('click', () => openAdminScreen());
+document.addEventListener('keydown', (e) => { if (adminMod) adminMod.onKey(e); }, true);
+
+// ---- 公告：大家打開網站時最上面的一條；按 × 之後這則就不再出現 ----
+const ANN_SEEN = 'study_ann_closed';
+let annAt = 0, annCur = null;
+async function loadAnnounce(force) {
+    if (!fb || (!force && Date.now() - annAt < 30 * 60000)) return;
+    annAt = Date.now();
+    try {
+        const d = await fb.fs.getDoc(fb.fs.doc(fb.db, 'meta', 'announce'));
+        annCur = d.exists() ? d.data() : null;
+    } catch (e) { return; }
+    renderAnnounce();
+}
+function renderAnnounce() {
+    const a = annCur, bar = $('annBar'), now = Date.now();
+    const show = a && a.text && a.id && (!a.from || a.from <= now) && (!a.to || a.to > now) && localStorage.getItem(ANN_SEEN) !== a.id;
+    bar.hidden = !show;
+    if (!show) return;
+    bar.className = 'ann-bar ann-' + (['info', 'warn', 'fix'].includes(a.kind) ? a.kind : 'info');
+    $('annText').textContent = a.text;
+    const go = a.btn && ANN_GO[a.btn.go] ? a.btn : null;
+    $('annGo').hidden = !go;
+    if (go) $('annGo').textContent = String(go.label || ANN_GO[go.go][0]).slice(0, 8);
+    if (sessionStorage.getItem('study_ann_seen') !== a.id) {   // 看過幾次（每個人每則只算一次）
+        try { sessionStorage.setItem('study_ann_seen', a.id); } catch (e) {}
+        if (fb && localStorage.getItem('study_ann_counted') !== a.id) { lsSet('study_ann_counted', a.id); fb.fs.updateDoc(fb.fs.doc(fb.db, 'meta', 'announce'), { seen: fb.fs.increment(1) }).catch(() => {}); }
+    }
+}
+// 公告的按鈕（管理者選要打開哪裡）：[預設文字, 打開的方法]
+const ANN_GO = {
+    bg: ['去換背景', () => openTheme('bg')],
+    tt: ['看課表', () => { calView = 'tt'; lsSet(LS.calView, calView); showTab('tab-calendar'); applyCalView(); }],
+    lunch: ['轉轉看', () => openLunch()],
+    notif: ['去設定', () => openNotif()],
+    timer: ['開始讀書', () => showTab('tab-timer')],
+    stats: ['看統計', () => { statOffset = 0; statSel = null; renderStats(); showTab('tab-stats'); }],
+    room: ['讀書房間', () => { roomView = null; showTab('tab-room'); }],
+    guide: ['看導覽', () => openGuide()]
+};
+$('annGo').addEventListener('click', () => { const g = annCur?.btn && ANN_GO[annCur.btn.go]; if (g) g[1](); });
+$('annClose').addEventListener('click', () => {
+    if (!annCur) return;
+    lsSet(ANN_SEEN, annCur.id); $('annBar').hidden = true;
+    fb?.fs.updateDoc(fb.fs.doc(fb.db, 'meta', 'announce'), { closed: fb.fs.increment(1) }).catch(() => {});
+});
+onAppShow(() => loadAnnounce());
 $('nfBack').addEventListener('click', closeNotif);
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && $('notifScreen').classList.contains('open') && !document.querySelector('.modal.open')) { e.stopImmediatePropagation(); closeNotif(); }
@@ -5087,7 +5294,7 @@ function renderPoke() {
     const sub = s.phase === 'focus' ? `${s.subject != null ? SUBJECTS[s.subject] : ''}${s.paused ? '暫停中' : '專注中'}` : s.phase === 'break' ? '番茄鐘休息中' : s.min > 0 ? '休息中' : '今天還沒開始';
     pop.innerHTML = `<div class="pk-head"><span class="pk-av" style="background:${avColor(u)}">${esc(firstGlyph(name))}</span><div class="pk-who"><b>${esc(name)}${me ? '（你）' : ''}</b><small>${esc(sub)}</small></div></div>
         <div class="pk-stat"><div><b class="num">${fmtClockHM(s.min + (s.phase === 'focus' ? s.el / 60000 : 0))}</b><span>今天</span></div><div><b class="num">${fmtClockHM(w.week)}</b><span>這週</span></div><div><b class="num">${w.streak}<small>天</small></b><span>連續</span></div></div>
-        ${btn}${!me && !(s.phase === 'focus' && !s.paused) && left <= 0 ? '<p class="pk-note">他會收到推播・每 10 分鐘可叫一次</p>' : ''}`;
+        ${btn}${!me && !(s.phase === 'focus' && !s.paused) && left <= 0 ? '<p class="pk-note">他會收到推播・每 10 分鐘可叫一次</p>' : ''}${me ? '' : `<button class="pk-block" data-pk="${isBlocked(u) ? 'unblock' : 'block'}">${isBlocked(u) ? '解除封鎖' : '封鎖'}</button>`}`;
     pop.hidden = false;
     const r = seat.querySelector('.seat-av').getBoundingClientRect();
     const W = pop.offsetWidth, H = pop.offsetHeight, vw = document.documentElement.clientWidth, vh = innerHeight;
@@ -5128,6 +5335,13 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pokeFor)
 window.addEventListener('scroll', () => { if (pokeFor) renderPoke(); }, { passive: true });
 window.addEventListener('resize', () => { if (pokeFor) renderPoke(); });
 $('pokePop').addEventListener('click', async (e) => {
+    const bk = e.target.closest('[data-pk="block"],[data-pk="unblock"]');
+    if (bk && pokeFor) {
+        const u = pokeFor, on = bk.dataset.pk === 'block', nm = memberName({ u, p: profiles[u] });
+        if (on && !confirm(`封鎖「${nm}」？\n封鎖後你不會再看到他的訊息，也不會收到他的通知。`)) return;
+        await setBlocked(u, on); renderPoke(); toast(on ? `已封鎖 ${nm}` : `已解除封鎖 ${nm}`);
+        return;
+    }
     if (!e.target.closest('[data-pk="go"]') || !pokeFor || !fb || !currentUser) return;
     const to = pokeFor, room = roomView;
     pokeLast[to] = Date.now(); lsSet(LS.pokes, pokeLast);
@@ -5357,6 +5571,11 @@ function renderChatList(toEnd) {
             items.push([m.id, `<p class="chat-sys">${m.uid === me ? '你' : esc(m.name || '同學')} 收回了一則訊息</p>`]);
             prev = m; return;
         }
+        if (m.uid !== me && isBlocked(m.uid)) return;   // v73 封鎖的人的訊息不顯示
+        if (m.hidden) {   // v73 被很多人檢舉：先隱藏，等管理者處理
+            items.push([m.id, `<p class="chat-sys">一則訊息被檢舉，先隱藏起來了</p>`]);
+            prev = m; return;
+        }
         const mine = m.uid === me;
         const grouped = prev && !prev.recalled && prev.uid === m.uid && m.at - prev.at < 5 * 60000;
         const d = new Date(m.at);
@@ -5381,6 +5600,7 @@ function renderChatList(toEnd) {
 
 async function sendChat(text, img) {
     if (!chatRoom || chatSending) return false;
+    if (await mutedNow()) return false;
     text = (text || '').trim().slice(0, 1000);
     if (!text && !img) return false;
     chatSending = true;
@@ -5443,6 +5663,118 @@ function compressImage(file) {
 }
 const photosToday = () => { const c = lsGet(LS.photoCount, {}); return c.date === todayStr() ? c.n : 0; };
 
+/* --- v73 封鎖、檢舉、禁言（跟 App 一樣：封鎖名單存在 users/{uid}.blocked，檢舉送到 reports） --- */
+let blockedMap = {};
+const isBlocked = (u) => !!(u && blockedMap[u]);
+function applyBlocked(b) {
+    const x = b && typeof b === 'object' ? b : {};
+    if (JSON.stringify(x) === JSON.stringify(blockedMap)) return;
+    blockedMap = x;
+    if (chatRoom) renderChatList(false);
+    updateChatBadges(); if (document.body.dataset.tab === 'tab-room') renderRoom();
+}
+async function setBlocked(u, on) {
+    if (!currentUser || !fb || !u) return;
+    const next = { ...blockedMap }; if (on) next[u] = Date.now(); else delete next[u];
+    applyBlocked(next);
+    try { await fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), { blocked: next }, { mergeFields: ['blocked'] }); }
+    catch (e) { toast('沒有存成功，請檢查網路'); }
+}
+const REPORT_REASONS = ['騷擾或霸凌', '色情或不雅內容', '仇恨或歧視', '暴力或威脅', '詐騙或廣告', '其他不當內容'];
+let repMsg = null, repRoom = null, repReason = '';
+function openReport(code, m) {
+    repMsg = m; repRoom = code; repReason = '';
+    $('repQuote').innerHTML = `<b>${esc(m.name || '同學')}</b>：${m.img ? '傳了一張照片' : esc(String(m.text || '').slice(0, 120))}`;
+    $('repList').innerHTML = REPORT_REASONS.map(r => `<button role="radio" aria-checked="false" data-reason="${r}"><i></i>${r}</button>`).join('');
+    $('repSend').disabled = true; $('repSend').textContent = '送出檢舉';
+    openModal('reportModal');
+}
+$('repList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-reason]'); if (!b) return;
+    repReason = b.dataset.reason;
+    $('repList').querySelectorAll('[data-reason]').forEach(x => x.setAttribute('aria-checked', x === b));
+    $('repSend').disabled = false;
+});
+$('repSend').addEventListener('click', async () => {
+    const m = repMsg; if (!m || !repReason || !currentUser || !fb) return;
+    $('repSend').disabled = true; $('repSend').textContent = '送出中…';
+    try {
+        await fb.fs.addDoc(fb.fs.collection(fb.db, 'reports'), { by: currentUser.uid, room: repRoom, msg: m.id, uid: m.uid || '', name: String(m.name || '').slice(0, 20),
+            text: String(m.text || '').slice(0, 300), img: !!m.img, reason: repReason, at: Date.now() });
+    } catch (e) {
+        $('repSend').disabled = false; $('repSend').textContent = '送出檢舉';
+        toast(e.code === 'permission-denied' ? '檢舉沒有送出：請確認 Firestore 規則已更新' : '檢舉沒有送出，請檢查網路'); return;
+    }
+    closeModal('reportModal');
+    if (!isBlocked(m.uid) && confirm(`謝謝你的檢舉，管理者會盡快處理。\n要不要也封鎖「${m.name || '同學'}」？封鎖後你不會再看到他的訊息。`)) { await setBlocked(m.uid, true); toast('已送出檢舉，也封鎖了'); }
+    else toast('已送出檢舉');
+});
+// 被禁言（管理者處理檢舉時設定）：mutes/{uid}.until 之前不能傳訊息；5 分鐘內只查一次
+let muteChk = { at: 0, until: 0 };
+async function mutedNow() {
+    if (!currentUser || !fb) return false;
+    if (Date.now() - muteChk.at > 5 * 60000) {
+        try { const d = await fb.fs.getDoc(fb.fs.doc(fb.db, 'mutes', currentUser.uid)); muteChk = { at: Date.now(), until: d.exists() ? +d.data().until || 0 : 0 }; }
+        catch (e) { muteChk = { at: Date.now(), until: 0 }; }
+    }
+    if (muteChk.until > Date.now()) {
+        const d = new Date(muteChk.until);
+        toast(`你被禁言到 ${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}，這段時間不能傳訊息`);
+        return true;
+    }
+    return false;
+}
+
+/* --- v73 線上人數：網站開著的時候，每 2 分鐘告訴伺服器「我在」（只有一個時間，管理者只看得到總人數） --- */
+let presLast = 0, presId = '';
+function presenceBeat(force) {
+    if (!fb) return;
+    const vis = document.visibilityState === 'visible';
+    if (vis && !force && Date.now() - presLast < 110000) return;
+    presLast = vis ? Date.now() : 0;
+    const id = currentUser ? currentUser.uid : 'g_' + errDevice();
+    if (presId && presId !== id) fb.fs.setDoc(fb.fs.doc(fb.db, 'presence', presId), { until: 0, u: presId.indexOf('g_') !== 0 }).catch(() => {});   // 剛登入／登出：舊的那筆先收掉
+    presId = id;
+    fb.fs.setDoc(fb.fs.doc(fb.db, 'presence', id), { until: vis ? Date.now() + 180000 : 0, u: !!currentUser }).catch(() => {});
+}
+document.addEventListener('visibilitychange', () => presenceBeat(true));
+window.addEventListener('pagehide', () => { if (fb && presId) fb.fs.setDoc(fb.fs.doc(fb.db, 'presence', presId), { until: 0, u: !!currentUser }).catch(() => {}); });
+setInterval(() => presenceBeat(false), 30000);
+// 今天有打開（管理者看「今天、這 7 天有幾個人在用」）：一天只寫一次
+function markSeenToday() {
+    if (!currentUser || !fb) return;
+    const k = 'study_seen_day', t = todayStr() + '|' + currentUser.uid;
+    if (localStorage.getItem(k) === t) return;
+    lsSet(k, t);
+    fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), { seenAt: Date.now() }, { mergeFields: ['seenAt'] }).catch(() => {});
+}
+
+/* --- v73 儲存聊天室照片：手機用「分享 → 儲存影像」存進相簿（iPhone 不支援直接下載），電腦直接下載 --- */
+function dataToFile(url, name) {
+    const [head, b64] = url.split(',');
+    const type = (head.match(/data:([^;]+)/) || [])[1] || 'image/jpeg';
+    const bin = atob(b64), arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new File([arr], name, { type });
+}
+function savePhoto(url, at) {
+    const name = `study-room-${ymd(new Date(at || Date.now()))}.jpg`;   // 檔名用英文：有些瀏覽器遇到中文檔名會變成「download」
+    let file = null;
+    try { file = url.startsWith('data:') ? dataToFile(url, name) : null; } catch (e) {}
+    // 一定要在按下去的當下呼叫分享（不能先等別的事），手機才會跳出「儲存影像」
+    if (file && matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [file] })) {
+        navigator.share({ files: [file] }).catch(err => { if (err?.name !== 'AbortError') downloadPhoto(file, url, name); });
+        return;
+    }
+    downloadPhoto(file, url, name);
+}
+function downloadPhoto(file, url, name) {
+    const href = file ? URL.createObjectURL(file) : url;
+    const l = document.createElement('a'); l.href = href; l.download = name; document.body.appendChild(l); l.click(); l.remove();
+    if (file) setTimeout(() => URL.revokeObjectURL(href), 4000);
+    toast('照片已下載');
+}
+
 /* --- 長按訊息：像 IG 一樣浮出訊息卡片＋選單 --- */
 let menuMsg = null;
 function openMsgPop(id, srcEl) {
@@ -5463,6 +5795,7 @@ function openMsgPop(id, srcEl) {
     $('popSave').hidden = !isPhoto(m.img) || photoExpired(m);
     $('popRecall').hidden = !canRecall;
     $('popDelete').hidden = mine || r?.owner !== currentUser?.uid;
+    $('popReport').hidden = mine; $('popBlock').hidden = mine;
     $('popNote').textContent = mine && !canRecall ? '超過 24 小時的訊息不能收回' : canRecall ? '收回後，大家會看到「你收回了一則訊息」' : '';
     $('msgPop').classList.toggle('mine', mine);
     try { window.getSelection()?.removeAllRanges(); } catch (err) {}
@@ -5488,9 +5821,11 @@ $('msgPop').addEventListener('click', async (e) => {
     const ref = fb.fs.doc(fb.db, 'rooms', chatRoom, 'messages', m.id);
     try {
         if (a === 'copy') { await navigator.clipboard.writeText(m.text); toast('已複製'); }
-        else if (a === 'save') { if (!isPhoto(m.img)) return; const l = document.createElement('a'); l.href = m.img; l.download = `讀書房間-${ymd(new Date(m.at))}.jpg`; l.click(); }
+        else if (a === 'save') { if (isPhoto(m.img)) savePhoto(m.img, m.at); }
         else if (a === 'recall') { await fb.fs.updateDoc(ref, { recalled: true, text: '', img: '' }); toast('已收回'); }
         else if (a === 'delete') { if (confirm('確定要刪除這則訊息嗎？')) { await fb.fs.deleteDoc(ref); toast('已刪除'); } }
+        else if (a === 'report') openReport(chatRoom, m);
+        else if (a === 'block') { if (confirm(`封鎖「${m.name || '同學'}」？\n封鎖後你不會再看到他的訊息，也不會收到他的通知。可以在讀書房間點他的頭像解除。`)) { await setBlocked(m.uid, true); toast('已封鎖'); } }
     } catch (err) { console.error(err); toast(a === 'copy' ? '無法複製' : '操作失敗，請檢查網路'); }
 });
 
@@ -5572,7 +5907,7 @@ chatList.addEventListener('click', (e) => {
     const im = e.target.closest('.chat-img');
     if (im && isPhoto(im.getAttribute('src'))) {   // 照片：等一下確定不是連點兩下才打開
         clearTimeout(imgTapT);
-        imgTapT = setTimeout(() => { $('imgView').src = im.getAttribute('src'); openModal('imgModal'); }, 330);
+        imgTapT = setTimeout(() => { $('imgView').src = im.getAttribute('src'); $('imgView').dataset.at = (chats[chatRoom]?.msgs || []).find(x => x.id === im.dataset.mid)?.at || ''; openModal('imgModal'); }, 330);
     }
 });
 chatList.addEventListener('dblclick', (e) => { if (e.target.closest('[data-mid]')) e.preventDefault(); });
@@ -5925,7 +6260,7 @@ document.addEventListener('keydown', (e) => {
 }, true);
 // 第一次打開：手機瀏覽器先教「加到主畫面」（一定要按我知道了），接著簡易導覽；其他情況只顯示簡易導覽
 // v60：用過舊版的人，更新後第一次打開會看到「這次新增了什麼」（第一次用的人看簡易導覽就好，不會連跳兩個視窗）
-const WHATS_NEW = 'v72';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
+const WHATS_NEW = 'v73';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
 setTimeout(() => {
     if (document.querySelector('.modal.open') || document.body.classList.contains('guide-open')) return;
     const needInstall = !localStorage.getItem(LS.install) && !isStandalone() && isMobile();
@@ -5935,7 +6270,7 @@ setTimeout(() => {
     else if (needTour) openTour();
     else if (localStorage.getItem(LS.seenVer) !== WHATS_NEW) { lsSet(LS.seenVer, WHATS_NEW); openModal('whatsNewModal'); }
 }, 1200);
-$('wnTry').addEventListener('click', () => { closeModal('whatsNewModal'); openModal('accountModal'); setTimeout(() => { setFold('bgRow', 'bgFold', true); setTimeout(() => $('bgRow').scrollIntoView({ block: 'start', behavior: 'smooth' }), 250); }, 250); });
+$('wnTry').addEventListener('click', () => { closeModal('whatsNewModal'); openTheme('bg'); });
 
 /* =====================================================
  * 帳號畫面
@@ -5952,6 +6287,7 @@ function renderAccount(statusText) {
     $('syncDot').className = 'sync-dot ' + (u && !statusText ? 'ok' : /失敗|離線/.test(status) ? 'bad' : u ? 'wait' : '');
     $('accountHint').style.display = u ? 'none' : '';
     $('accentName').textContent = ACCENT_NAME[localStorage.getItem(LS.accent) || 'amber'] || '琥珀';
+    renderThemeValue();
     $('installState').textContent = isStandalone() ? '已加入 ✓' : '教學';
     $('loginBtn').textContent = u ? '登出' : '使用 Google 登入';
     $('delAcctBtn').hidden = !u;
@@ -7165,6 +7501,8 @@ async function initFirebase() {
         fb = { app, auth, provider, authM, db, fs: fsM };
         renderAccount();
         setTimeout(flushErrors, 3000);   // 打開前就出的錯，等 Firebase 準備好再送
+        setTimeout(loadAnnounce, 1500);   // v73 公告（讀一份很小的資料，不影響開啟速度）
+        setTimeout(() => presenceBeat(true), 2500);
         // 只有剛用「整頁跳轉」登入回來時才需要讀結果（平常打開不用多載一個登入用的網頁框）
         let redirected = false;
         try { redirected = sessionStorage.getItem('study_redirect') === '1'; sessionStorage.removeItem('study_redirect'); } catch (e) {}
@@ -7188,6 +7526,7 @@ function onAuthChanged(user) {
     cloudReady = false;
     if (unsubscribe) { unsubscribe(); unsubscribe = null; }
     if (!user) {
+        isAdmin = false; renderAdminRow(); blockedMap = {}; muteChk = { at: 0, until: 0 }; presenceBeat(true);
         setTimeout(warmLogin, 1500);
         roomStop(); lastProfile = '';
         clearCloudCache(); cachedUid = null; cloudBase = null; cloudDirty = false;
@@ -7196,6 +7535,8 @@ function onAuthChanged(user) {
         return;
     }
     loadRoomProfile(user);
+    checkAdmin(user);
+    presenceBeat(true);
     renderAccount('同步中…');
     setTimeout(() => { if (pushPref.on && pushSupport().ok && Notification.permission === 'granted') pushSave().catch(() => {}); pushBeat(true); renderNotifRow(); pokeListen(); }, 1500);   // 推播 token 可能會換，登入時更新一次
     setTimeout(handlePendingJoin, 800);
@@ -7213,7 +7554,8 @@ function onAuthChanged(user) {
         if (first && snap.metadata.fromCache && !snap.exists()) return; // 本機沒快取，等雲端回應
         const cloud = snap.exists() ? normalize(snap.data()) : normalize({});
         const dupes = removedDupes;
-        if (snap.exists()) applyCloudPrefs(snap.data().prefs);
+        if (snap.exists()) { applyCloudPrefs(snap.data().prefs); applyBlocked(snap.data().blocked); }
+        if (first && !snap.metadata.fromCache) markSeenToday();
         let next;
         if (first) {
             first = false;

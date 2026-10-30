@@ -99,6 +99,13 @@
     </header>
 
     <main class="main">
+        <!-- v73 公告（管理者發的，大家最上面都會看到；按 × 關掉） -->
+        <div class="ann-bar" id="annBar" role="status" hidden>
+            <span class="ann-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h3l7 4V6L7 10z"/><path d="M17.5 9a4 4 0 0 1 0 6"/></svg></span>
+            <span class="ann-tx" id="annText"></span>
+            <button class="ann-go" id="annGo" hidden></button>
+            <button class="ann-x" id="annClose" aria-label="關掉公告"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
 
         <!-- ========== 1. 倒數 ========== -->
         <section id="tab-countdown" class="tab active">
@@ -525,53 +532,16 @@
             </div>
             <p class="acct-hint" id="accountHint">登入 Google 帳號後，資料會自動同步到雲端。</p>
             <div class="acct-group">
-                <button class="acct-row" id="accentRow" aria-expanded="false" aria-controls="accentFold">
+                <button class="acct-row" id="themeRow">
                     <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.8 1.6-1.6 0-.9-.6-1.3-.6-2.1 0-.9.7-1.5 1.6-1.5H17a4 4 0 0 0 4-4c0-4.4-4-8.8-9-8.8z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10" cy="7" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/></svg></span>
-                    <span class="acct-label">主題色</span><span class="grow"></span>
-                    <span class="acct-value" id="accentName">琥珀</span><i class="acct-swatch"></i><svg class="acct-fold-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    <span class="acct-label">外觀與主題</span><span class="grow"></span>
+                    <span class="acct-value" id="themeValue">琥珀・呼吸光</span><i class="acct-swatch"></i><svg class="acct-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
                 </button>
-                <div class="acct-fold" id="accentFold" inert><div class="acct-fold-in">
-                <div class="accent-grid" id="accentGrid">
-                    <button class="accent-opt" data-accent="amber"><i style="background:#E9B154"></i>琥珀</button>
-                    <button class="accent-opt" data-accent="mint"><i style="background:#5ED3A8"></i>薄荷</button>
-                    <button class="accent-opt" data-accent="violet"><i style="background:#A99BF0"></i>霧紫</button>
-                    <button class="accent-opt" data-accent="sakura"><i style="background:#F4A3BE"></i>櫻花</button>
-                    <button class="accent-opt" data-accent="ocean"><i style="background:#6CB4EE"></i>海藍</button>
-                    <button class="accent-opt" data-accent="coral"><i style="background:#FF8B74"></i>珊瑚</button>
-                    <button class="accent-opt" data-accent="matcha"><i style="background:#A9C46C"></i>抹茶</button>
-                    <button class="accent-opt" data-accent="moon"><i style="background:#C3CAD6"></i>月光銀</button>
-                </div>
-                </div></div>
-                <button class="acct-row" id="bgRow" aria-expanded="false" aria-controls="bgFold">
-                    <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.4"/></svg></span>
-                    <span class="acct-label">背景</span><span class="grow"></span>
-                    <span class="acct-value" id="bgName">呼吸光</span><svg class="acct-fold-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                <button class="acct-row" id="adminRow" hidden>
+                    <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7.5 3v5.5c0 4.5-3.2 8.2-7.5 9.5-4.3-1.3-7.5-5-7.5-9.5V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+                    <span class="acct-label">管理</span><span class="grow"></span>
+                    <span class="acct-value" id="adminValue">使用狀況、檢舉、公告</span><svg class="acct-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
                 </button>
-                <div class="acct-fold" id="bgFold" inert><div class="acct-fold-in">
-                <div class="bg-grid" id="bgGrid">
-                    <button class="bg-opt" data-bg="glow"><span class="th t-glow"></span>呼吸光</button>
-                    <button class="bg-opt" data-bg="stars"><span class="th t-stars"></span>星空</button>
-                    <button class="bg-opt" data-bg="aurora"><span class="th t-aurora"></span>極光</button>
-                    <button class="bg-opt" data-bg="mist"><span class="th t-mist"></span>晨霧</button>
-                    <button class="bg-opt" data-bg="rain"><span class="th t-rain"></span>雨夜</button>
-                    <button class="bg-opt" data-bg="petal"><span class="th t-petal"></span>花瓣</button>
-                    <button class="bg-opt" data-bg="grid"><span class="th t-grid"></span>方格紙</button>
-                    <button class="bg-opt" data-bg="plain"><span class="th t-plain"></span>極簡</button>
-                    <button class="bg-opt" data-bg="sky"><span class="th t-sky"></span>天空</button>
-                    <button class="bg-opt" data-bg="photo"><span class="th t-photo" id="bgPhotoTh"></span>照片</button>
-                </div>
-                <div class="bg-photo-acts" id="bgPhotoActs" hidden>
-                    <button class="btn" id="bgPhotoEdit">調整照片</button><button class="btn" id="bgPhotoChange">換一張</button>
-                </div>
-                <input type="file" accept="image/*" id="bgPhotoFile" hidden>
-                </div></div>
-                <div class="acct-row acct-mode">
-                    <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor"/></svg></span>
-                    <span class="acct-label">外觀</span><span class="grow"></span>
-                    <div class="mode-seg" id="modeSeg" role="group" aria-label="外觀">
-                        <button data-mode="light">淺色</button><button data-mode="dark">深色</button><button data-mode="auto">跟系統</button>
-                    </div>
-                </div>
                 <button class="acct-row" id="notifRow">
                     <span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg></span>
                     <span class="acct-label">通知</span><span class="grow"></span>
@@ -852,6 +822,69 @@
         <div class="guide-body nf-body" id="nfBody"></div>
     </section>
 
+    <!-- v73 外觀與主題（從個人設定點進來的整頁設定：深淺色、主題色、背景） -->
+    <section class="guide-screen nf-screen th-screen" id="themeScreen" role="dialog" aria-modal="true" aria-labelledby="thTitle">
+        <header class="guide-head">
+            <button class="icon-btn ghost" id="thBack" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <h2 id="thTitle">外觀與主題</h2>
+        </header>
+        <div class="guide-body nf-body th-body" id="thBody">
+            <section class="nf-sec" id="thMode">
+                <h3>深淺色</h3>
+                <div class="th-modes" id="modeSeg" role="group" aria-label="深淺色">
+                    <button data-mode="light"><span class="th-mode-pic m-light"><i></i><i></i><i></i></span>淺色</button>
+                    <button data-mode="dark"><span class="th-mode-pic m-dark"><i></i><i></i><i></i></span>深色</button>
+                    <button data-mode="auto"><span class="th-mode-pic m-auto"><i></i><i></i><i></i></span>跟系統</button>
+                </div>
+                <p class="nf-foot">深淺色每台裝置各自決定；右上角的月亮／太陽也能快速切換。</p>
+            </section>
+            <section class="nf-sec" id="thAccent">
+                <h3>主題色<span class="th-cur" id="accentName">琥珀</span></h3>
+                <div class="nf-card th-card">
+                <div class="accent-grid" id="accentGrid">
+                    <button class="accent-opt" data-accent="amber"><i style="background:#E9B154"></i>琥珀</button>
+                    <button class="accent-opt" data-accent="mint"><i style="background:#5ED3A8"></i>薄荷</button>
+                    <button class="accent-opt" data-accent="violet"><i style="background:#A99BF0"></i>霧紫</button>
+                    <button class="accent-opt" data-accent="sakura"><i style="background:#F4A3BE"></i>櫻花</button>
+                    <button class="accent-opt" data-accent="ocean"><i style="background:#6CB4EE"></i>海藍</button>
+                    <button class="accent-opt" data-accent="coral"><i style="background:#FF8B74"></i>珊瑚</button>
+                    <button class="accent-opt" data-accent="matcha"><i style="background:#A9C46C"></i>抹茶</button>
+                    <button class="accent-opt" data-accent="moon"><i style="background:#C3CAD6"></i>月光銀</button>
+                </div>
+                </div>
+            </section>
+            <section class="nf-sec" id="thBg">
+                <h3>背景<span class="th-cur" id="bgName">呼吸光</span></h3>
+                <div class="nf-card th-card">
+                <div class="bg-grid" id="bgGrid">
+                    <button class="bg-opt" data-bg="glow"><span class="th t-glow"></span>呼吸光</button>
+                    <button class="bg-opt" data-bg="stars"><span class="th t-stars"></span>星空</button>
+                    <button class="bg-opt" data-bg="aurora"><span class="th t-aurora"></span>極光</button>
+                    <button class="bg-opt" data-bg="mist"><span class="th t-mist"></span>晨霧</button>
+                    <button class="bg-opt" data-bg="rain"><span class="th t-rain"></span>雨夜</button>
+                    <button class="bg-opt" data-bg="petal"><span class="th t-petal"></span>花瓣</button>
+                    <button class="bg-opt" data-bg="grid"><span class="th t-grid"></span>方格紙</button>
+                    <button class="bg-opt" data-bg="plain"><span class="th t-plain"></span>極簡</button>
+                    <button class="bg-opt" data-bg="sky"><span class="th t-sky"></span>天空</button>
+                    <button class="bg-opt" data-bg="photo"><span class="th t-photo" id="bgPhotoTh"></span>照片</button>
+                </div>
+                <div class="bg-sky-acts" id="bgSkyActs" hidden>
+                    <label class="nf-row sky-row"><span class="nf-tx"><b>跟著天氣變</b><small id="skyWxNow">下雨時變灰、有雨滴；打雷會閃</small></span><input type="checkbox" id="skyWx"><span class="nf-sw"></span></label>
+                    <div class="sky-loc" id="skyLoc">
+                        <select class="field sky-city" id="skyCity" aria-label="看哪裡的天氣"></select>
+                        <button class="btn" id="skyGps">用目前位置</button>
+                    </div>
+                </div>
+                <div class="bg-photo-acts" id="bgPhotoActs" hidden>
+                    <button class="btn" id="bgPhotoEdit">調整照片</button><button class="btn" id="bgPhotoChange">換一張</button>
+                </div>
+                <input type="file" accept="image/*" id="bgPhotoFile" hidden>
+                </div>
+                <p class="nf-foot">主題色和背景會跟著帳號同步。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</p>
+            </section>
+        </div>
+    </section>
+
     <!-- v62：選時間的滾輪 -->
     <div class="modal bottom" id="wheelModal" role="dialog" aria-modal="true" aria-labelledby="whTitle">
         <div class="sheet wh-sheet">
@@ -872,11 +905,12 @@
         <div class="sheet tour-card wn-card">
             <p class="tour-kicker">版本更新</p>
             <h2 id="wnTitle">這次新增了什麼</h2>
-            <p class="tour-sub">背景可以用自己的照片，還多了會變的天空和吃飯抽籤</p>
+            <p class="tour-sub">背景可以用自己的照片，天空會跟著天氣變，聊天室也更安全了</p>
             <ul class="tour-list">
                 <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.4"/></svg></span><div><b>用自己的照片當背景</b><span>選一張喜歡的照片，可以調模糊和淡化，字一樣看得清楚；登入的話換裝置也看得到</span></div></li>
-                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></span><div><b>會變的天空</b><span>新背景：跟著現在的時間變成清晨、白天、夕陽和星空</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17a4 4 0 1 1 1-7.9A5 5 0 0 1 18 10a3.5 3.5 0 0 1-1 7z"/><path d="M9 20l-1 2M13 20l-1 2M17 20l-1 2"/></svg></span><div><b>會變的天空</b><span>新背景：跟著時間變成清晨、白天、夕陽和星空，下雨時會下雨，月亮照真實月相</span></div></li>
                 <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0z"/><path d="M8 20.5h8"/><path d="M14 8.5l5-5"/><path d="M11 8.5l5.5-5.5"/></svg></span><div><b>今天吃什麼？</b><span>首頁的吃飯轉盤，選項可以自己改，還能跳過最近吃過的</span></div></li>
+                <li><span class="tour-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4h11l-1.5 4L16 12H5"/></svg></span><div><b>聊天室可以檢舉和封鎖</b><span>長按別人的訊息就能檢舉或封鎖，不舒服的訊息不用忍</span></div></li>
             </ul>
             <p class="tour-note">背景在右上角<b>頭像 → 背景</b>裡換。</p>
             <div class="sheet-btns">
@@ -1047,7 +1081,7 @@
   <p class="g-sys">哲哲 收回了一則訊息</p>
   <div class="g-pop"><div class="g-rbar"><span>❤️</span><span>😂</span><span>😮</span><span>😢</span><span>👍</span><span>🔥</span></div><span class="g-msg mine solo"><span>好 👌 衝 ≥ 3 小時！</span></span><div class="menu"><span>回覆</span><span>複製文字</span><span class="red">收回訊息</span></div></div>
 </div></figure>
-                <ul class="g-points"><li>在房間裡，聊天室在<b>座位下面、今天排行上面</b>，有未讀訊息時會顯示數字。</li><li>可以傳文字、表情符號（用手機鍵盤就能打）和照片；照片會先壓縮，30 天後過期。</li><li><b>長按訊息</b>（電腦按右鍵）會浮出訊息卡片：上面一排可以<b>按表情</b>（❤️😂😮😢👍🔥），下面可以回覆、複製文字、儲存照片；自己的訊息 24 小時內可以收回。</li><li><b>回覆</b>：長按選「回覆」，或在手機上把訊息<b>往右滑</b>，輸入框上面會出現「回覆 某某」，按 ✕ 取消。送出後訊息上方會帶著原本那則，點一下就跳回去看。</li><li><b>連點兩下</b>訊息就會送出 ❤️，再連點兩下取消。表情會貼在訊息泡泡角落，不會蓋到字；點表情可以看是誰按的，每人一則只能按一個，按別的會換掉。</li><li>自己的訊息旁邊會顯示「已讀 N」。</li><li>在其他頁面有新訊息時，畫面<b>上方</b>會滑出通知（頭像、名字、房間和訊息），點一下直接打開聊天室，往上滑可以關掉；「計時」分頁也會出現紅點。通知樣式可以在個人設定的<b>訊息通知</b>選「頂部橫幅」或「頂部小膠囊」。</li><li>打開<b>推播通知</b>（個人設定 →「通知」）之後，網站沒開也收得到新訊息；有人<b>回覆你的訊息</b>，通知上面會多一行「回覆了你：「你的訊息…」」，有人<b>對你的訊息按表情</b>也會通知你。每一種都可以在通知設定裡分別開關。</li></ul>
+                <ul class="g-points"><li>在房間裡，聊天室在<b>座位下面、今天排行上面</b>，有未讀訊息時會顯示數字。</li><li>可以傳文字、表情符號（用手機鍵盤就能打）和照片；照片會先壓縮，30 天後過期。</li><li><b>長按訊息</b>（電腦按右鍵）會浮出訊息卡片：上面一排可以<b>按表情</b>（❤️😂😮😢👍🔥），下面可以回覆、複製文字、儲存照片；自己的訊息 24 小時內可以收回。</li><li><b>回覆</b>：長按選「回覆」，或在手機上把訊息<b>往右滑</b>，輸入框上面會出現「回覆 某某」，按 ✕ 取消。送出後訊息上方會帶著原本那則，點一下就跳回去看。</li><li><b>連點兩下</b>訊息就會送出 ❤️，再連點兩下取消。表情會貼在訊息泡泡角落，不會蓋到字；點表情可以看是誰按的，每人一則只能按一個，按別的會換掉。</li><li>自己的訊息旁邊會顯示「已讀 N」。</li><li><b>檢舉和封鎖</b>：長按別人的訊息，選<b>檢舉這則訊息</b>（選原因後送出，管理者會在 24 小時內處理，對方不會知道是誰檢舉的），或<b>封鎖這個人</b>（不會再看到他的訊息和通知）。在房間點他的頭像也能封鎖或解除封鎖。同一則訊息被 3 個人檢舉會先自動隱藏；亂發言的人可能會被禁言一段時間。</li><li>在其他頁面有新訊息時，畫面<b>上方</b>會滑出通知（頭像、名字、房間和訊息），點一下直接打開聊天室，往上滑可以關掉；「計時」分頁也會出現紅點。通知樣式可以在個人設定的<b>訊息通知</b>選「頂部橫幅」或「頂部小膠囊」。</li><li>打開<b>推播通知</b>（個人設定 →「通知」）之後，網站沒開也收得到新訊息；有人<b>回覆你的訊息</b>，通知上面會多一行「回覆了你：「你的訊息…」」，有人<b>對你的訊息按表情</b>也會通知你。每一種都可以在通知設定裡分別開關。</li></ul>
                 
             </section>
 
@@ -1093,7 +1127,7 @@
   <div class="g-acct-row">網站導覽<span>›</span></div>
   <div class="g-acct-row">新增到主畫面<span>›</span></div>
 </div></figure>
-                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。手機和電腦<b>同時使用</b>、或是沒網路時改的東西，連上網路後會一筆一筆合併，不會互相蓋掉。</li><li><b>沒有網路</b>時畫面下方會出現「離線中」的小提示，照樣可以計時、改進度；連上網路後會顯示「同步中」，同步好就自己收起來。</li><li>個人設定裡的<b>隱私權政策</b>，寫清楚收集了哪些資料、誰看得到、怎麼刪除。</li><li>不想用了可以按個人設定最下面的<b>刪除帳號與資料</b>：雲端資料、聊天訊息和照片都會永久刪除，並離開所有房間（要輸入「刪除」確認，Google 可能會請你再登入一次）。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 10 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡、天空、照片，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>天空</b>：跟著現在的時間變，清晨、白天、夕陽、晚上的星星和月亮；淺色是淡淡的天色、深色是夜空般的深色。</li><li><b>照片</b>：選一張自己的照片當背景，可以調<b>模糊</b>、<b>淡化</b>，拖曳預覽移動位置；文字和卡片會自動保持看得清楚。選了以後背景下面會多「調整照片」「換一張」。登入的話照片會跟著帳號，換裝置也看得到（只有自己看得到）。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>通知</b>：個人設定裡只有一列「通知」，點進去是完整的通知設定頁（下一段有詳細說明）。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
+                <ul class="g-points"><li>用 Google 登入後，手機和電腦的資料會<b>自動同步</b>；沒登入時資料只存在這台裝置。手機和電腦<b>同時使用</b>、或是沒網路時改的東西，連上網路後會一筆一筆合併，不會互相蓋掉。</li><li><b>沒有網路</b>時畫面下方會出現「離線中」的小提示，照樣可以計時、改進度；連上網路後會顯示「同步中」，同步好就自己收起來。</li><li>個人設定裡的<b>隱私權政策</b>，寫清楚收集了哪些資料、誰看得到、怎麼刪除。</li><li>不想用了可以按個人設定最下面的<b>刪除帳號與資料</b>：雲端資料、聊天訊息和照片都會永久刪除，並離開所有房間（要輸入「刪除」確認，Google 可能會請你再登入一次）。</li><li><b>主題色</b>有 8 種：琥珀、薄荷、霧紫、櫻花、海藍、珊瑚、抹茶、月光銀。</li><li><b>背景</b>有 10 種：呼吸光、星空、極光、晨霧、雨夜、花瓣、方格紙、極簡、天空、照片，可以和主題色自由搭配（花瓣、極光的顏色會跟著主題色變）。會動的背景在專注計時和聊天室時會自動停下來，比較省電。</li><li><b>天空</b>：跟著現在的時間變，清晨、白天、夕陽、晚上的星星和月亮；淺色是淡淡的天色、深色是夜空般的深色。月亮會照<b>真實的月相</b>（今天是上弦月還是滿月）。打開<b>跟著天氣變</b>的話，下雨時天空變灰、有雨滴，打雷會偶爾閃一下，陰天、起霧也會變灰；天氣看你選的<b>縣市</b>，也可以按「用目前位置」（只取大概的位置）。</li><li><b>照片</b>：選一張自己的照片當背景，可以調<b>模糊</b>、<b>淡化</b>，拖曳預覽移動位置；文字和卡片會自動保持看得清楚。選了以後背景下面會多「調整照片」「換一張」。登入的話照片會跟著帳號，換裝置也看得到（只有自己看得到）。</li><li><b>外觀</b>可以選淺色、深色或跟著手機系統；右上角的月亮／太陽也能快速切換。主題色和背景會跟著帳號同步。</li><li><b>通知</b>：個人設定裡只有一列「通知」，點進去是完整的通知設定頁（下一段有詳細說明）。</li><li><b>公告</b>：有重要的事（例如維修、新功能）時，畫面最上面會出現一條公告，有的會帶一個按鈕可以直接去看；按 × 關掉後這則就不會再出現。</li><li><b>新增到主畫面</b>：像 App 一樣全螢幕開啟、打開更快，也比較能收到通知。</li><li><b>自動更新</b>：每次打開或從別的 App 切回來，都會自動檢查新版本，在你沒在打字或操作時悄悄更新，不用自己重新整理。最下面的版本號可以確認目前是哪一版。</li><li>離開超過幾分鐘再打開，會<b>自動回到倒數頁</b>；如果還在專注計時，則會直接回到計時頁。</li></ul>
                 
             </section>
 
@@ -1217,6 +1251,8 @@
                 <button data-pop="copy" id="popCopy"><span>複製文字</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button>
                 <button data-pop="save" id="popSave"><span>儲存照片</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
                 <button data-pop="recall" id="popRecall" class="danger"><span>收回訊息</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+                <button data-pop="report" id="popReport" class="danger"><span>檢舉這則訊息</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4h11l-1.5 4L16 12H5"/></svg></button>
+                <button data-pop="block" id="popBlock" class="danger"><span>封鎖這個人</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg></button>
                 <button data-pop="delete" id="popDelete" class="danger"><span>刪除（房主）</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
             </div>
             <p class="pop-note" id="popNote"></p>
@@ -1226,6 +1262,7 @@
     <!-- 聊天：看大圖 -->
     <div class="modal img-modal" id="imgModal" role="dialog" aria-modal="true" aria-label="照片">
         <img id="imgView" alt="照片" data-close>
+        <button class="img-save" id="imgSave" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>儲存照片</button>
         <button class="icon-btn img-close" data-close aria-label="關閉"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
 
@@ -1233,6 +1270,17 @@
     <!-- 聊天訊息通知：頂部橫幅／頂部小膠囊（個人設定裡選） -->
     <div class="nbanner" id="nBanner" role="status" aria-live="polite" hidden></div>
     <div class="npill" id="nPill" role="status" aria-live="polite" hidden></div>
+
+    <!-- v73 檢舉聊天訊息 -->
+    <div class="modal" id="reportModal" role="dialog" aria-modal="true" aria-labelledby="repTitle">
+        <div class="sheet rep-sheet">
+            <h2 id="repTitle">檢舉這則訊息</h2>
+            <p class="note">選一個原因，管理者會在 24 小時內處理（刪除訊息，必要時禁言）。檢舉不會讓對方知道是誰。</p>
+            <div class="rep-quote" id="repQuote"></div>
+            <div class="rep-list" id="repList" role="radiogroup" aria-label="原因"></div>
+            <div class="sheet-btns"><span class="spacer"></span><button class="btn" data-close>取消</button><button class="btn btn-accent" id="repSend" disabled>送出檢舉</button></div>
+        </div>
+    </div>
 
     <!-- 照片背景 -->
     <div class="modal" id="bgPhotoModal" role="dialog" aria-modal="true" aria-labelledby="bgPhotoTitle">
