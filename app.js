@@ -61,7 +61,7 @@ const AI_ON = false;
 if (AI_ON) document.documentElement.classList.add('ai-on');
 // v70：讀書地圖先拿掉了（還沒達到想要的效果）。程式碼在 v69 的版本裡，之後要做可以從那裡拿回來
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v76';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v77';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
