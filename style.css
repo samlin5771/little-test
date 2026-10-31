@@ -301,7 +301,7 @@ html[data-bg="photo"][data-theme="dark"] { --surface: rgba(12, 13, 18, .42); }
     background: #050608; color: rgba(242, 240, 233, 0.8); font: 700 13px 'Noto Sans TC', sans-serif; letter-spacing: 0.4em; text-indent: 0.4em;
     transition: opacity 0.5s ease, visibility 0.5s;
 }
-#splash svg { animation: splashIn 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
+#splash img { animation: splashIn 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
 @keyframes splashIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: none; } }
 @media (display-mode: standalone), (display-mode: fullscreen) { #splash { display: flex; } }
 #splash.hide { opacity: 0; visibility: hidden; }
@@ -1042,7 +1042,7 @@ body.sub #themeBtn, body.sub #accountBtn { display: none; }
 /* --- 加到主畫面教學（置中圖卡） --- */
 .install-card { max-width: 380px; padding: 26px 22px 22px; border-radius: 28px; }
 .install-head { text-align: center; margin-bottom: 18px; }
-.install-icon { border-radius: 16px; background: #050608; display: block; margin: 0 auto 14px; box-shadow: 0 10px 30px rgba(var(--accent-rgb), 0.25); }
+.install-icon { border-radius: 16px; background: #fff; display: block; margin: 0 auto 14px; box-shadow: 0 10px 30px rgba(var(--accent-rgb), 0.25); }
 .install-head h2 { margin: 0 0 6px; font-size: 19px; }
 .install-head p { margin: 0; font-size: 13.5px; color: var(--muted); font-family: 'Noto Sans TC', sans-serif; }
 .install-card .seg { display: grid; margin-bottom: 6px; }
