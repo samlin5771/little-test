@@ -61,7 +61,7 @@ const AI_ON = false;
 if (AI_ON) document.documentElement.classList.add('ai-on');
 // v70：讀書地圖先拿掉了（還沒達到想要的效果）。程式碼在 v69 的版本裡，之後要做可以從那裡拿回來
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v78';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v80';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -1332,6 +1332,27 @@ function closeModal(id) {
     // 個人設定關掉後，主題色、背景的展開也收起來（等視窗淡出後再收，不會看到跳動）
     if (id === 'accountModal') setTimeout(() => { if (!$('accountModal').classList.contains('open')) closeFolds(); }, 220);
 }
+// v80 表單視窗改成 iOS 系統的樣子：上排「取消｜標題｜儲存」、灰色底、白色圓角欄位；刪除變成最下面一整列紅字
+// （只是把原本的按鈕和標題搬位置，id 和事件都不變）
+const FM_IDS = ['eventModal', 'todoModal', 'cdEditModal', 'joinModal', 'weeklyModal', 'logModal', 'sessModal', 'fbModal', 'ttCellModal', 'ttTimeModal', 'ttImportModal', 'roomModal', 'meModal', 'reportModal', 'sylPickModal', 'goalModal'];
+FM_IDS.forEach(id => {
+    const m = $(id); if (!m) return;
+    const sh = m.querySelector('.sheet'), h2 = sh && sh.querySelector('h2'), bs = sh && sh.querySelector('.sheet-btns');
+    if (!sh || !h2 || !bs) return;
+    const cancel = bs.querySelector('[data-close]'), prim = bs.querySelector('.btn-accent');
+    if (!cancel) return;
+    const head = document.createElement('div');
+    head.className = 'fm-head';
+    cancel.className = 'hbtn'; cancel.removeAttribute('style');
+    if (prim) { prim.classList.remove('btn', 'btn-accent'); prim.classList.add('hbtn', 'prim'); prim.style.flex = ''; }
+    head.append(cancel, h2, prim || Object.assign(document.createElement('span'), { className: 'hbtn ghost' }));
+    sh.prepend(head);
+    sh.classList.add('fm-sheet');
+    m.classList.add('fm', 'bottom');
+    const rest = [...bs.querySelectorAll('.btn')];
+    if (rest.length) { bs.className = 'fm-dels'; bs.querySelectorAll('.spacer').forEach(x => x.remove()); rest.forEach(b => { b.className = 'fm-del'; }); }
+    else bs.remove();
+});
 document.querySelectorAll('.modal').forEach(m => {
     // data-locked 的視窗（加到主畫面教學）只能按裡面的按鈕關閉
     m.addEventListener('click', (e) => { if (m.hasAttribute('data-locked')) return; if (e.target === m || e.target.closest('[data-close]')) closeModal(m.id); });
@@ -2203,6 +2224,27 @@ async function holRefresh() {
 }
 setTimeout(() => { holRefresh(); }, 4000);
 
+// =====================================================
+// v80 行事曆（跟 iOS 行事曆一樣）：每一格日期下面直接放彩色橫條；
+// 連續多天的行程、考試、倒數是一條橫跨的色條（跨週會在每一週重新顯示標題）；點橫條看詳細資訊
+// =====================================================
+let calItems = {};
+const CAL_MAXL = 3;
+// 這個月要畫在月曆上的東西：{ k, type, title, start, end, color, important, ref }
+function calMonthItems(y, m) {
+    const ms = `${y}-${pad(m + 1)}-01`, me = `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`;
+    const hit = (s, e) => s <= me && e >= ms;
+    const out = [];
+    examEntries.forEach(([k, e]) => { if (hit(e.date, e.end || e.date)) out.push({ k: 'x:' + k, type: 'exam', title: e.short || e.name, full: e.name, start: e.date, end: e.end || e.date, color: 'var(--exam)', ref: e }); });
+    state.countdowns.items.filter(c => c.cal).forEach(c => {
+        let s = c.date, e = c.end || c.date;
+        if (c.yearly) { s = `${y}${c.date.slice(4)}`; e = s; if (c.date > s) return; }
+        if (hit(s, e)) out.push({ k: 'c:' + c.id, type: 'cd', title: c.short || c.name, full: c.name, start: s, end: e, color: c.color, ref: c });
+    });
+    state.events.forEach(ev => { const e = evEnd(ev); if (hit(ev.start, e)) out.push({ k: 'e:' + ev.id, type: 'event', title: ev.title, full: ev.title, start: ev.start, end: e, color: ev.important ? 'var(--important)' : 'var(--accent)', important: !!ev.important, ref: ev }); });
+    state.todos.filter(t => t.date).forEach(t => { if (hit(t.date, t.date)) out.push({ k: 't:' + t.id, type: 'todo', title: t.text, full: t.text, start: t.date, end: t.date, color: 'var(--mark-green)', ref: t }); });
+    return out;
+}
 function renderCalendar() {
     const t = todayStr();
     $('calYear').textContent = calY;
@@ -2210,41 +2252,52 @@ function renderCalendar() {
     const first = new Date(calY, calM, 1);
     const offset = (first.getDay() + 6) % 7;
     const total = new Date(calY, calM + 1, 0).getDate();
+    const items = calMonthItems(calY, calM);
+    calItems = {};
+    items.forEach(i => { calItems[i.k] = i; });
+    const weeks = Math.ceil((offset + total) / 7);
     let html = '';
-    for (let i = 0; i < offset; i++) html += '<div class="cal-cell blank"></div>';
-    for (let n = 1; n <= total; n++) {
-        const ds = `${calY}-${pad(calM + 1)}-${pad(n)}`;
-        const evs = eventsOn(ds), exs = examsOn(ds);
-        const imp = evs.some(e => e.important);
-        const hol = holOn(ds), rest = hol ? hol.off : isWeekendDs(ds);
-        const cls = ['cal-cell', ds === t ? 'today' : '', ds < t ? 'past' : '', ds === selDate ? 'selected' : '', exs.length ? 'exam' : '', imp ? 'imp-day' : '', rest ? 'rest' : '', hol?.off ? 'hol' : '', hol?.work ? 'work' : ''].join(' ');
-        const singles = evs.filter(e => !e.end), multi = evs.find(e => e.end);
-        const tds = todosOn(ds), cds = cdsOn(ds);
-        const dots = [...cds.map(c => `<i style="background:${c.color}"></i>`), ...singles.map(e => `<i class="${e.important ? 'imp' : ''}"></i>`), ...tds.map(() => '<i class="td"></i>')].slice(0, 3).join('');
-        // 連續多天：手機在日期下方畫一條連起來的線（每週的頭尾也收成圓角）
-        let bar = '';
-        if (multi) {
-            const col = (offset + n - 1) % 7;
-            const head = ds === multi.start || col === 0 || n === 1, tail = ds === multi.end || col === 6 || n === total;
-            bar = `<span class="cal-bar${multi.important ? ' imp' : ''}${head ? ' head' : ''}${tail ? ' tail' : ''}"></span>`;
+    for (let w = 0; w < weeks; w++) {
+        const ws = addDaysStr(ymd(first), w * 7 - offset), we = addDaysStr(ws, 6);
+        let days = '';
+        for (let c = 0; c < 7; c++) {
+            const ds = addDaysStr(ws, c), inMonth = ds.slice(0, 7) === `${calY}-${pad(calM + 1)}`;
+            if (!inMonth) { days += '<div class="cal-cell blank"></div>'; continue; }
+            const n = +ds.slice(8), hol = holOn(ds), rest = hol ? hol.off : isWeekendDs(ds);
+            const cnt = items.filter(i => i.start <= ds && ds <= i.end).length;
+            const cls = ['cal-cell', ds === t ? 'today' : '', ds < t ? 'past' : '', ds === selDate ? 'selected' : '', rest ? 'rest' : '', hol?.off ? 'hol' : '', hol?.work ? 'work' : ''].join(' ');
+            days += `<button class="${cls}" data-date="${ds}" aria-label="${calM + 1}月${n}日${hol ? '，' + hol.full : ''}${cnt ? `，${cnt} 個項目` : ''}"><span class="cal-num num">${n}</span>${hol ? `<span class="cal-hol">${esc(hol.n)}</span>` : ''}</button>`;
         }
-        const titles = [
-            ...(hol ? [`<span class="hol${hol.work ? ' work' : ''}">${esc(hol.full)}</span>`] : []),
-            ...exs.map(e => `<span class="exam">${esc(e.short)}</span>`),
-            ...cds.map(c => `<span class="cdt" style="--cd-color:${c.color}">${esc(c.short)}</span>`),
-            ...evs.map(e => `<span class="${e.important ? 'imp' : ''}${e.end ? ' multi' : ''}${e.end && ds !== e.start ? ' cont' : ''}">${esc(e.title)}</span>`),
-            ...tds.map(x => `<span class="td">${esc(x.text)}</span>`)
-        ].slice(0, 3).join('');
-        const label = `${calM + 1}月${n}日${hol ? '，' + hol.full : ''}${exs.length ? '，考試' : ''}${imp ? '，有重要行程' : ''}${evs.length ? `，${evs.length} 個行程` : ''}${tds.length ? `，${tds.length} 個待辦` : ''}`;
-        html += `<button class="${cls}" data-date="${ds}" aria-label="${label}"><span class="cal-num num">${n}</span>${hol ? `<span class="cal-hol">${esc(hol.n)}</span>` : ''}<span class="cal-dots">${dots}</span>${bar}<span class="cal-titles">${titles}</span></button>`;
+        // 這一週的橫條：先排長的、早的，每一格最多 3 條，放不下的算「+N」
+        const wk = items.filter(i => i.start <= we && i.end >= ws).map(i => {
+            const s = i.start < ws ? ws : i.start, e = i.end > we ? we : i.end;
+            const c0 = Math.max(0, daysBetween(ws, s)), c1 = Math.min(6, daysBetween(ws, e));
+            return { i, c0, c1 };
+        }).sort((a, b) => a.c0 - b.c0 || (b.c1 - b.c0) - (a.c1 - a.c0));
+        const lanes = Array.from({ length: CAL_MAXL }, () => Array(7).fill(false));
+        const more = Array(7).fill(0);
+        let bars = '';
+        wk.forEach(({ i, c0, c1 }) => {
+            // 這個月以外的日子不畫（月初、月底那一週）
+            let a = c0, b = c1;
+            while (a <= b && addDaysStr(ws, a).slice(0, 7) !== `${calY}-${pad(calM + 1)}`) a++;
+            while (b >= a && addDaysStr(ws, b).slice(0, 7) !== `${calY}-${pad(calM + 1)}`) b--;
+            if (a > b) return;
+            const L = lanes.findIndex(l => l.slice(a, b + 1).every(x => !x));
+            if (L < 0) { for (let c = a; c <= b; c++) more[c]++; return; }
+            for (let c = a; c <= b; c++) lanes[L][c] = true;
+            const head = addDaysStr(ws, a) === i.start, tail = addDaysStr(ws, b) === i.end;
+            bars += `<button class="cal-ev t-${i.type}${i.important ? ' imp' : ''}${head ? ' head' : ''}${tail ? ' tail' : ''}" data-k="${esc(i.k)}" style="--c0:${a};--span:${b - a + 1};--lane:${L};--ev:${i.color}" aria-label="${esc(i.full)}"><span>${esc(i.title)}</span></button>`;
+        });
+        more.forEach((n, c) => { if (n) bars += `<span class="cal-more" style="--c0:${c}">+${n}</span>`; });
+        html += `<div class="cal-week${more.some(n => n) ? ' has-more' : ''}"><div class="cal-days">${days}</div>${bars}</div>`;
     }
-    const rest = (7 - (offset + total) % 7) % 7;
-    for (let i = 0; i < rest; i++) html += '<div class="cal-cell blank"></div>';
-    $('calGrid').innerHTML = html;
+    const g = $('calGrid');
+    g.classList.add('cal-b');
+    g.innerHTML = html;
     renderDayList();
     renderUpcoming();
 }
-
 function eventRowHtml(item, showRel) {
     const d = parseYmd(item.date);
     const t = todayStr();
@@ -2286,17 +2339,58 @@ function cdsOn(ds) {
     return state.countdowns.items.filter(c => c.cal && (c.yearly ? c.date.slice(5) === ds.slice(5) && c.date <= ds : c.date <= ds && ds <= (c.end || c.date)))
         .map(c => ({ key: c.id, name: c.name, short: c.short, color: c.color, yearly: c.yearly, date: c.date, end: c.end }));
 }
+// v80 本月行程：這個月所有的行程、倒數、考試（依日期排），點了打開編輯
 function renderUpcoming() {
-    const t = todayStr();
-    const items = [
-        ...examEntries.map(([, e]) => ({ date: e.date, title: e.name, exam: true, sub: e.end ? `${shortDate(e.date)} – ${shortDate(e.end)}，共 ${daysBetween(e.date, e.end) + 1} 天` : '' })),
-        ...state.events.map(e => ({ id: e.id, date: e.start, title: e.title, important: e.important, sub: e.end ? spanText(e) : '' }))
-    ].filter(i => i.date > t).sort((a, b) => a.date.localeCompare(b.date) || (b.exam ? 1 : 0) - (a.exam ? 1 : 0)).slice(0, 8);
-    $('upcomingList').innerHTML = items.length ? items.map(i => eventRowHtml(i, true)).join('') : '<li class="empty">接下來沒有安排</li>';
+    const list = calMonthItems(calY, calM).filter(i => i.type !== 'todo').sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
+    $('upcomingList').innerHTML = list.length ? list.map(i => {
+        const d = parseYmd(i.start), n = daysBetween(i.start, i.end) + 1;
+        const top = i.end !== i.start ? `${shortDate(i.start)}–${shortDate(i.end)}` : shortDate(i.start);
+        const sub = `週${WEEK_ZH[d.getDay()]}${n > 1 ? `・共 ${n} 天` : ''}`;
+        const tag = i.type === 'exam' ? '考試' : i.type === 'cd' ? '倒數' : i.important ? '重要' : '';
+        return `<li><button class="ml-row" data-k="${esc(i.k)}"><i class="ml-bar" style="background:${i.color}"></i><span class="ml-date num"><b>${top}</b><small>${sub}</small></span><span class="ml-title">${esc(i.full)}</span>${tag ? `<span class="ml-tag">${tag}</span>` : ''}</button></li>`;
+    }).join('') : '<li class="empty">這個月沒有行程</li>';
 }
+// 點月曆上的橫條：詳細資訊（右上可以編輯）
+function openCalDetail(k) {
+    const i = calItems[k];
+    if (!i) return;
+    const n = daysBetween(i.start, i.end) + 1, d0 = parseYmd(i.start), d1 = parseYmd(i.end);
+    const left = daysBetween(todayStr(), i.start);
+    const kind = { exam: '考試', cd: '倒數', event: '行程', todo: '待辦' }[i.type];
+    const wd = (ds, d) => `${shortDate(ds)}（${WEEK_ZH[d.getDay()]}）`;
+    const rows = n > 1 ? [['開始', wd(i.start, d0)], ['結束', wd(i.end, d1)], ['天數', `共 ${n} 天`]] : [['日期', wd(i.start, d0)]];
+    if (i.type === 'todo' && i.ref.time) rows.push(['時間', i.ref.time]);
+    if (i.type === 'event') rows.push(['重要', i.important ? '是' : '否']);
+    if (i.type === 'cd' && i.ref.yearly) rows.push(['每年重複', '是']);
+    rows.push(['距離今天', left > 0 ? `還有 ${left} 天` : left === 0 ? '就是今天' : (todayStr() <= i.end ? '進行中' : `${-left} 天前`)]);
+    $('cdtBody').innerHTML = `<div class="fm-group"><div class="cdt-head"><i style="background:${i.color}"></i><div><b>${esc(i.full)}</b><small>${kind}</small></div></div></div>
+        <div class="fm-group">${rows.map(([a, b]) => `<div class="fm-row"><span>${a}</span><span class="fm-val">${esc(b)}</span></div>`).join('')}</div>
+        ${i.type === 'exam' ? '<p class="fm-foot">考試日期是固定的，不能編輯。</p>' : ''}`;
+    $('cdtEdit').hidden = i.type === 'exam' || i.type === 'todo';
+    $('cdtEdit').dataset.k = k;
+    openModal('calDetailModal');
+}
+$('cdtEdit').addEventListener('click', () => {
+    const i = calItems[$('cdtEdit').dataset.k];
+    closeModal('calDetailModal');
+    if (!i) return;
+    // 等詳細資訊收起來再打開編輯，兩個視窗不會疊在一起
+    setTimeout(() => { if (i.type === 'event') openEventModal({ id: i.ref.id }); else if (i.type === 'cd') openCdEdit(i.ref.id); }, 240);
+});
+$('upcomingList').addEventListener('click', (e) => {
+    const r = e.target.closest('.ml-row');
+    if (!r) return;
+    const i = calItems[r.dataset.k];
+    if (!i) return;
+    if (i.type === 'event') openEventModal({ id: i.ref.id });
+    else if (i.type === 'cd') openCdEdit(i.ref.id);
+    else { selDate = i.start; renderCalendar(); }
+});
 
 $('calGrid').addEventListener('click', (e) => {
     if (Date.now() - calSwipedAt < 400) return;   // 剛滑動換月，不要當成點日期
+    const bar = e.target.closest('.cal-ev');
+    if (bar) { openCalDetail(bar.dataset.k); return; }
     const c = e.target.closest('.cal-cell[data-date]');
     if (!c) return;
     if (c.dataset.date === selDate) { openEventModal({ date: selDate }); return; } // 再點一次同一天 → 新增
@@ -2311,7 +2405,6 @@ function onEventListClick(e) {
 }
 $('selDayList').addEventListener('click', (e) => { const c = e.target.closest('[data-cdedit]'); if (c) { openCdEdit(c.dataset.cdedit); return; } onEventListClick(e); });
 $('selDayList').addEventListener('change', (e) => { if (e.target.dataset.todo && e.target.checked) completeTodoById(e.target.dataset.todo); });
-$('upcomingList').addEventListener('click', onEventListClick);
 
 function moveMonth(delta) {
     calM += delta;
@@ -2454,7 +2547,7 @@ function renderTodos() {
                     <button class="del-btn" aria-label="刪除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
                 </div>
             </li>`).join('') + '<li class="swipe-hint">往右滑完成，往左滑刪除</li>'
-        : '<li class="empty">目前沒有待辦事項，太棒了！</li>';
+        : '<li class="empty">目前沒有待辦事項，太棒了！<br><small>按右上角 ＋ 新增</small></li>';
 }
 function removeTodo(li, doneText) {
     li.style.opacity = '0';
@@ -2481,14 +2574,27 @@ $('todoList').addEventListener('change', (e) => { if (e.target.checked) removeTo
 $('todoList').addEventListener('click', (e) => { if (e.target.closest('.del-btn')) removeTodo(e.target.closest('li'), '已刪除'); });
 function addTodo() {
     const text = $('todoInput').value.trim();
-    if (!text) return;
+    if (!text) { toast('請輸入待辦內容'); $('todoInput').focus(); return; }
     const date = $('todoDate').value, time = date ? todoTime : '';
     state.todos.push({ id: uid(), text, ...(date ? { date, ...(time ? { time } : {}) } : {}) });
     $('todoInput').value = '';
     setTodoDate('');
     save(); renderTodosEverywhere();
+    closeModal('todoModal');
     if (date) toast(`已排在${todoDateText(date)}${time ? ' ' + time : ''}，行事曆上也看得到`);
 }
+// v80 新增待辦：從上面的「＋」打開視窗（在行事曆時預設是選中的那天）
+function openTodoModal(date) {
+    $('todoInput').value = '';
+    setTodoDate(date || '');
+    openModal('todoModal');
+    setTimeout(() => { if ($('todoModal').classList.contains('open')) $('todoInput').focus(); }, 120);
+}
+$('topAddBtn').addEventListener('click', () => {
+    const tab = document.body.dataset.tab;
+    if (tab === 'tab-todo') openTodoModal('');
+    else if (tab === 'tab-calendar') openEventModal({ date: selDate });
+});
 // 待辦日期：按日曆圖示選日期，選好後顯示在按鈕上，按 ✕ 取消
 let todoTime = '';
 function setTodoDate(v) {
@@ -3538,7 +3644,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'n' || e.key === 'N') {
         e.preventDefault();
         if (tab === 'tab-calendar') openEventModal({ date: selDate });
-        else { showTab('tab-todo'); setTimeout(() => $('todoInput').focus(), 50); }
+        else { showTab('tab-todo'); setTimeout(() => openTodoModal(''), 50); }
         return;
     }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -4379,12 +4485,15 @@ async function leaveRoom(code) {
 async function shareRoom(code) {
     const r = myRooms.find(x => x.id === code);
     const text = `一起來讀書！點連結登入後按「加入」，就能進「${r?.name || ''}」（邀請碼 ${code}）`;
-    const url = `${location.origin}${location.pathname}?join=${code}`;   // 朋友點開會直接問要不要加入
+    const url = `${location.origin}${location.pathname}?join=${code}`;   // 朋友點開會直接問要不要加入（有裝 App 會直接打開 App）
+    // v80 先複製邀請連結和代碼，再打開分享選單（不想分享也已經可以貼上）
+    let copied = false;
+    try { await navigator.clipboard.writeText(`${text}\n${url}`); copied = true; } catch (e) {}
+    if (copied) { toast('已複製邀請連結和代碼'); try { navigator.vibrate?.(10); } catch (e) {} }
     try {
         if (navigator.share) { await navigator.share({ title: '讀書房間邀請', text, url }); return; }
     } catch (e) { if (e.name === 'AbortError') return; }
-    try { await navigator.clipboard.writeText(`${text}\n${url}`); toast('已複製邀請訊息'); }
-    catch (e) { toast(`邀請碼：${code}`); }
+    if (!copied) toast(`邀請碼：${code}`);
 }
 
 const MEDAL = ['#E9B154', '#C9CED6', '#C98A5A'];
@@ -5059,8 +5168,9 @@ const NF_IC = {
     focus: '<path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5z"/><path d="M12 6.5v13"/>',
     bell: '<path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/>'
 };
-const nfIc = (k) => `<span class="nf-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${NF_IC[k]}</svg></span>`;
-const nfRow = (k, title, sub, on, path) => `<label class="nf-row">${nfIc(k)}<span class="nf-tx"><b>${title}</b><small>${sub}</small></span><input type="checkbox" role="switch" data-nf="${path}" ${on ? 'checked' : ''}><i class="nf-sw" aria-hidden="true"></i></label>`;
+const NF_COLOR = { chat: '#34C759', reply: '#007AFF', react: '#FF9500', poke: '#5E5CE6', pomo: '#FF3B30', daily: '#FF9500', morning: '#FFCC00', event: '#FF3B30', todo: '#34C759', quiet: '#5E5CE6', focus: '#007AFF', bell: '#FF3B30' };
+const nfIc = (k) => `<span class="nf-ic" style="--ic:${NF_COLOR[k] || '#8E8E93'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${NF_IC[k]}</svg></span>`;
+const nfRow = (k, title, sub, on, path) => `<label class="nf-row">${nfIc(k)}<span class="nf-tx"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span><input type="checkbox" role="switch" data-nf="${path}" ${on ? 'checked' : ''}><i class="nf-sw" aria-hidden="true"></i></label>`;
 const nfVal = (label, value, act, aria) => `<div class="nf-line"><span>${label}</span><button type="button" class="nf-val" data-nfa="${act}" aria-label="${aria || label}：${value.replace(/<[^>]+>/g, '')}"><span>${value}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 10l4 4 4-4"/></svg></button></div>`;
 function morningChips() {
     const t = todayStr();
@@ -5083,39 +5193,37 @@ function renderNotif() {
     <section class="nf-sec"><h3>這台裝置</h3><div class="nf-card">${dev}</div>
         <p class="nf-foot">每台手機、電腦要各自開啟一次推播；下面的設定跟著帳號，所有裝置共用。</p>
         ${on ? '<button class="btn nf-test" id="nfTest" data-nfa="test">傳一則測試通知</button>' : ''}</section>
-    <section class="nf-sec"><h3>朋友和聊天</h3><div class="nf-card">
-        ${nfRow('chat', '聊天訊息', '朋友在讀書房間傳訊息', n.chat, 'chat')}
-        ${nfRow('reply', '回覆你的訊息', '通知上面會多一行「回覆了你：你的訊息…」', n.reply, 'reply')}
-        ${nfRow('react', '對你的訊息按表情', '例如「對你的訊息按了 😂」', n.react, 'react')}
-        ${nfRow('poke', '朋友叫你讀書', '房間裡的朋友點你的頭像叫你去讀書', n.poke, 'poke')}
-    </div></section>
+    <section class="nf-sec"><h3>朋友</h3><div class="nf-card">
+        ${nfRow('chat', '聊天室通知', '', n.chat || n.reply || n.react, 'chatall')}
+        ${nfRow('poke', '叫我讀書', '', n.poke, 'poke')}
+    </div><p class="nf-foot">聊天室通知包含新訊息、回覆你、對你的訊息按表情。</p></section>
     <section class="nf-sec"><h3>讀書</h3><div class="nf-card">
-        ${nfRow('pomo', '番茄鐘時間到', '專注結束：「休息中，點一下繼續」', n.pomo, 'pomo')}
-        ${nfRow('daily', '每日讀書提醒', '到了這個時間，今天還沒達標才提醒', n.daily.on, 'daily.on')}
+        ${nfRow('pomo', '番茄鐘時間到', '', n.pomo, 'pomo')}
+        ${nfRow('daily', '每日提醒', '', n.daily.on, 'daily.on')}
         ${n.daily.on ? `<div class="nf-sub">${nfVal('每天', n.daily.time, 'daily', '每日讀書提醒時間')}${quietWarn(n.daily.time)}</div>` : ''}
-        ${nfRow('morning', '早安倒數', '每天早上告訴你離考試還有幾天', n.morning.on, 'morning.on')}
+        ${nfRow('morning', '早安倒數', '', n.morning.on, 'morning.on')}
         ${n.morning.on ? `<div class="nf-sub">${nfVal('每天', n.morning.time, 'morning', '早安倒數時間')}${quietWarn(n.morning.time)}
             <div class="nf-line col"><span>要倒數哪些（可以複選）</span><div class="nf-chips">${morningChips()}</div></div></div>` : ''}
-    </div></section>
+    </div><p class="nf-foot">每日提醒：今天還沒達標才會提醒。早安倒數：每天早上告訴你還有幾天。</p></section>
     <section class="nf-sec"><h3>行事曆和待辦</h3><div class="nf-card">
-        ${nfRow('event', '行程提醒', '行事曆上的行程、考試和自己的倒數', n.event.on, 'event.on')}
+        ${nfRow('event', '行事曆提醒', '', n.event.on, 'event.on')}
         ${n.event.on ? `<div class="nf-sub">${nfVal('提前', ev, 'evdays', '提前幾天')}${nfVal('提醒時間', n.event.time, 'evtime')}</div>` : ''}
-        ${nfRow('todo', '待辦提醒', '有日期的待辦事項', n.todo.on, 'todo.on')}
+        ${nfRow('todo', '待辦提醒', '', n.todo.on, 'todo.on')}
         ${n.todo.on ? `<div class="nf-sub">${nfVal('有設時間的待辦，提前', fmtLead(n.todo.lead), 'tdlead', '待辦提前多久')}${nfVal('只有日期的待辦，當天', n.todo.day, 'tdday')}</div>` : ''}
     </div></section>
     <section class="nf-sec"><h3>勿擾</h3><div class="nf-card">
-        ${nfRow('quiet', '勿擾時段', '這段時間不推播；行程和待辦提醒延到結束後再發', n.quiet.on, 'quiet.on')}
+        ${nfRow('quiet', '勿擾時段', '', n.quiet.on, 'quiet.on')}
         ${n.quiet.on ? `<div class="nf-sub">${nfVal('從', n.quiet.from, 'qfrom', '勿擾開始')}${nfVal('到', n.quiet.to, 'qto', '勿擾結束')}</div>` : ''}
-        ${nfRow('focus', '讀書中不打擾', '專注計時的時候，聊天和其他通知先不推播；行程和待辦等你停下來再發', n.focus, 'focus')}
-    </div></section>
-    <section class="nf-sec"><h3>正在用網站時，訊息怎麼顯示</h3><div class="nf-card"><div class="notify-grid nf-style" id="notifyGrid">
+        ${nfRow('focus', '讀書中不打擾', '', n.focus, 'focus')}
+    </div><p class="nf-foot">勿擾時段、讀書中：先不推播，行程和待辦提醒等結束後再發。</p></section>
+    <section class="nf-sec"><h3>網站開著時的訊息樣式</h3><div class="nf-card"><div class="notify-grid nf-style" id="notifyGrid">
         <button class="notify-opt ${notifyStyle === 'banner' ? 'active' : ''}" data-notify="banner" aria-pressed="${notifyStyle === 'banner'}"><span class="nt-th"><span class="nt-banner"><i></i><span><b></b><em></em><em class="s"></em></span></span></span><span class="nt-name">頂部橫幅</span><span class="nt-sub">名字＋兩行訊息</span></button>
         <button class="notify-opt ${notifyStyle === 'pill' ? 'active' : ''}" data-notify="pill" aria-pressed="${notifyStyle === 'pill'}"><span class="nt-th"><span class="nt-pill"><i></i><em></em><u></u></span></span><span class="nt-name">頂部小膠囊</span><span class="nt-sub">最省空間</span></button>
     </div><button class="nt-try" type="button" data-nfa="try">試試看</button></div></section>`);
 }
 function renderNotifRow() {
     if (!$('notifValue')) return;
-    const kinds = [notif.chat, notif.reply, notif.react, notif.poke, notif.pomo, notif.daily.on, notif.morning.on, notif.event.on, notif.todo.on].filter(Boolean).length;
+    const kinds = [notif.chat || notif.reply || notif.react, notif.poke, notif.pomo, notif.daily.on, notif.morning.on, notif.event.on, notif.todo.on].filter(Boolean).length;
     $('notifValue').textContent = pushOn() ? `推播已開啟 · ${kinds} 項` : '推播未開啟';
 }
 function openNotif() {
@@ -5132,6 +5240,44 @@ function closeNotif() {
     syncScrollLock();
 }
 $('notifRow').addEventListener('click', openNotif);
+// v80 看大圖（跟 IG 一樣）：一開始照片避開上面的按鈕；點一下按鈕收起、照片放大到整個螢幕（不裁切）；
+// 再點一下回來。兩指縮放、點兩下放大／還原；往下滑關掉（放大時不會關）。點照片不會關掉視窗
+(function () {
+    const st = $('ivStage'), im = $('imgView'), md = $('imgModal');
+    let z = 1, tx = 0, ty = 0, pts = new Map(), pinch0 = 0, z0 = 1, drag = null, lastTap = 0, tapT = 0, dy = 0;
+    const apply = (anim) => { im.style.transition = anim ? 'transform .3s cubic-bezier(.2,.8,.2,1)' : 'none'; im.style.transform = `translate(${tx}px, ${ty + dy}px) scale(${z})`; md.style.setProperty('--iv-a', String(Math.max(0, 1 - Math.abs(dy) / 400))); };
+    const reset = () => { z = 1; tx = ty = dy = 0; apply(true); };
+    window.ivReset = () => { md.classList.remove('full'); z = 1; tx = ty = dy = 0; apply(false); };
+    st.addEventListener('pointerdown', (e) => {
+        st.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); z0 = z; drag = null; }
+        else drag = { x: e.clientX, y: e.clientY, tx, ty, moved: false };
+    });
+    st.addEventListener('pointermove', (e) => {
+        if (!pts.has(e.pointerId)) return;
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pts.size === 2 && pinch0) { const [a, b] = [...pts.values()]; z = Math.min(5, Math.max(1, z0 * Math.hypot(a.x - b.x, a.y - b.y) / pinch0)); apply(false); return; }
+        if (!drag) return;
+        const ddx = e.clientX - drag.x, ddy = e.clientY - drag.y;
+        if (Math.abs(ddx) + Math.abs(ddy) > 6) drag.moved = true;
+        if (z > 1.02) { tx = drag.tx + ddx; ty = drag.ty + ddy; apply(false); }
+        else if (ddy > 0 || dy) { dy = Math.max(0, ddy); apply(false); }
+    });
+    const up = (e) => {
+        pts.delete(e.pointerId);
+        if (pts.size) return;
+        pinch0 = 0;
+        if (z <= 1.02 && z !== 1) reset();
+        if (dy) { if (dy > 120) { closeModal('imgModal'); } else { dy = 0; apply(true); } drag = null; return; }
+        if (drag && !drag.moved) {
+            const now = Date.now();
+            if (now - lastTap < 280) { clearTimeout(tapT); lastTap = 0; if (z > 1) reset(); else { z = 2.5; tx = ty = 0; apply(true); } }
+            else { lastTap = now; tapT = setTimeout(() => { if (z === 1) md.classList.toggle('full'); }, 280); }
+        }
+        drag = null;
+    };
+    st.addEventListener('pointerup', up); st.addEventListener('pointercancel', up);
+})();
 $('imgSave').addEventListener('click', (e) => { e.stopPropagation(); const u = $('imgView').getAttribute('src'); if (u) savePhoto(u, +$('imgView').dataset.at || 0); });
 
 /* =====================================================
@@ -5282,6 +5428,8 @@ document.addEventListener('keydown', (e) => {
 $('nfBody').addEventListener('change', (e) => {
     const p = e.target.dataset.nf;
     if (!p) return;
+    // v80 聊天室的三種通知（新訊息、回覆、按表情）合成一個開關
+    if (p === 'chatall') { notif.chat = notif.reply = notif.react = e.target.checked; saveNotif(); return; }
     const [a, b] = p.split('.');
     if (b) notif[a][b] = e.target.checked; else notif[a] = e.target.checked;
     saveNotif();
@@ -5971,7 +6119,7 @@ chatList.addEventListener('click', (e) => {
     const im = e.target.closest('.chat-img');
     if (im && isPhoto(im.getAttribute('src'))) {   // 照片：等一下確定不是連點兩下才打開
         clearTimeout(imgTapT);
-        imgTapT = setTimeout(() => { $('imgView').src = im.getAttribute('src'); $('imgView').dataset.at = (chats[chatRoom]?.msgs || []).find(x => x.id === im.dataset.mid)?.at || ''; openModal('imgModal'); }, 330);
+        imgTapT = setTimeout(() => { $('imgView').src = im.getAttribute('src'); $('imgView').dataset.at = (chats[chatRoom]?.msgs || []).find(x => x.id === im.dataset.mid)?.at || ''; window.ivReset?.(); openModal('imgModal'); }, 330);
     }
 });
 chatList.addEventListener('dblclick', (e) => { if (e.target.closest('[data-mid]')) e.preventDefault(); });
@@ -6324,7 +6472,7 @@ document.addEventListener('keydown', (e) => {
 }, true);
 // 第一次打開：手機瀏覽器先教「加到主畫面」（一定要按我知道了），接著簡易導覽；其他情況只顯示簡易導覽
 // v60：用過舊版的人，更新後第一次打開會看到「這次新增了什麼」（第一次用的人看簡易導覽就好，不會連跳兩個視窗）
-const WHATS_NEW = 'v74';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
+const WHATS_NEW = 'v80';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
 setTimeout(() => {
     if (document.querySelector('.modal.open') || document.body.classList.contains('guide-open')) return;
     const needInstall = !localStorage.getItem(LS.install) && !isStandalone() && isMobile();
@@ -6334,7 +6482,7 @@ setTimeout(() => {
     else if (needTour) openTour();
     else if (localStorage.getItem(LS.seenVer) !== WHATS_NEW) { lsSet(LS.seenVer, WHATS_NEW); openModal('whatsNewModal'); }
 }, 1200);
-$('wnTry').addEventListener('click', () => { closeModal('whatsNewModal'); openFeedback(); });
+$('wnTry').addEventListener('click', () => { closeModal('whatsNewModal'); showTab('tab-calendar'); });
 
 /* =====================================================
  * 帳號畫面
@@ -6364,6 +6512,9 @@ function renderAccount(statusText) {
 }
 $('accountBtn').addEventListener('click', () => { $('installState').textContent = isStandalone() ? '已加入 ✓' : '教學'; closeFolds(); openModal('accountModal'); warmLogin(); });
 $('guideRow').addEventListener('click', () => { closeModal('accountModal'); openGuide(); });
+// v80 個人設定（iOS 設定的樣子）：首頁排序、新手教學
+$('homeRow').addEventListener('click', () => { closeModal('accountModal'); openHomeEdit(); });
+$('tourRow').addEventListener('click', () => { closeModal('accountModal'); openTour(); });
 $('installRow').addEventListener('click', () => { closeModal('accountModal'); openInstall(false); });
 
 // 禁止雙指縮放（iOS Safari 不吃 viewport 設定，要另外擋）
@@ -6478,6 +6629,8 @@ function makeSortable(list, onMove) {
         const startY = e.clientY, hgt = rects[from].height;
         let to = from;
         row.classList.add('dragging');
+        device.vibrate(6);   // v80 按住就浮起來＋輕震
+        let lastTo = from;
         list.classList.add('sorting');
         document.body.classList.add('sorting');
         try { window.getSelection()?.removeAllRanges(); } catch (err) {}
@@ -6488,6 +6641,7 @@ function makeSortable(list, onMove) {
             const center = rects[from].top + hgt / 2 + dy;
             to = from;
             rects.forEach((r, i) => { const mid = r.top + r.height / 2; if (i < from && center <= mid) to = Math.min(to, i); if (i > from && center >= mid) to = Math.max(to, i); });
+            if (to !== lastTo) { lastTo = to; device.vibrate(4); }   // 每跟另一列換位置就輕震一下
             rows.forEach((r, i) => {
                 if (r === row) return;
                 const sh = from < to && i > from && i <= to ? -hgt : to < from && i >= to && i < from ? hgt : 0;
