@@ -61,7 +61,7 @@ const AI_ON = false;
 if (AI_ON) document.documentElement.classList.add('ai-on');
 // v70：讀書地圖先拿掉了（還沒達到想要的效果）。程式碼在 v69 的版本裡，之後要做可以從那裡拿回來
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v82';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v83';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -4939,6 +4939,14 @@ async function pushRemove() {
     if (!id || !fb || !currentUser) return;
     try { await fb.fs.deleteDoc(fb.fs.doc(fb.db, 'pushTokens', id)); } catch (e) {}
 }
+// v83 登出時推播會從這台拿掉（別的帳號才不會收到你的通知）；重新登入後，如果這台之前開過、系統也還允許，就自動接回來，不用自己再開
+async function pushResume() {
+    try {
+        if (!currentUser || currentUser.isAnonymous || !fb || !pushPref.on) return;
+        if (localStorage.getItem(LS.pushId) || !pushSupport().ok || Notification.permission !== 'granted') return;
+        if (await pushSave()) { schedSync(true); renderNotif(); renderNotifRow(); toast('已重新開啟這台裝置的推播通知'); }
+    } catch (e) { console.warn('重新開啟推播失敗：', e); }
+}
 async function enablePush() {
     if (pushBusy) return;
     const sup = pushSupport();
@@ -7859,6 +7867,7 @@ function onAuthChanged(user) {
     renderAccount('同步中…');
     setTimeout(() => { if (pushPref.on && pushSupport().ok && Notification.permission === 'granted') pushSave().catch(() => {}); pushBeat(true); renderNotifRow(); pokeListen(); }, 1500);   // 推播 token 可能會換，登入時更新一次
     setTimeout(handlePendingJoin, 800);
+    setTimeout(pushResume, 1500);   // v83 重新登入：這台之前開過推播、系統也允許的話，自動接回來
     let first = true;
     // 副本是同一個帳號的才算數；換帳號就先清掉，避免看到別人的資料
     if (cachedUid && cachedUid !== user.uid) { clearCloudCache(); cachedUid = null; cloudBase = null; cloudDirty = false; state = loadLocal(); renderAll(); }
