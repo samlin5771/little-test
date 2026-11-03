@@ -61,7 +61,7 @@ const AI_ON = false;
 if (AI_ON) document.documentElement.classList.add('ai-on');
 // v70：讀書地圖先拿掉了（還沒達到想要的效果）。程式碼在 v69 的版本裡，之後要做可以從那裡拿回來
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v81';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v82';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -1093,7 +1093,7 @@ function savePrefs() {
     prefsTimer = setTimeout(() => {
         fb.fs.setDoc(fb.fs.doc(fb.db, 'users', currentUser.uid), {
             prefs: { accent: localStorage.getItem(LS.accent) || 'amber', bg: localStorage.getItem(LS.bg) || 'glow', notify: localStorage.getItem(LS.notify) || 'banner', home: homePref, tt, notif, lunch, sky: skyPref, ...(bgPhoto.prefsMeta() !== undefined ? { bgPhoto: bgPhoto.prefsMeta() } : {}),
-                room: { name: roomPref.name || '', color: AV_COLORS.includes(roomPref.color) ? roomPref.color : '', hidden: !!roomPref.hidden },
+                room: { name: roomPref.name || '', color: AV_COLORS.includes(roomPref.color) ? roomPref.color : '', hidden: !!roomPref.hidden, ...myAvFields() },
                 ...(mapKeep ? { map: mapKeep } : {}) }
         }, { mergeFields: ['prefs'] }).catch(e => console.warn('設定同步失敗：', e));
     }, 400);
@@ -1120,8 +1120,10 @@ function applyCloudPrefs(p) {
     } else savePrefs();
     if (p.room && typeof p.room === 'object') {
         const nm = String(p.room.name || '').slice(0, 20), col = AV_COLORS.includes(p.room.color) ? p.room.color : '';
-        if (nm !== (roomPref.name || '') || col !== (roomPref.color || '') || !!p.room.hidden !== !!roomPref.hidden) {
-            roomPref = { ...roomPref, name: nm, color: col, hidden: !!p.room.hidden }; saveRoomPref();
+        const at = p.room.avType === 'photo' && okAvPhoto(p.room.avPhoto) ? 'photo' : '', ap = at ? p.room.avPhoto : '';
+        if (nm !== (roomPref.name || '') || col !== (roomPref.color || '') || !!p.room.hidden !== !!roomPref.hidden
+            || at !== (roomPref.avType || '') || ap !== (roomPref.avPhoto || '')) {
+            roomPref = { ...roomPref, name: nm, color: col, hidden: !!p.room.hidden, avType: at, avPhoto: ap }; saveRoomPref();
             publishProfile(); renderRoom(); renderHomeRoom();
         }
     }
@@ -1192,17 +1194,17 @@ function showChatNotice(d) {
     const other = notifyStyle === 'pill' ? $('nBanner') : $('nPill');
     if (notice.el === other) hideNotice(true);
     const el = notifyStyle === 'pill' ? $('nPill') : $('nBanner');
-    const av = `background:${avColor(d.uid)}`;
-    const g = esc(firstGlyph(d.name || '同學'));
+    const face = avFace(d.uid, d.name || '同學');
+    const av = face.style, g = face.inner;
     const more = d.count > 1 ? d.count - 1 : 0;
     if (notifyStyle === 'pill') {
         const lead = d.reply ? `回覆了你：「${d.reply}」` : '';
-        el.innerHTML = `<div class="np-row"><span class="np-av" style="${av}">${g}</span><span class="np-t">${esc(d.name || '同學')}${lead ? ' 回覆了你' : ''}：${esc(d.text)}</span>${d.count > 0 ? `<span class="np-n">${d.count > 99 ? '99+' : d.count}</span>` : ''}</div>
+        el.innerHTML = `<div class="np-row"><span class="np-av${face.cls}" style="${av}">${g}</span><span class="np-t">${esc(d.name || '同學')}${lead ? ' 回覆了你' : ''}：${esc(d.text)}</span>${d.count > 0 ? `<span class="np-n">${d.count > 99 ? '99+' : d.count}</span>` : ''}</div>
             <div class="np-exp"><small>${esc(d.room || '')} · 剛剛</small>${lead ? `<p class="np-q">${esc(lead)}</p>` : ''}<p>${esc(d.text)}</p>
             <div class="np-btns"><button data-np="later">稍後</button><button class="go" data-np="open">${d.kind === 'poke' ? '開始讀書' : '打開聊天室'}</button></div></div>`;
         el.setAttribute('aria-label', `${d.name}：${d.text}`);
     } else {
-        el.innerHTML = `<span class="nb-av" style="${av}">${g}<span class="nb-room">${ICON_CHAT_SM}</span></span>
+        el.innerHTML = `<span class="nb-av${face.cls}" style="${av}">${g}<span class="nb-room">${ICON_CHAT_SM}</span></span>
             <div class="nb-tx"><div class="nb-hd"><b>${esc(d.name || '同學')}</b><small>${esc(d.room || '')}</small><em>剛剛</em></div>
             ${d.reply ? `<div class="nb-q">回覆了你：「${esc(d.reply)}」</div>` : ''}<div class="nb-msg">${esc(d.text)}</div>${more ? `<div class="nb-more">還有 ${more} 則新訊息</div>` : ''}</div><span class="nb-grab"></span>`;
     }
@@ -4258,7 +4260,26 @@ function firstGlyph(str) {
     if (graphemer) { const it = graphemer.segment(s)[Symbol.iterator]().next(); if (it.value) return it.value.segment; }
     return Array.from(s)[0];
 }
-const avHtml = (p, uidv) => `<span class="av" style="background:${avColor(uidv)}">${esc(firstGlyph(p?.name || '?'))}</span>`;
+// v82 自己選的頭像：名字第一個字（預設）或照片。存在 profiles/uid 的 avType / avPhoto（跟著帳號），房間裡大家都看得到
+// 只接受單純的 JPEG base64（別人的資料會放進 style，一定要擋掉引號這類字元）
+const okAvPhoto = (x) => typeof x === 'string' && x.length <= 24000 && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(x);
+function avSrc(uid) {
+    if (uid && uid === currentUser?.uid) return { avType: roomPref.avType, avPhoto: roomPref.avPhoto };
+    return profiles[uid] || {};
+}
+// 頭像的 style（底色或照片）和裡面的字；cls 給照片／表情調大小用
+function avFace(uid, name) {
+    const s = avSrc(uid), bg = avColor(uid);
+    if (s.avType === 'photo' && okAvPhoto(s.avPhoto)) return { style: `background:${bg} url('${s.avPhoto}') center/cover no-repeat`, inner: '', cls: ' av-photo' };
+    return { style: `background:${bg}`, inner: esc(firstGlyph(name || '?')), cls: '' };
+}
+function myAvFields() {
+    const t = roomPref.avType;
+    if (t === 'photo' && okAvPhoto(roomPref.avPhoto)) return { avType: 'photo', avPhoto: roomPref.avPhoto };
+    return { avType: null, avPhoto: null };
+}
+const avSpan = (cls, uid, name, extra = '') => { const f = avFace(uid, name); return `<span class="${cls}${f.cls}" style="${f.style}">${extra}${f.inner}</span>`; };
+const avHtml = (p, uidv) => avSpan('av', uidv, p?.name);
 const myName = () => (roomPref.name || currentUser?.displayName || '同學').slice(0, 20);
 // 計時頁顯示：所有房間裡正在讀的人數（沒用過房間時回傳 null）
 function roomLiveCount() {
@@ -4288,6 +4309,7 @@ function publishProfile(force) {
     const hide = roomPref.hidden;
     const base = {
         name: myName(), hidden: !!hide, color: AV_COLORS.includes(roomPref.color) ? roomPref.color : null,
+        ...myAvFields(),
         todayMin: Math.round(dayMinutes(t)), todayDate: t,
         days: recentDays(92)   // 最近 3 個月每天讀了幾分鐘（只有總時數），房間的讀書紀錄用
     };
@@ -4546,7 +4568,7 @@ function roomHistoryHtml(ms, now) {
         const first = i === 0 && x.total > 0;
         return `<li class="rh-row ${first ? 'first' : ''}">
             <span class="rh-rk num">${i + 1}</span>
-            <span class="rh-av" style="background:${avColor(x.m.u)}">${first ? CROWN_SVG : ''}${esc(firstGlyph(memberName(x.m)))}</span>
+            ${avSpan('rh-av', x.m.u, memberName(x.m), first ? CROWN_SVG : '')}
             <span class="rh-mid"><span class="rh-name"><b>${esc(memberName(x.m))}</b></span>
                 <span class="rh-track"><i style="width:${x.total ? Math.max(3, x.total / max * 100).toFixed(1) : 0}%;background:${avColor(x.m.u)}"></i></span>
                 <span class="rh-meta"><span class="num">${fmtHM(x.total)}</span>${days.length > 1 ? `<span>讀了 ${x.active} 天</span>` : ''}</span></span>
@@ -4671,7 +4693,7 @@ function renderRoom(errMsg) {
                 const fr = seatFrac(m.s);
                 return `<div class="seat ${m.s.phase}${m.s.phase === 'idle' && m.s.min > 0 ? ' rested' : ''}" data-seat="${esc(m.u)}">
                     <div class="seat-av"><svg viewBox="0 0 68 68" aria-hidden="true"><circle class="st-track" cx="34" cy="34" r="31"/><circle class="st-bar" cx="34" cy="34" r="31" stroke-dasharray="${SEAT_C.toFixed(1)}" stroke-dashoffset="${(SEAT_C * (1 - fr)).toFixed(1)}"/></svg>
-                        <span class="seat-face" style="background:${avColor(m.u)}">${esc(firstGlyph(memberName(m)))}</span></div>
+                        ${avSpan('seat-face', m.u, memberName(m))}</div>
                     <b class="sn">${esc(memberName(m))}${m.u === meUid ? '<small>（你）</small>' : ''}</b>
                     ${seatSub(m.s)}
                     <span class="sc num" data-clock="${esc(m.u)}">${memberClock(m.s)}</span>
@@ -4693,7 +4715,7 @@ function renderRoom(errMsg) {
         </div>`);
         return;
     }
-    setTopExtra('tab-room', `<button class="me-chip" data-top="me" aria-label="我的暱稱、頭像顏色與隱身設定"><span class="av" style="background:${avColor(meUid)}">${esc(firstGlyph(myName()))}</span><span class="zh">${esc(myName())}</span></button>`);
+    setTopExtra('tab-room', `<button class="me-chip" data-top="me" aria-label="我的暱稱、頭像顏色與隱身設定">${avSpan('av', meUid, myName())}<span class="zh">${esc(myName())}</span></button>`);
     const tickets = `<div class="sec-head" style="margin:6px 0 14px"><h3>我的房間</h3><span>${myRooms.length ? myRooms.length + ' 間' : ''}</span></div>
         ${myRooms.length ? myRooms.map(r => {
             const ms = (r.members || []);
@@ -5502,7 +5524,7 @@ function renderPoke() {
     else if (left > 0) btn = `<button class="pk-btn done" disabled>已經叫過了✓（${Math.ceil(left / 60000)} 分鐘後可再試）</button>`;
     else btn = '<button class="pk-btn" data-pk="go">📣 叫他讀書！</button>';
     const sub = s.phase === 'focus' ? `${s.subject != null ? SUBJECTS[s.subject] : ''}${s.paused ? '暫停中' : '專注中'}` : s.phase === 'break' ? '番茄鐘休息中' : s.min > 0 ? '休息中' : '今天還沒開始';
-    pop.innerHTML = `<div class="pk-head"><span class="pk-av" style="background:${avColor(u)}">${esc(firstGlyph(name))}</span><div class="pk-who"><b>${esc(name)}${me ? '（你）' : ''}</b><small>${esc(sub)}</small></div></div>
+    pop.innerHTML = `<div class="pk-head">${avSpan('pk-av', u, name)}<div class="pk-who"><b>${esc(name)}${me ? '（你）' : ''}</b><small>${esc(sub)}</small></div></div>
         <div class="pk-stat"><div><b class="num">${fmtClockHM(s.min + (s.phase === 'focus' ? s.el / 60000 : 0))}</b><span>今天</span></div><div><b class="num">${fmtClockHM(w.week)}</b><span>這週</span></div><div><b class="num">${w.streak}<small>天</small></b><span>連續</span></div></div>
         ${btn}${!me && !(s.phase === 'focus' && !s.paused) && left <= 0 ? '<p class="pk-note">他會收到推播・每 10 分鐘可叫一次</p>' : ''}${me ? '' : `<button class="pk-block" data-pk="${isBlocked(u) ? 'unblock' : 'block'}">${isBlocked(u) ? '解除封鎖' : '封鎖'}</button>`}`;
     pop.hidden = false;
@@ -5802,7 +5824,7 @@ function renderChatList(toEnd) {
         items.push([m.id, mine
             ? `<div class="msg mine ${grouped ? 'grouped' : ''} ${reacts ? 'has-r' : ''}" data-row="${esc(m.id)}">${swipe}<div class="msg-line">${meta}${mb}</div></div>`
             : `<div class="msg them ${grouped ? 'grouped' : ''} ${reacts ? 'has-r' : ''}" data-row="${esc(m.id)}">${swipe}
-                ${grouped ? '<span class="chat-av-sp"></span>' : `<span class="chat-av" style="background:${avColor(m.uid)}">${esc(firstGlyph(m.name || '?'))}</span>`}
+                ${grouped ? '<span class="chat-av-sp"></span>' : avSpan('chat-av', m.uid, m.name)}
                 <div class="msg-col">${grouped || quoteHtml(m) ? '' : `<p class="chat-who">${esc(m.name || '同學')}</p>`}<div class="msg-line">${mb}${meta}</div></div>
             </div>`]);
         lastMsgIdx = items.length - 1;
@@ -6302,20 +6324,31 @@ $('tab-room').addEventListener('input', (e) => {
     }
 });
 // 我的暱稱、隱身模式（房間列表右上角）
-let meColorDraft = '';
+let meColorDraft = '', meAvDraft = { t: '', p: '' };
 function renderMeColors() {
+    const d = meAvDraft;
     const g = esc(firstGlyph($('meName').value.trim() || myName()));
     $('meColors').innerHTML = `<button class="me-color auto ${!meColorDraft ? 'active' : ''}" data-color="" aria-label="自動" aria-pressed="${!meColorDraft}">自動</button>` +
         AV_COLORS.map(c => `<button class="me-color ${meColorDraft === c ? 'active' : ''}" data-color="${c}" style="background:${c}" aria-label="頭像顏色" aria-pressed="${meColorDraft === c}">${g}</button>`).join('');
     const pv = $('mePreviewAv');
-    pv.textContent = firstGlyph($('meName').value.trim() || myName());
-    pv.style.background = meColorDraft || (() => { let h = 0; for (const c of String(currentUser?.uid || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0; return `var(--s${h % 5})`; })();
+    const bg = meColorDraft || (() => { let h = 0; for (const c of String(currentUser?.uid || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0; return `var(--s${h % 5})`; })();
+    const photo = d.t === 'photo' && okAvPhoto(d.p);
+    pv.textContent = photo ? '' : firstGlyph($('meName').value.trim() || myName());
+    pv.style.background = photo ? `${bg} url("${d.p}") center/cover no-repeat` : bg;
+    pv.classList.toggle('av-photo', photo);
+    // 樣式切換、表情列表、照片按鈕
+    $('meAvSeg').querySelectorAll('[data-avt]').forEach(b => { const on = b.dataset.avt === d.t; b.classList.toggle('active', on); b.setAttribute('aria-selected', on); });
+    $('mePhotoBox').hidden = d.t !== 'photo';
+    $('mePhotoPick').textContent = okAvPhoto(d.p) ? '換一張照片' : '選一張照片';
+    $('meColors').hidden = $('meColorLabel').hidden = photo;
     $('mePreviewName').textContent = $('meName').value.trim() || myName();
 }
 function openMeModal() {
     $('meName').value = myName();
     $('meHidden').checked = !!roomPref.hidden;
     meColorDraft = AV_COLORS.includes(roomPref.color) ? roomPref.color : '';
+    const f = myAvFields();
+    meAvDraft = { t: f.avType || '', p: f.avPhoto || '' };
     renderMeColors();
     openModal('meModal');
 }
@@ -6325,17 +6358,52 @@ $('meColors').addEventListener('click', (e) => {
     meColorDraft = b.dataset.color; renderMeColors();
 });
 $('meName').addEventListener('input', renderMeColors);
+$('meAvSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-avt]'); if (!b) return;
+    meAvDraft.t = b.dataset.avt;
+    renderMeColors();
+    if (meAvDraft.t === 'photo' && !okAvPhoto(meAvDraft.p)) $('mePhotoFile').click();
+});
+$('mePhotoPick').addEventListener('click', () => $('mePhotoFile').click());
+// 照片：從中間裁成正方形、縮成 128px 的 JPEG（約 5KB），存在帳號裡，不用另外的空間
+$('mePhotoFile').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) { if (!okAvPhoto(meAvDraft.p)) { meAvDraft.t = ''; renderMeColors(); } return; }
+    try {
+        const url = URL.createObjectURL(file);
+        const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = url; });
+        const side = Math.min(img.naturalWidth, img.naturalHeight), N = 128;
+        const c = document.createElement('canvas'); c.width = c.height = N;
+        const x = c.getContext('2d');
+        x.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, N, N);
+        URL.revokeObjectURL(url);
+        let q = .82, out = c.toDataURL('image/jpeg', q);
+        while (out.length > 22000 && q > .4) { q -= .1; out = c.toDataURL('image/jpeg', q); }
+        if (!okAvPhoto(out)) throw new Error('too big');
+        meAvDraft = { ...meAvDraft, t: 'photo', p: out };
+        renderMeColors();
+    } catch (err) {
+        toast('這張照片讀不到，換一張試試');
+        if (!okAvPhoto(meAvDraft.p)) { meAvDraft.t = ''; renderMeColors(); }
+    }
+});
 $('saveMeBtn').addEventListener('click', () => {
     const v = $('meName').value.trim().slice(0, 20);
     const hid = $('meHidden').checked;
     const changedHidden = hid !== !!roomPref.hidden;
     const changedColor = meColorDraft !== (roomPref.color || '');
-    roomPref.name = v; roomPref.hidden = hid; roomPref.color = meColorDraft; saveRoomPref();
+    const before = JSON.stringify(myAvFields());
+    roomPref.name = v; roomPref.hidden = hid; roomPref.color = meColorDraft;
+    roomPref.avType = meAvDraft.t === 'photo' && okAvPhoto(meAvDraft.p) ? 'photo' : '';
+    roomPref.avPhoto = roomPref.avType === 'photo' ? meAvDraft.p : '';
+    const changedAv = before !== JSON.stringify(myAvFields());
+    saveRoomPref();
     savePrefs();   // v62：暱稱跟著帳號同步
     closeModal('meModal');
     publishProfile();
     renderRoom();
-    toast(changedHidden ? (hid ? '已開啟隱身模式' : '已關閉隱身模式') : changedColor ? '已更新頭像顏色' : '已更新暱稱');
+    toast(changedHidden ? (hid ? '已開啟隱身模式' : '已關閉隱身模式') : changedAv ? '已更新頭像' : changedColor ? '已更新頭像顏色' : '已更新暱稱');
 });
 onEnter($('meName'), () => $('saveMeBtn').click());
 // 房間內右上角「⋯」
@@ -6363,6 +6431,7 @@ async function loadRoomProfile(user) {
             const p = snap.data();
             if (!profiles[user.uid]) profiles[user.uid] = p;   // 先知道雲端上自己的狀態（別台裝置可能正在讀），才不會被這台蓋掉
             roomPref = { ...roomPref, enabled: true, name: roomPref.name || String(p.name || '').slice(0, 20), hidden: roomPref.hidden ?? !!p.hidden, color: roomPref.color || (AV_COLORS.includes(p.color) ? p.color : '') };
+            if (!roomPref.avType && p.avType === 'photo' && okAvPhoto(p.avPhoto)) Object.assign(roomPref, { avType: 'photo', avPhoto: p.avPhoto });
             saveRoomPref();
         }
     } catch (e) { /* 離線或規則還沒設定 */ }
@@ -7198,7 +7267,7 @@ function renderHomeClass() {
         return `<span ${x.k.color >= 0 ? `data-c style="--c:var(--s${x.k.color})"` : ''} class="${past ? 'past' : ''} ${isCur ? 'now' : ''}" title="第 ${x.i + 1} 節 ${esc(x.k.name)}">${esc(ttShort(x.k.name))}</span>`;
     }).join('');
     const after = cur ? classes.find(x => x.i > cur.i) : classes.find(x => x.i > next.i);
-    setHtml(el, `<div class="sec-head"><h3>今天的課</h3><span>星期${WEEK_ZH[now.getDay()]} · ${classes.length} 節</span></div>
+    setHtml(el, `<div class="sec-head"><h3>${modIc('class')}今天的課</h3><span>星期${WEEK_ZH[now.getDay()]} · ${classes.length} 節</span></div>
         <button class="cls-now" data-hc="open">
             <svg class="ring" viewBox="0 0 46 46" aria-hidden="true"><circle cx="23" cy="23" r="19" fill="none" stroke="var(--surface-2)" stroke-width="4"/><circle cx="23" cy="23" r="19" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - frac)).toFixed(1)}" transform="rotate(-90 23 23)"/><text x="23" y="27.5" text-anchor="middle" font-size="13" font-weight="800" fill="currentColor" font-family="Manrope">${show.i + 1}</text></svg>
             <span class="tx"><span class="t1" style="display:block">${line1}</span><span class="t2" style="display:block;color:${col}">${esc(show.k.name)}</span><span class="t3" style="display:block">${line3}${show.k.note ? ` · ${esc(show.k.note)}` : ''}</span></span>
@@ -7408,15 +7477,26 @@ async function openHeatShare() {
  * 首頁自己排：倒數頁下面的區塊要不要顯示、排什麼順序（跟著帳號同步）
  * ===================================================== */
 const HOME_MODS = [
-    { k: 'class', name: '今天的課', sub: '課表上現在和下一節課', icon: '<rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M9 4v16"/>' },
-    { k: 'time', name: '今天讀了多久', icon: '<path d="M4 18V11M10 18V6M16 18v-5M2 21h20"/>' },
-    { k: 'list', name: '今天的清單', sub: '進度表和今天的待辦', icon: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>' },
-    { k: 'review', name: '重點複習', sub: '有標重點時才會出現', icon: '<path d="M6 3h12v18l-6-4-6 4z"/>' },
-    { k: 'roulette', name: '現在要讀什麼？', icon: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="15" cy="9" r="1"/><circle cx="9" cy="15" r="1"/>' },
-    { k: 'lunch', name: '今天吃什麼？', sub: '吃飯抽籤，選項可以自己改', icon: '<path d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0z"/><path d="M8 20.5h8"/><path d="M14 8.5l5-5"/><path d="M11 8.5l5.5-5.5"/>' },
-    { k: 'upcoming', name: '接下來的行程', sub: '最近的考試、行程和倒數', off: true, icon: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>' },
-    { k: 'room', name: '讀書房間', sub: '朋友現在在讀什麼', off: true, icon: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.5.2 4 1.9 4.5 4.9"/>' }
+    { k: 'class', color: '#007AFF', name: '今天的課', sub: '課表上現在和下一節課', icon: '<rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M9 4v16"/>' },
+    { k: 'time', color: '#FF9500', name: '今天讀了多久', icon: '<path d="M4 18V11M10 18V6M16 18v-5M2 21h20"/>' },
+    { k: 'list', color: '#34C759', name: '今天的清單', sub: '進度表和今天的待辦', icon: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>' },
+    { k: 'review', color: '#5856D6', name: '重點複習', sub: '有標重點時才會出現', icon: '<path d="M6 3h12v18l-6-4-6 4z"/>' },
+    { k: 'roulette', color: '#FF3B30', name: '現在要讀什麼？', icon: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="15" cy="9" r="1"/><circle cx="9" cy="15" r="1"/>' },
+    { k: 'lunch', color: '#FF9500', name: '今天吃什麼？', sub: '吃飯抽籤，選項可以自己改', icon: '<path d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0z"/><path d="M8 20.5h8"/><path d="M14 8.5l5-5"/><path d="M11 8.5l5.5-5.5"/>' },
+    { k: 'upcoming', color: '#FF3B30', name: '接下來的行程', sub: '最近的考試、行程和倒數', off: true, icon: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>' },
+    { k: 'room', color: '#34C759', name: '讀書房間', sub: '朋友現在在讀什麼', off: true, icon: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.5.2 4 1.9 4.5 4.9"/>' }
 ];
+// v81 首頁每一區的標題前面加彩色圓角方塊圖示（跟編輯首頁、App 一樣）
+function modIc(k) {
+    let m = null;
+    try { m = HOME_MODS.find(x => x.k === k); } catch (e) { return ''; }
+    return m ? `<span class="mod-ic" style="--ic:${m.color}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${m.icon}</svg></span>` : '';
+}
+document.querySelectorAll('#homeMods .home-mod').forEach(el => {
+    const h = el.querySelector(':scope > .sec-head h3, :scope > h3.mod-title');
+    if (h && !h.querySelector('.mod-ic')) h.insertAdjacentHTML('afterbegin', modIc(el.dataset.mod));
+});
+try { renderHomeClass(); } catch (e) {}
 const HOME_DEFAULT = { order: HOME_MODS.map(m => m.k), hide: HOME_MODS.filter(m => m.off).map(m => m.k) };
 function normHome(h) {
     const keys = HOME_MODS.map(m => m.k);
@@ -7445,12 +7525,12 @@ function applyHome() {
     renderHomeExtras();
 }
 function renderHomeEdit() {
-    const fixed = `<li class="he-row fixed"><span class="he-check on dim">${ICON_CHECK_SM}</span><span class="he-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/></svg></span><span class="he-tx"><b>倒數</b><small>固定在最上面</small></span><span class="drag-sp"></span></li>`;
+    const fixed = `<li class="he-row fixed"><span class="he-check on dim">${ICON_CHECK_SM}</span><span class="he-ic" style="--ic:#8E8E93"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/></svg></span><span class="he-tx"><b>倒數</b><small>固定在最上面</small></span><span class="drag-sp"></span></li>`;
     $('homeEditList').innerHTML = fixed + homeDraft.order.map(k => {
         const m = HOME_MODS.find(x => x.k === k), on = !homeDraft.hide.includes(k);
         return `<li class="he-row" data-sort="${k}">
             <button class="he-check ${on ? 'on' : ''}" data-hetoggle="${k}" aria-pressed="${on}" aria-label="${on ? '隱藏' : '顯示'}${m.name}">${ICON_CHECK_SM}</button>
-            <span class="he-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${m.icon}</svg></span>
+            <span class="he-ic" style="--ic:${m.color}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${m.icon}</svg></span>
             <span class="he-tx"><b>${m.name}</b>${m.sub ? `<small>${m.sub}</small>` : ''}</span>
             <button class="drag-h" aria-label="拖曳排序 ${m.name}（也可以用上下鍵）">${ICON_HANDLE}</button>
         </li>`;

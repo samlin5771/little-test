@@ -664,7 +664,7 @@
             <p class="del-sub" id="delSub">刪除後沒辦法復原，下面這些都會永久清掉：</p>
             <ul class="del-list">
                 <li>讀書紀錄、每週進度、學測範圍、行事曆、待辦、倒數</li>
-                <li>讀書房間裡的暱稱、頭像顏色和讀書狀態</li>
+                <li>讀書房間裡的暱稱、頭像（顏色或你選的照片）和讀書狀態</li>
                 <li>你在聊天室傳過的訊息和照片</li>
                 <li>你會離開所有房間（最後一個人離開時房間會一起刪除）</li>
                 <li>這台裝置上的讀書資料，以及 Google 登入的帳號連結</li>
@@ -809,11 +809,20 @@
     <!-- 讀書房間：我的暱稱與隱身 -->
     <div class="modal" id="meModal" role="dialog" aria-modal="true" aria-labelledby="meTitle">
         <div class="sheet">
-            <h2 id="meTitle">我在房間裡的樣子</h2>
+            <h2 id="meTitle">房間裡的我</h2>
             <div class="me-preview"><span class="av" id="mePreviewAv">林</span><b id="mePreviewName"></b></div>
             <label class="field-label" for="meName">暱稱（最多 20 字）</label>
             <input type="text" class="field" id="meName" maxlength="20" enterkeyhint="done">
-            <span class="field-label">頭像顏色</span>
+            <span class="field-label">頭像</span>
+            <div class="seg two me-avseg" id="meAvSeg" role="tablist" aria-label="頭像樣式">
+                <button data-avt="" role="tab">名字</button><button data-avt="photo" role="tab">照片</button>
+            </div>
+            <div class="me-photo" id="mePhotoBox" hidden>
+                <button class="btn" id="mePhotoPick">選一張照片</button>
+                <p class="note me-photo-note">會裁成圓形；房間裡的朋友都看得到，請不要用別人的照片。</p>
+                <input type="file" id="mePhotoFile" accept="image/*" hidden>
+            </div>
+            <span class="field-label" id="meColorLabel">頭像顏色</span>
             <div class="me-colors" id="meColors" role="group" aria-label="頭像顏色"></div>
             <label class="toggle-row"><input type="checkbox" class="checkbox" id="meHidden">隱身模式：只顯示今天時數，不顯示在讀什麼</label>
             <div class="sheet-btns">
@@ -1091,7 +1100,7 @@
     <div class="g-rh-row"><span class="g-rh-av" style="background:var(--s0)">明</span><span class="g-rh-mid"><b>阿明</b><i class="g-rh-bar"><i style="width:78%;background:var(--s0)"></i></i><span class="g-rh-meta"><span>4 時 2 分</span><span>讀了 5 天</span></span></span></div>
   </div>
 </div></figure>
-                <ul class="g-points"><li>按<b>建立新房間</b>會拿到 6 碼邀請碼，最多 20 人。</li><li><b>邀請朋友</b>（「⋯」裡）會分享一個<b>邀請連結</b>：朋友點開、登入後按「加入」就好，不用自己輸入邀請碼；也可以直接輸入 6 碼加入。</li><li>房間裡每個人有一個座位，頭像外圈是這一輪的進度；綠色是正在讀，變淡是還沒開始。</li><li><b>今天排行</b>連正在讀的那一輪也算進去，前三名有金銀銅。</li><li>最下面的<b>讀書紀錄</b>可以選<b>日、週、月或自訂</b>期間，看房間裡每個人讀了多久、讀了幾天，第一名的頭像會戴上<b>皇冠</b>。</li><li>右上角的暱稱可以改名字、選<b>頭像顏色</b>（10 種顏色或自動），或開<b>隱身模式</b>：只顯示今天時數，不顯示在讀什麼。暱稱和顏色會<b>跟著帳號</b>，換手機、重新登入都一樣。</li><li><b>點朋友的頭像</b>會跳出小卡片：看他今天、這週讀了多久和連續天數，還可以按<b>「叫他讀書！」</b>，他會收到通知。同一個人 10 分鐘可以叫一次；他正在讀書時不能叫。</li><li>房主可以改房間名稱；「⋯」裡可以邀請朋友或離開房間。</li></ul>
+                <ul class="g-points"><li>按<b>建立新房間</b>會拿到 6 碼邀請碼，最多 20 人。</li><li><b>邀請朋友</b>（「⋯」裡）會分享一個<b>邀請連結</b>：朋友點開、登入後按「加入」就好，不用自己輸入邀請碼；也可以直接輸入 6 碼加入。</li><li>房間裡每個人有一個座位，頭像外圈是這一輪的進度；綠色是正在讀，變淡是還沒開始。</li><li>點房間右上角<b>自己的名字</b>可以改暱稱和<b>頭像</b>：用名字的第一個字（可以選顏色），或<b>用自己的照片</b>（會裁成圓形，房間裡的朋友都看得到）。頭像跟著帳號，換手機或電腦登入一樣是你選的那張。</li><li><b>今天排行</b>連正在讀的那一輪也算進去，前三名有金銀銅。</li><li>最下面的<b>讀書紀錄</b>可以選<b>日、週、月或自訂</b>期間，看房間裡每個人讀了多久、讀了幾天，第一名的頭像會戴上<b>皇冠</b>。</li><li>右上角的暱稱可以改名字、選<b>頭像顏色</b>（10 種顏色或自動），或開<b>隱身模式</b>：只顯示今天時數，不顯示在讀什麼。暱稱和顏色會<b>跟著帳號</b>，換手機、重新登入都一樣。</li><li><b>點朋友的頭像</b>會跳出小卡片：看他今天、這週讀了多久和連續天數，還可以按<b>「叫他讀書！」</b>，他會收到通知。同一個人 10 分鐘可以叫一次；他正在讀書時不能叫。</li><li>房主可以改房間名稱；「⋯」裡可以邀請朋友或離開房間。</li></ul>
                 
             </section>
 
