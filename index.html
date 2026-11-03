@@ -41,6 +41,8 @@
 
     <!-- 畫面出現前先套用主題：有手動選過就用選過的，否則跟著手機設定 -->
     <script>
+        // v81 蘋果裝置（iPhone、iPad、Mac）用蘋方字型，字的位置跟其他字型不一樣，按鈕置中要分開調
+        if (/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent)) document.documentElement.classList.add('apple');
         (function () {
             var t = null;
             try { t = localStorage.getItem('study_theme'); } catch (e) {}

@@ -1016,10 +1016,13 @@ body.sub #themeBtn, body.sub #accountBtn { display: none; }
     white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
     -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
-.msg.them .bubble { background: var(--surface-2); border-top-left-radius: 6px; }
-.msg.them.grouped .bubble { border-top-left-radius: 18px; border-bottom-left-radius: 6px; }
-.msg.mine .bubble { background: var(--accent); color: var(--on-accent); border-top-right-radius: 6px; max-width: 78%; }
-.msg.mine.grouped .bubble { border-top-right-radius: 18px; border-bottom-right-radius: 6px; }
+/* v81 跟 App 一樣：一組訊息裡，外側都是大圓角；跟上一則、下一則接起來的那個角是小圓角 */
+.msg.them .bubble { background: var(--surface-2); }
+.msg.mine .bubble { background: var(--accent); color: var(--on-accent); max-width: 78%; }
+.msg.them.grouped .bubble { border-top-left-radius: 5px; }
+.msg.them.cont .bubble { border-bottom-left-radius: 5px; }
+.msg.mine.grouped .bubble { border-top-right-radius: 5px; }
+.msg.mine.cont .bubble { border-bottom-right-radius: 5px; }
 .msg.mine .bubble a { color: inherit; text-decoration: underline; }
 .bubble a { color: var(--accent-text); }
 .chat-img { display: block; max-width: min(240px, 66vw); max-height: 300px; border-radius: 16px; border: 1px solid var(--line); object-fit: cover; cursor: zoom-in; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
@@ -1142,8 +1145,8 @@ body.chat-open { overflow: hidden; }
 .msg-pop.mine .pop-msg { align-items: flex-end; }
 .msg-pop.open .pop-msg { transform: scale(1.04); }
 .pop-msg .bubble { max-width: 100%; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35); -webkit-user-select: text; user-select: text; }
-.pop-msg.them .bubble { background: var(--modal-bg); border-top-left-radius: 6px; }
-.pop-msg.mine .bubble { background: var(--accent); color: var(--on-accent); border-top-right-radius: 6px; }
+.pop-msg.them .bubble { background: var(--modal-bg); border-radius: 18px; }
+.pop-msg.mine .bubble { background: var(--accent); color: var(--on-accent); border-radius: 18px; }
 .pop-msg .chat-img { max-height: 46vh; max-width: 100%; }
 .pop-time { font-size: 11px; color: rgba(255, 255, 255, 0.75); padding: 0 6px; }
 .pop-msg .chat-who { color: rgba(255, 255, 255, 0.8); }
@@ -3459,3 +3462,10 @@ body.sub .top-add { display: none; }
     border-radius: 3px; padding: 0 3px; font-style: normal; font-size: 7.5px; font-weight: 700; line-height: 13px; white-space: nowrap; overflow: hidden;
     background: color-mix(in srgb, var(--ev) 26%, transparent); color: color-mix(in srgb, var(--ev) 72%, var(--text)); }
 .fm-del svg { display: none; }   /* iOS 的刪除鈕只有字；原本按鈕裡的垃圾桶圖示不要被放大 */
+/* v81 標題下面的小字（例如課表的上課時間） */
+.fm-head h2 .fm-sub { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 500; color: var(--g-sub); letter-spacing: 0; }
+.fm-head h2:has(.fm-sub) { white-space: normal; line-height: 1.2; }
+/* v81 蘋方（iPhone、iPad、Mac）本來就置中，不用往下補；上面的補值只給 Noto／正黑體這類字型 */
+html.apple .hbtn { padding-top: 0; }
+html.apple .fm-head h2 { padding-top: 0; }
+html.apple .fm-del { padding-bottom: 0; }

@@ -61,7 +61,7 @@ const AI_ON = false;
 if (AI_ON) document.documentElement.classList.add('ai-on');
 // v70：讀書地圖先拿掉了（還沒達到想要的效果）。程式碼在 v69 的版本裡，之後要做可以從那裡拿回來
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v80';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v81';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -5775,20 +5775,22 @@ function renderChatList(toEnd) {
         return;
     }
     const items = [];   // [key, html]
-    let prev = null;
+    let prev = null, lastMsgIdx = -1;
     msgs.forEach(m => {
         if (!prev || m.at - prev.at > 30 * 60000 || ymd(new Date(m.at)) !== ymd(new Date(prev.at))) items.push(['t' + m.id, `<p class="chat-sys">${chatDayLabel(m.at)}</p>`]);
         if (m.recalled) {
             items.push([m.id, `<p class="chat-sys">${m.uid === me ? '你' : esc(m.name || '同學')} 收回了一則訊息</p>`]);
-            prev = m; return;
+            prev = m; lastMsgIdx = -1; return;
         }
         if (m.uid !== me && isBlocked(m.uid)) return;   // v73 封鎖的人的訊息不顯示
         if (m.hidden) {   // v73 被很多人檢舉：先隱藏，等管理者處理
             items.push([m.id, `<p class="chat-sys">一則訊息被檢舉，先隱藏起來了</p>`]);
-            prev = m; return;
+            prev = { ...m, recalled: true }; lastMsgIdx = -1; return;
         }
         const mine = m.uid === me;
         const grouped = prev && !prev.recalled && prev.uid === m.uid && m.at - prev.at < 5 * 60000;
+        // v81 跟 App 一樣：同一組的上一則，下面接起來的角改成小圓角
+        if (grouped && lastMsgIdx >= 0) items[lastMsgIdx][1] = items[lastMsgIdx][1].replace('class="msg ', 'class="msg cont ');
         const d = new Date(m.at);
         const tm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
         let readN = 0;
@@ -5803,6 +5805,7 @@ function renderChatList(toEnd) {
                 ${grouped ? '<span class="chat-av-sp"></span>' : `<span class="chat-av" style="background:${avColor(m.uid)}">${esc(firstGlyph(m.name || '?'))}</span>`}
                 <div class="msg-col">${grouped || quoteHtml(m) ? '' : `<p class="chat-who">${esc(m.name || '同學')}</p>`}<div class="msg-line">${mb}${meta}</div></div>
             </div>`]);
+        lastMsgIdx = items.length - 1;
         prev = m;
     });
     patchList(box, items);
@@ -6472,7 +6475,7 @@ document.addEventListener('keydown', (e) => {
 }, true);
 // 第一次打開：手機瀏覽器先教「加到主畫面」（一定要按我知道了），接著簡易導覽；其他情況只顯示簡易導覽
 // v60：用過舊版的人，更新後第一次打開會看到「這次新增了什麼」（第一次用的人看簡易導覽就好，不會連跳兩個視窗）
-const WHATS_NEW = 'v80';   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
+const WHATS_NEW = 'v74';   // v81 這次不跳新功能介紹   // 有新功能想介紹時才改這個（跟 APP_VERSION 分開，小修正不會跳）
 setTimeout(() => {
     if (document.querySelector('.modal.open') || document.body.classList.contains('guide-open')) return;
     const needInstall = !localStorage.getItem(LS.install) && !isStandalone() && isMobile();
@@ -6964,7 +6967,7 @@ function openTTCell(key) {
     if (!per) return;
     ttEditKey = key;
     const c = tt.cells[key] || {};
-    $('ttCellTitle').textContent = `星期${WEEK_ZH[d + 1]} · 第 ${p + 1} 節（${per.s}–${per.e}）`;
+    $('ttCellTitle').innerHTML = `星期${WEEK_ZH[d + 1]} · 第 ${p + 1} 節<small class="fm-sub num">${per.s}–${per.e}</small>`;   // v81 時間放第二行，不跟標題擠
     $('ttName').value = c.n || '';
     $('ttName2').value = c.n2 || '';
     $('ttNote').value = c.note || '';
