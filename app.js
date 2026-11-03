@@ -4938,6 +4938,8 @@ async function pushRemove() {
     try { localStorage.removeItem(LS.pushId); } catch (e) {}
     if (!id || !fb || !currentUser) return;
     try { await fb.fs.deleteDoc(fb.fs.doc(fb.db, 'pushTokens', id)); } catch (e) {}
+    // v83 這台目前的推播碼也作廢：就算剛剛沒網路、名單沒刪掉，舊帳號也推不到這台（下次登入會拿新的）
+    try { if (pushMsg) await pushMsg.m.deleteToken(pushMsg.messaging); } catch (e) {}
 }
 // v83 登出時推播會從這台拿掉（別的帳號才不會收到你的通知）；重新登入後，如果這台之前開過、系統也還允許，就自動接回來，不用自己再開
 async function pushResume() {
