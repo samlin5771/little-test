@@ -54,6 +54,8 @@ const FIREBASE_CONFIG = {
     measurementId: "G-01SBVEFL1R"
 };
 const FIREBASE_VER = '12.19.0';
+// v84 網站也能用 Apple 登入（跟 App 用同一個帳號）。要先在 Apple Developer 建 Services ID、Firebase 填好，再把這裡改成 true
+const APPLE_WEB = false;
 // v61 推播：Firebase 主控台 → 專案設定 → Cloud Messaging → Web Push 憑證 的「金鑰組」（公開的，可以放在這裡）
 const VAPID_KEY = 'BGD80hd0Xdk6Irow67T2c0x6txEOqT_dnwv3r5IaByGhq86PDQm47egvg_Dni2uHyRfv_ZSECzdnpFc_Fs0wagE';
 // v67：AI 排計畫暫時隱藏（不太穩定）。要打開改成 true 就好，程式和資料都還在
@@ -61,7 +63,7 @@ const AI_ON = false;
 if (AI_ON) document.documentElement.classList.add('ai-on');
 // v70：讀書地圖先拿掉了（還沒達到想要的效果）。程式碼在 v69 的版本裡，之後要做可以從那裡拿回來
 // AI 讀書計畫用的模型（Firebase AI Logic → Gemini Developer API）
-const APP_VERSION = 'v83';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
+const APP_VERSION = 'v85';   // 每次更新記得跟 service-worker.js 的 CACHE_NAME 一起改
 const AI_MODEL = 'gemini-3.5-flash';
 const AI_FALLBACK_MODEL = 'gemini-3.5-flash-lite';   // 主要模型太忙時改用（穩定版，至少用到 2027 年 7 月）
 // App Check 金鑰（Fraud Defense，舊稱 reCAPTCHA Enterprise）：在 Google Cloud 建立後貼在這裡；留空就不啟用
@@ -226,7 +228,9 @@ function normalize(raw = {}) {
             : { id: t.id || uid(), text: t.text || '', ...(/^\d{4}-\d{2}-\d{2}$/.test(t.date || '') ? { date: t.date, ...(/^([01]\d|2[0-3]):[0-5]\d$/.test(t.time || '') ? { time: t.time } : {}) } : {}) }),
         events: (raw.events || []).filter(e => e && e.start).map(e => ({
             id: String(e.id || uid()), title: e.title || '', start: String(e.start).slice(0, 10), important: !!e.important,
-            ...(e.end && String(e.end).slice(0, 10) > String(e.start).slice(0, 10) ? { end: String(e.end).slice(0, 10) } : {})
+            ...(e.end && String(e.end).slice(0, 10) > String(e.start).slice(0, 10) ? { end: String(e.end).slice(0, 10) } : {}),
+            // v85 行程顏色（App 選的）：網站還不能選，但要原樣保留、照顏色畫，不然網站一存就把 App 選的顏色洗掉
+            ...(/^#[0-9A-Fa-f]{6}$/.test(e.color || '') ? { color: e.color } : {})
         })).filter(e => { if (isExamDuplicate(e)) { removedDupes++; return false; } return true; }),
         weekly: raw.weekly && typeof raw.weekly === 'object' ? raw.weekly : {},
         sessions: (raw.sessions || []).filter(x => x && x.start && x.minutes > 0).map(x => ({
@@ -2243,7 +2247,7 @@ function calMonthItems(y, m) {
         if (c.yearly) { s = `${y}${c.date.slice(4)}`; e = s; if (c.date > s) return; }
         if (hit(s, e)) out.push({ k: 'c:' + c.id, type: 'cd', title: c.short || c.name, full: c.name, start: s, end: e, color: c.color, ref: c });
     });
-    state.events.forEach(ev => { const e = evEnd(ev); if (hit(ev.start, e)) out.push({ k: 'e:' + ev.id, type: 'event', title: ev.title, full: ev.title, start: ev.start, end: e, color: ev.important ? 'var(--important)' : 'var(--accent)', important: !!ev.important, ref: ev }); });
+    state.events.forEach(ev => { const e = evEnd(ev); if (hit(ev.start, e)) out.push({ k: 'e:' + ev.id, type: 'event', title: ev.title, full: ev.title, start: ev.start, end: e, color: ev.important ? 'var(--important)' : (ev.color || 'var(--accent)'), important: !!ev.important, ref: ev }); });
     state.todos.filter(t => t.date).forEach(t => { if (hit(t.date, t.date)) out.push({ k: 't:' + t.id, type: 'todo', title: t.text, full: t.text, start: t.date, end: t.date, color: 'var(--mark-green)', ref: t }); });
     return out;
 }
@@ -6587,6 +6591,8 @@ function renderAccount(statusText) {
     renderThemeValue();
     $('installState').textContent = isStandalone() ? '已加入 ✓' : '教學';
     $('loginBtn').textContent = guest ? '用 Google 登入（保留紀錄）' : u ? '登出' : '使用 Google 登入';
+    $('appleBtn').hidden = !APPLE_WEB || !fb || (!!u && !guest);
+    $('appleTx').textContent = guest ? '用 Apple 登入（保留紀錄）' : '使用 Apple 登入';
     $('delAcctBtn').hidden = !u;
     $('delAcctBtn').textContent = guest ? '結束訪客身分並刪除資料' : '刪除帳號與資料';
     $('loginBtn').classList.toggle('btn-accent', !u || guest);
@@ -7571,7 +7577,7 @@ function renderHomeUpcoming() {
     const t = todayStr();
     const items = [
         ...examEntries.filter(([, e]) => (e.end || e.date) >= t).map(([, e]) => ({ date: e.date, title: e.name, color: 'var(--exam)', tag: '考試' })),
-        ...state.events.filter(e => (e.end || e.start) >= t).map(e => ({ date: e.start < t ? t : e.start, title: e.title, color: e.important ? 'var(--important)' : 'var(--faint)' })),
+        ...state.events.filter(e => (e.end || e.start) >= t).map(e => ({ date: e.start < t ? t : e.start, title: e.title, color: e.important ? 'var(--important)' : (e.color || 'var(--faint)') })),
         ...state.countdowns.items.map(c => ({ date: cdNextDate(c), title: c.name, color: c.color, tag: '倒數', end: c.end })).filter(c => (c.end || c.date) >= t)
     ].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
     setHtml($('homeUpcoming'), items.length ? items.map(i => {
@@ -7826,13 +7832,13 @@ async function initFirebase() {
         setTimeout(loadAnnounce, 1500);   // v73 公告（讀一份很小的資料，不影響開啟速度）
         setTimeout(() => presenceBeat(true), 2500);
         // 只有剛用「整頁跳轉」登入回來時才需要讀結果（平常打開不用多載一個登入用的網頁框）
-        let redirected = false;
-        try { redirected = sessionStorage.getItem('study_redirect') === '1'; sessionStorage.removeItem('study_redirect'); } catch (e) {}
+        let redirected = false, rKind = 'google';
+        try { redirected = sessionStorage.getItem('study_redirect') === '1'; rKind = sessionStorage.getItem('study_redirect_kind') || 'google'; sessionStorage.removeItem('study_redirect'); sessionStorage.removeItem('study_redirect_kind'); } catch (e) {}
         if (redirected) {
             loginWarm = true;
-            authM.getRedirectResult(auth).then(r => { if (r && r.operationType === 'link') toast('已登入 Google，訪客的紀錄都保留了'); }).catch(err => {
+            authM.getRedirectResult(auth).then(r => { if (r && r.operationType === 'link') toast(`已登入 ${LOGIN_NAME[rKind] || 'Google'}，訪客的紀錄都保留了`); }).catch(err => {
                 // 訪客用整頁跳轉登入 Google，但這個 Google 帳號已經有資料：合併
-                if (['auth/credential-already-in-use', 'auth/email-already-in-use'].includes(err?.code)) { const go = () => currentUser ? upgradeGuest(err) : setTimeout(go, 300); go(); return; }
+                if (['auth/credential-already-in-use', 'auth/email-already-in-use'].includes(err?.code)) { const go = () => currentUser ? upgradeGuest(err, rKind) : setTimeout(go, 300); go(); return; }
                 console.warn('跳轉登入結果：', err); toast('登入沒有完成，請再試一次');
             });
         }
@@ -7953,10 +7959,24 @@ $('guestBtn').addEventListener('click', async () => {
     catch (err) { toast(err?.code === 'auth/operation-not-allowed' ? '訪客登入還沒開放' : '沒有成功，請檢查網路後再試'); if (err?.code !== 'auth/network-request-failed') reportErr(err, 'guest'); }
     b.disabled = false; b.textContent = '先用訪客身分開始';
 });
-async function guestToExisting(cred) {
+const LOGIN_NAME = { google: 'Google', apple: 'Apple' };
+function authProvider(kind) {
+    if (kind === 'apple') {
+        const p = new fb.authM.OAuthProvider('apple.com');
+        p.addScope('email'); p.addScope('name');
+        p.setCustomParameters({ locale: 'zh_TW' });
+        return p;
+    }
+    return fb.provider;
+}
+// 這個帳號是用什麼登入的（刪除帳號前要用同一種再確認一次）
+const userKind = (u) => (u?.providerData || []).some(x => x.providerId === 'apple.com') && !(u?.providerData || []).some(x => x.providerId === 'google.com') ? 'apple' : 'google';
+const credFromErr = (kind, err) => kind === 'apple' ? fb.authM.OAuthProvider.credentialFromError(err) : fb.authM.GoogleAuthProvider.credentialFromError(err);
+const setRedirect = (kind) => { try { sessionStorage.setItem('study_redirect', '1'); sessionStorage.setItem('study_redirect_kind', kind); } catch (e) {} };
+async function guestToExisting(cred, kind = 'google') {
     const { authM, auth, fs, db } = fb, anon = currentUser;
     if (!cred || !anon) { toast('沒有成功，請再試一次'); return; }
-    if (!confirm('這個 Google 帳號之前用過，已經有資料了。\n要把訪客的紀錄合併進這個帳號嗎？（訪客加入的讀書房間要重新加入）')) return;
+    if (!confirm(`這個 ${LOGIN_NAME[kind]} 帳號之前用過，已經有資料了。\n要把訪客的紀錄合併進這個帳號嗎？（訪客加入的讀書房間要重新加入）`)) return;
     if (cloudDirty) await flushCloud();
     guestCarry = { uid: anon.uid, state: cloneState(state) };
     try { await fs.deleteDoc(fs.doc(db, 'users', anon.uid)); } catch (e) {}
@@ -7965,17 +7985,17 @@ async function guestToExisting(cred) {
     anon.delete().catch(() => {});   // 訪客帳號用不到了
     closeModal('accountModal');
 }
-async function upgradeGuest(redirectErr) {
-    const { authM, provider } = fb;
+async function upgradeGuest(redirectErr, kind = 'google') {
+    const { authM } = fb, provider = authProvider(kind);
     const done = async () => {
         await currentUser.reload().catch(() => {});
         renderAccount(); loadRoomProfile(currentUser); closeModal('accountModal');
-        toast('已登入 Google，訪客的紀錄都保留了');
+        toast(`已登入 ${LOGIN_NAME[kind]}，訪客的紀錄都保留了`);
     };
     const fail = async (err) => {
-        if (['auth/credential-already-in-use', 'auth/email-already-in-use'].includes(err?.code)) return guestToExisting(authM.GoogleAuthProvider.credentialFromError(err));
+        if (['auth/credential-already-in-use', 'auth/email-already-in-use'].includes(err?.code)) return guestToExisting(credFromErr(kind, err), kind);
         if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'].includes(err?.code)) {
-            try { sessionStorage.setItem('study_redirect', '1'); } catch (e) {}
+            setRedirect(kind);
             return authM.linkWithRedirect(currentUser, provider);
         }
         if (err?.code !== 'auth/popup-closed-by-user') { toast('登入沒有完成，請再試一次'); reportErr(err, 'upgradeGuest'); }
@@ -7986,9 +8006,14 @@ async function upgradeGuest(redirectErr) {
 }
 
 let loginBusy = false;
+$('appleBtn').addEventListener('click', () => {
+    if (!fb) { toast('目前無法連線，請連上網路後再試'); return; }
+    if (currentUser?.isAnonymous) { upgradeGuest(null, 'apple'); return; }
+    if (!currentUser) loginWith('apple');
+});
 $('loginBtn').addEventListener('click', async () => {
     if (!fb) { toast('目前無法連線，請連上網路後再試'); return; }
-    const { auth, provider, authM } = fb;
+    const { auth, authM } = fb;
     if (currentUser?.isAnonymous) { upgradeGuest(); return; }
     if (currentUser) {
         if (confirm('確定要登出嗎？')) {
@@ -8004,9 +8029,13 @@ $('loginBtn').addEventListener('click', async () => {
         }
         return;
     }
+    loginWith('google');
+});
+async function loginWith(kind) {
+    const { auth, authM } = fb, provider = authProvider(kind);
     if (loginBusy) return;
     loginBusy = true;
-    const btn = $('loginBtn');
+    const btn = kind === 'apple' ? $('appleBtn') : $('loginBtn');
     btn.textContent = '登入中…'; btn.classList.add('busy');
     // 登入視窗在另一個分頁打開時，回到這頁會自動完成；太久沒反應就讓按鈕恢復，可以再按一次
     const slow = setTimeout(() => { if (!currentUser) toast('登入視窗還開著嗎？完成後回到這裡就會自動登入'); }, 8000);
@@ -8016,14 +8045,15 @@ $('loginBtn').addEventListener('click', async () => {
     } catch (err) {
         // 加到主畫面的 App 常會擋彈出視窗，改用整頁跳轉登入
         const useRedirect = ['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'];
-        if (useRedirect.includes(err.code)) { try { sessionStorage.setItem('study_redirect', '1'); } catch (e) {} authM.signInWithRedirect(auth, provider); }
+        if (useRedirect.includes(err.code)) { setRedirect(kind); authM.signInWithRedirect(auth, provider); }
+        else if (err.code === 'auth/account-exists-with-different-credential') alert(`這個 email 之前用 ${kind === 'apple' ? 'Google' : 'Apple'} 登入過，請改用 ${kind === 'apple' ? 'Google' : 'Apple'} 登入。`);
         else if (err.code !== 'auth/popup-closed-by-user') alert('登入失敗：' + err.message);
     } finally {
         clearTimeout(slow);
         loginBusy = false; btn.classList.remove('busy');
         if (!currentUser) renderAccount();
     }
-});
+}
 
 /* --- v55：刪除帳號與所有資料 --- */
 const DEL_PENDING = 'study_del_pending';
@@ -8047,13 +8077,21 @@ async function deleteAccount() {
     const user = currentUser;
     if (!user || !fb || deletingAccount) return;
     if (navigator.onLine === false) { delSay('刪除帳號需要網路，請連上網路後再試。', true); return; }
-    const { fs, db, authM, provider } = fb;
+    const { fs, db, authM } = fb;
+    const kind = userKind(user), provider = authProvider(kind);
     const btn = $('delGo');
     // Google 規定：刪除帳號前要「剛登入過」。太久以前登入的話，先請他再登入一次
     const last = Date.parse(user.metadata?.lastSignInTime || '') || 0;
-    if (!user.isAnonymous && (!last || Date.now() - last > 4 * 60000)) {
+    if (!user.isAnonymous && (kind === 'apple' || !last || Date.now() - last > 4 * 60000)) {   // Apple 每次都要再確認一次，才能撤銷授權
         delSay('請在跳出的視窗再登入一次，確認是本人…');
-        try { await authM.reauthenticateWithPopup(user, provider); }
+        try {
+            const r = await authM.reauthenticateWithPopup(user, provider);
+            // Apple 規定：刪除帳號時要撤銷 Apple 登入的授權
+            if (kind === 'apple' && authM.revokeAccessToken) {
+                const tok = authM.OAuthProvider.credentialFromResult(r)?.accessToken;
+                if (tok) await authM.revokeAccessToken(fb.auth, tok).catch(e => console.warn('撤銷 Apple 授權失敗：', e));
+            }
+        }
         catch (err) {
             if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'].includes(err?.code)) {
                 // 加到主畫面的 App 常擋彈出視窗：改用整頁跳轉，回來後自動打開這個視窗，再按一次就好

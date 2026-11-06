@@ -3489,3 +3489,8 @@ html.apple .fm-del { padding-bottom: 0; }
 .me-photo-note { margin: 8px 4px 0; font-size: 12.5px; color: var(--muted); }
 /* 照片頭像不要字 */
 .av-photo { color: transparent !important; }
+/* v84 Apple 登入按鈕（照 Apple 規定：淺色黑底白字、深色白底黑字） */
+.acct-apple { min-height: 50px; border-radius: 25px; display: flex; align-items: center; justify-content: center; gap: 8px; background: #000 !important; color: #fff !important; border-color: #000 !important; margin-top: 10px; font-weight: 600; }
+.acct-apple svg { width: 18px; height: 18px; margin-top: -2px; }
+.acct-apple[hidden] { display: none !important; }
+[data-theme="dark"] .acct-apple { background: #fff !important; color: #000 !important; border-color: #fff !important; }
